@@ -206,27 +206,34 @@ struct PublicScannerTests {
     #expect(cursor == result.dirtyRange.upperBound)
   }
 
-  @Test("Fountain does not trap; it degrades to text until Sortie 13 gives it a grammar")
-  func fountainDegradesRatherThanTrapping() {
-    // `Language.fountain` is public API today and has no grammar until Sortie 13. A
-    // public entry point that traps on a public input is not an entry point, so it
-    // scans as plain text — total, well-formed, and wrong only in richness.
+  @Test("`Language.fountain` reaches the Fountain grammar through the public facade")
+  func fountainScansThroughTheFacade() {
+    // Sortie 13 gave `.fountain` a grammar, and this is the only place in the suite that
+    // proves the *public* entry point dispatches to it: `FountainGrammar` is internal, so
+    // a test that names the type cannot tell whether `EscriboScanner(language: .fountain)`
+    // ever reaches it. Naming the resulting `ElementKind`s can.
+    //
+    // `BOB` is action here, not a character cue: cues are Sortie 14's, and a cue is the
+    // one Fountain construct that needs lookahead. That is a gap in richness, never in
+    // totality.
     var scanner = EscriboScanner(language: .fountain)
     let text = "INT. HOUSE - DAY\n\nBOB\nHello.\n"
     let result = scanner.fullScan(text)
-    ScanInvariants.check(result, text: text, editedRange: nil, "fountain fallback full scan")
+    ScanInvariants.check(result, text: text, editedRange: nil, "fountain full scan")
 
     #expect(result.dirtyRange == 0..<text.utf16.count)
     #expect(result.spans.reduce(0) { $0 + $1.range.count } == text.utf16.count)
-    #expect(result.spans.allSatisfy { $0.kind == .text })
     #expect(
-      result.lineRecords.map(\.element) == [.paragraph, .blank, .paragraph, .paragraph, .blank])
+      result.lineRecords.map(\.element) == [.sceneHeading, .blank, .action, .action, .blank])
+    #expect(result.spans.first?.kind == .sceneHeading)
+    #expect(result.spans.first?.range == 0..<16)
 
     // Editing it is total too.
     let edited = "INT. HOUSE - NIGHT\n\nBOB\nHello.\n"
     let after = scanner.incrementalScan(TextEdit(range: 13..<16, replacementLength: 5), in: edited)
-    ScanInvariants.check(after, text: edited, editedRange: 13..<18, "fountain fallback edit")
+    ScanInvariants.check(after, text: edited, editedRange: 13..<18, "fountain edit")
     #expect(after.dirtyRange.upperBound <= edited.utf16.count)
+    #expect(after.lineRecords.first?.element == .sceneHeading)
   }
 
   @Test("A language this version has never heard of scans as text rather than trapping")

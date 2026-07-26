@@ -102,6 +102,7 @@ public struct EscriboScanner {
 /// allocation anywhere.
 enum ResolvedGrammar: LineGrammar {
   case markdown(MarkdownGrammar)
+  case fountain(FountainGrammar)
   case text(TextGrammar)
 
   /// Resolves `language` to the grammar that scans it.
@@ -115,11 +116,10 @@ enum ResolvedGrammar: LineGrammar {
     case .markdown:
       self = .markdown(MarkdownGrammar())
     case .fountain:
-      // Fountain has no grammar until Sortie 13, which replaces this case with the
-      // Fountain grammar. Until then it degrades to plain text — deliberately, and
-      // rather than trapping, because `Language.fountain` is public API today and a
-      // public entry point that traps on a public input is not an entry point.
-      self = .text(TextGrammar())
+      // Block elements only until Sortie 14 adds dialogue: an ALL-CAPS line is action,
+      // not a character cue. That is a gap in richness, never in totality — every line
+      // still classifies, and every scan still tiles.
+      self = .fountain(FountainGrammar())
     default:
       self = .text(TextGrammar())
     }
@@ -128,6 +128,7 @@ enum ResolvedGrammar: LineGrammar {
   var lookahead: Int {
     switch self {
     case .markdown(let grammar): grammar.lookahead
+    case .fountain(let grammar): grammar.lookahead
     case .text(let grammar): grammar.lookahead
     }
   }
@@ -135,6 +136,7 @@ enum ResolvedGrammar: LineGrammar {
   var backwardExtent: Int {
     switch self {
     case .markdown(let grammar): grammar.backwardExtent
+    case .fountain(let grammar): grammar.backwardExtent
     case .text(let grammar): grammar.backwardExtent
     }
   }
@@ -142,6 +144,7 @@ enum ResolvedGrammar: LineGrammar {
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan {
     switch self {
     case .markdown(let grammar): grammar.scanLine(window, state: state)
+    case .fountain(let grammar): grammar.scanLine(window, state: state)
     case .text(let grammar): grammar.scanLine(window, state: state)
     }
   }

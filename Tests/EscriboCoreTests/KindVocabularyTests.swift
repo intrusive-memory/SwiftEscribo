@@ -89,6 +89,14 @@ struct KindVocabularyTests {
       (SpanKind.heading, "heading"),
       (SpanKind.codeBlock, "codeBlock"),
       (SpanKind.codeInfoString, "codeInfoString"),
+      (SpanKind.sceneHeading, "sceneHeading"),
+      (SpanKind.action, "action"),
+      (SpanKind.transition, "transition"),
+      (SpanKind.centered, "centered"),
+      (SpanKind.section, "section"),
+      (SpanKind.synopsis, "synopsis"),
+      (SpanKind.pageBreak, "pageBreak"),
+      (SpanKind.lyrics, "lyrics"),
     ]
   )
   func spanKindRawValues(kind: SpanKind, expected: String) {
@@ -103,6 +111,14 @@ struct KindVocabularyTests {
       (ElementKind.heading, "heading"),
       (ElementKind.codeFence, "codeFence"),
       (ElementKind.codeBlock, "codeBlock"),
+      (ElementKind.sceneHeading, "sceneHeading"),
+      (ElementKind.action, "action"),
+      (ElementKind.transition, "transition"),
+      (ElementKind.centered, "centered"),
+      (ElementKind.section, "section"),
+      (ElementKind.synopsis, "synopsis"),
+      (ElementKind.pageBreak, "pageBreak"),
+      (ElementKind.lyrics, "lyrics"),
     ]
   )
   func elementKindRawValues(element: ElementKind, expected: String) {

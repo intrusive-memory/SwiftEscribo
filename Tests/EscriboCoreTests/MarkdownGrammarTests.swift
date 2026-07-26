@@ -112,14 +112,24 @@ struct MarkdownGrammarTests {
     }
   }
 
-  @Test("Seven hashes, a bare hashtag, and four spaces of indent are not headings")
+  @Test("Seven hashes, a bare hashtag, and four columns of indent are not headings")
   func nonHeadings() {
     // Each of these is a line a heading scanner gets wrong by being one condition
     // short, and each degrades to a paragraph rather than to an error.
-    for text in ["####### Too deep", "#hashtag", "    # indented four", "\t# tabbed"] {
+    for text in ["####### Too deep", "#hashtag"] {
       let result = Self.fullScan(text)
       #expect(result.lineRecords[0].element == .paragraph, "\(text.debugDescription)")
       #expect(result.spans.allSatisfy { $0.kind == .text }, "\(text.debugDescription)")
+      #expect(result.lineRecords[0].depth == 0, "\(text.debugDescription)")
+    }
+
+    // Four columns of indent is an indented code block, so the `#` is a hash rather than
+    // a marker. Sortie 5 recorded these two as paragraphs with a note saying indented code
+    // was Sortie 18's; this is Sortie 18, and the note is now the assertion.
+    for text in ["    # indented four", "\t# tabbed"] {
+      let result = Self.fullScan(text)
+      #expect(result.lineRecords[0].element == .codeBlock, "\(text.debugDescription)")
+      #expect(result.spans.allSatisfy { $0.kind == .codeBlock }, "\(text.debugDescription)")
       #expect(result.lineRecords[0].depth == 0, "\(text.debugDescription)")
     }
 

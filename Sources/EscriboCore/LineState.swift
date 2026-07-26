@@ -61,14 +61,54 @@ public struct LineState: Equatable, Sendable {
   /// `LineState` is stored per line for the whole document.
   var fenceLength: UInt16
 
+  /// Whether the line **before** this one had anything on it but whitespace.
+  ///
+  /// Fountain's two *natural* — unforced — block elements are recognized only at the
+  /// start of a block: `INT. HOUSE` is a scene heading and `CUT TO:` a transition when a
+  /// blank line precedes them, and action when one does not. That is backward-looking
+  /// information, so it is state rather than lookahead, and it belongs here for exactly
+  /// the reason the fence character does: a grammar that recomputed it per line could not
+  /// converge, and a grammar that computed it and failed to carry it would converge one
+  /// line early.
+  ///
+  /// Phrased as "follows a non-blank line" rather than "is at a block boundary" so that
+  /// the default — ``documentStart`` — is correct without an exception: the first line of
+  /// a document follows nothing, so it opens a block, and a scene heading may sit on it.
+  ///
+  /// The Markdown grammar neither reads nor writes this, and CommonMark's own
+  /// blank-line rules are decided from the line's own text, so leaving it `false`
+  /// throughout a Markdown document changes nothing there.
+  var followsNonBlankLine: Bool
+
+  /// The Markdown block-container context this line begins in: whether a paragraph is
+  /// open above it, and which list items enclose it.
+  ///
+  /// Two scalars inside ``MarkdownBlockState``, for the reason ``openConstruct`` is a
+  /// scalar: one `LineState` is stored per line for the whole document, so a list stack
+  /// held in an array would cost one allocation per line. It sits here rather than being
+  /// folded into ``openConstruct`` because ``openConstruct`` is a *tag* the scanner only
+  /// ever compares, and a list nesting stack is not a tag.
+  ///
+  /// `MarkdownGrammar`'s alone. Every other grammar leaves it at its default, where it is
+  /// a `Bool` and a `UInt64` of zeroes that compare equal to themselves forever.
+  var markdownBlocks: MarkdownBlockState
+
   /// Creates the state a line begins in.
   ///
   /// `internal` on purpose — see the type's documentation. External code obtains a
   /// `LineState` only by reading ``LineRecord/startState`` from a scan.
-  init(openConstruct: UInt16 = 0, fenceCharacter: UInt16 = 0, fenceLength: UInt16 = 0) {
+  init(
+    openConstruct: UInt16 = 0,
+    fenceCharacter: UInt16 = 0,
+    fenceLength: UInt16 = 0,
+    followsNonBlankLine: Bool = false,
+    markdownBlocks: MarkdownBlockState = MarkdownBlockState()
+  ) {
     self.openConstruct = openConstruct
     self.fenceCharacter = fenceCharacter
     self.fenceLength = fenceLength
+    self.followsNonBlankLine = followsNonBlankLine
+    self.markdownBlocks = markdownBlocks
   }
 
   /// The state the first line of a document begins in: nothing open, nothing carried.
