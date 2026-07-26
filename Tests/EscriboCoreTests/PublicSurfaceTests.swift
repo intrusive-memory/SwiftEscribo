@@ -154,3 +154,118 @@ struct PublicSurfaceTests {
     #expect("a\r\nb".utf16Count == 4)
   }
 }
+
+/// The public scanner entry point, exercised the way a consumer sees it.
+///
+/// Also **not** `@testable`, and that is the whole assertion: `EscriboScanner` has to be
+/// usable from out here with no grammar type in sight, while `LineGrammar`,
+/// `IncrementalScanner`, `LineIndex`, and `LineState`'s initializer stay unreachable.
+/// REQUIREMENTS.md § What is public in 1.0 lists "the scanner entry points"; this suite
+/// is the proof that the listed thing exists and that the price of it was not the
+/// opacity of `LineState`.
+@Suite("Public scanner entry point (no @testable import)")
+struct PublicScannerTests {
+
+  @Test("A consumer can full-scan and incrementally scan a Markdown document")
+  func markdownScanningIsPubliclyReachable() {
+    // Nothing internal is named anywhere in this method. That is the point of it: a
+    // caller names a `Language`, and `EscriboCore` owns the grammar behind it.
+    var scanner = EscriboScanner(language: .markdown)
+    #expect(scanner.language == .markdown)
+
+    let text = "# Title\nprose\n```swift\nlet x = 1\n```\n"
+    let full = scanner.fullScan(text)
+    #expect(full.dirtyRange == 0..<text.utf16.count)
+    #expect(full.spans.reduce(0) { $0 + $1.range.count } == text.utf16.count)
+    #expect(full.lineRecords.first?.element == .heading)
+    #expect(full.lineRecords.first?.depth == 1)
+    #expect(full.spans.first?.kind == .heading)
+    #expect(full.spans.first?.role == .marker)
+    #expect(full.spans.contains { $0.kind == .codeInfoString })
+
+    // And the incremental half, in old-text coordinates.
+    let edited = "## Title\nprose\n```swift\nlet x = 1\n```\n"
+    let result = scanner.incrementalScan(TextEdit(range: 0..<1, replacementLength: 2), in: edited)
+    #expect(result.dirtyRange.lowerBound == 0)
+    #expect(result.lineRecords.first?.depth == 2)
+    #expect(result.spans.first?.range == 0..<3)
+
+    // Consecutive spans on the dirty range are contiguous — the tiling guarantee holds
+    // through the facade, which is the only place a consumer ever sees it.
+    var cursor = result.dirtyRange.lowerBound
+    for span in result.spans {
+      #expect(span.range.lowerBound == cursor)
+      cursor = span.range.upperBound
+    }
+    #expect(cursor == result.dirtyRange.upperBound)
+  }
+
+  @Test("Fountain does not trap; it degrades to text until Sortie 13 gives it a grammar")
+  func fountainDegradesRatherThanTrapping() {
+    // `Language.fountain` is public API today and has no grammar until Sortie 13. A
+    // public entry point that traps on a public input is not an entry point, so it
+    // scans as plain text — total, well-formed, and wrong only in richness.
+    var scanner = EscriboScanner(language: .fountain)
+    let text = "INT. HOUSE - DAY\n\nBOB\nHello.\n"
+    let result = scanner.fullScan(text)
+
+    #expect(result.dirtyRange == 0..<text.utf16.count)
+    #expect(result.spans.reduce(0) { $0 + $1.range.count } == text.utf16.count)
+    #expect(result.spans.allSatisfy { $0.kind == .text })
+    #expect(
+      result.lineRecords.map(\.element) == [.paragraph, .blank, .paragraph, .paragraph, .blank])
+
+    // Editing it is total too.
+    let edited = "INT. HOUSE - NIGHT\n\nBOB\nHello.\n"
+    let after = scanner.incrementalScan(TextEdit(range: 13..<16, replacementLength: 5), in: edited)
+    #expect(after.dirtyRange.upperBound <= edited.utf16.count)
+  }
+
+  @Test("A language this version has never heard of scans as text rather than trapping")
+  func unknownLanguageDegrades() {
+    // `Language` is a struct with static members precisely so a consumer can name one
+    // the linked core does not implement. Dispatch has to stay total for that to be a
+    // feature rather than a crash.
+    var scanner = EscriboScanner(language: Language(rawValue: "org.example.notALanguage"))
+    let result = scanner.fullScan("# not a heading here\n")
+    #expect(result.spans.allSatisfy { $0.kind == .text })
+    #expect(result.lineRecords.first?.element == .paragraph)
+  }
+
+  @Test("An out-of-range edit through the facade is clamped, not trapped")
+  func facadeIsTotalOnBadInput() {
+    var scanner = EscriboScanner(language: .markdown)
+    scanner.fullScan("hello")
+    let result = scanner.incrementalScan(
+      TextEdit(range: 900..<9000, replacementLength: 3), in: "hello world")
+    #expect(result.dirtyRange.upperBound <= "hello world".utf16.count)
+    #expect(result.lineRecords.count == 1)
+  }
+
+  @Test("Scanning through the facade requires naming nothing internal")
+  func scannerInternalsAreUnreachable() {
+    // The negative half of the contract cannot be asserted by running code — the failure
+    // mode is code that *compiles*. It is asserted by these lines, each of which must
+    // fail to compile if pasted into this file:
+    //
+    //   struct MyGrammar: LineGrammar { }          // no public grammar protocol
+    //   _ = IncrementalScanner(grammar: ...)       // no public generic scanner
+    //   _ = LineIndex("text")                      // no public line index
+    //   _ = LineState()                            // no public LineState initializer
+    //   _ = MarkdownGrammar()                      // grammars are not public either
+    //
+    // Every one of them is reachable from a `@testable` file in this same target, which
+    // is what makes the difference observable rather than theoretical: if any of the
+    // five ever compiles from *here*, `LineState` has stopped being opaque and the
+    // scanner's internals are frozen at 1.0.
+    //
+    // What runs is the positive half — the facade is a public, non-generic type that
+    // needs none of them. It is deliberately **not** `Sendable`: it carries mutable scan
+    // state and REQUIREMENTS.md § Concurrency and failure makes the scanner synchronous
+    // and single-threaded, so one lives beside the text storage it reads and never
+    // crosses an isolation boundary.
+    #expect(String(describing: EscriboScanner.self) == "EscriboScanner")
+    var scanner = EscriboScanner(language: .markdown)
+    #expect(scanner.fullScan("").lineRecords.count == 1)
+  }
+}

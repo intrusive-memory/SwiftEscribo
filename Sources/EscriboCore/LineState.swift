@@ -43,12 +43,32 @@ public struct LineState: Equatable, Sendable {
   /// is the whole reason this type is opaque.
   var openConstruct: UInt16
 
+  /// The delimiter character of the fenced code block open at the start of this line —
+  /// `` ` `` or `~` as a UTF-16 code unit. Zero when no fence is open.
+  ///
+  /// A fence closes only with the character it opened with, so this has to be carried:
+  /// a `~~~` inside a ```` ``` ```` block is code, not a closing fence. It lives here
+  /// rather than being folded into ``openConstruct`` because ``openConstruct`` is a
+  /// *tag* the scanner only ever compares, and packing a character into it would make a
+  /// grammar's private encoding the shared type's business.
+  var fenceCharacter: UInt16
+
+  /// The length of the opening fence's delimiter run.
+  ///
+  /// CommonMark requires a closing fence to be **at least as long** as the one that
+  /// opened the block, so the opening length is state in the same sense the character
+  /// is. Carried as a `UInt16` for the same reason ``openConstruct`` is a scalar: one
+  /// `LineState` is stored per line for the whole document.
+  var fenceLength: UInt16
+
   /// Creates the state a line begins in.
   ///
   /// `internal` on purpose — see the type's documentation. External code obtains a
   /// `LineState` only by reading ``LineRecord/startState`` from a scan.
-  init(openConstruct: UInt16 = 0) {
+  init(openConstruct: UInt16 = 0, fenceCharacter: UInt16 = 0, fenceLength: UInt16 = 0) {
     self.openConstruct = openConstruct
+    self.fenceCharacter = fenceCharacter
+    self.fenceLength = fenceLength
   }
 
   /// The state the first line of a document begins in: nothing open, nothing carried.
