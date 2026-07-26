@@ -133,11 +133,8 @@ updated: 2026-07-25
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-1 | 4 | RUNNING | 1/3 | opus | 23 | `ade45006d96f0f850` (session `a448d579`) | subagents/agent-ade45006d96f0f850.jsonl | 2026-07-25 22:47 |
+| WU-1 | 5 | RUNNING | 1/3 | opus | 20 | (dispatched this session) | — | 2026-07-25 |
 
-Supervisor session `8380d2fe` is orphaned from this agent — it cannot poll it via
-`TaskOutput` (cross-session) and will receive no completion notification. Liveness and
-completion are therefore tracked by transcript mtime + `git log`, per DL-19.
 
 ---
 
@@ -168,6 +165,12 @@ completion are therefore tracked by transcript mtime + `git log`, per DL-19.
 | DL-19 | 2026-07-25 | WU-1 | 4 | CORRECTION: the original Sortie 4 agent was ALIVE the whole time. Redundant re-dispatch stood down with zero footprint. | The incumbent is `agent-ade45006d96f0f850` in session `a448d579`, dispatched 22:47 (the Sortie 4 dispatch minute), transcript still being written at 23:02:51 and growing past 458 KB. It had simply read for ~12 minutes before its first write — EXECUTION_PLAN.md is 58 KB and REQUIREMENTS.md 45 KB. **Why the check failed:** (a) `TaskList` is per-session and cannot see another session's agents; (b) `ps` cannot see an agent that is between tool calls, because there is no long-lived per-agent process to find; (c) "clean tree at the dispatch commit" is satisfied identically by a dead agent and by a live one that has read but not yet written. Three independent signals, all consistent with death, none capable of detecting life. The re-dispatched agent caught this itself — its first `Write` was rejected because the incumbent had created that exact file seconds earlier — and it stood down without writing a single line rather than corrupt the tree. Correct call; it is credited with the catch, not charged with the redundancy. **Reliable liveness signal, adopted going forward:** mtime of the agent's own transcript at `~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl`, cross-checked against source-tree mtimes. Never `ps`, never task lists across sessions, never a clean tree alone. |
 
 ---
+
+| DL-20 | 2026-07-25 | WU-1 | 4 | ACCEPTED with a follow-up obligation: scanner entry points are **internal**, not public | REQUIREMENTS.md § What is public in 1.0 lists "the scanner entry points", so this appears to violate it. The agent's reasoning is sound and I checked it: `IncrementalScanner` is generic over `LineGrammar`, so making it public makes `LineGrammar` public, which requires an external conformer to construct a `LineState` — whose initializer is internal by design. Public scanner ⇒ public `LineState` ⇒ opacity gone. The correct public surface is a **non-generic `Language`-dispatching facade over an internal grammar**. **Sortie 5 must create it** — otherwise Sortie 30's audit finds no public scanner entry point at all and REQUIREMENTS.md goes unmet. Carried into Sortie 5's prompt as a hard exit obligation. |
+| DL-21 | 2026-07-25 | WU-1 | 4 | ACCEPTED: `LineState` gained one internal field, `openConstruct: UInt16` | A grammar-defined tag; zero means nothing open. Without at least one field every `LineState` equals every other and a stateful test grammar is impossible. A scalar rather than a stack because one state is stored per line for the whole document, and an allocating field would put an allocation per line on the cheapest thing the scanner does. Sortie 5 may add named fields beside it. |
+| DL-22 | 2026-07-25 | WU-1 | 4 | NOTED for Sortie 28: one `[UInt16]` allocation per line scanned | `GrammarLine` owns its content units. The bulk-read contract holds (one `copyUTF16CodeUnits` per line, never per code unit), but the array is a real allocation on the hot path. The agent chose clarity over a pooled ring buffer on the highest-risk algorithm in the package — the right call at this stage. **Sortie 28 must measure it**; if it bites, the fix is local to `grammarLine(at:in:)` and the window. |
+| DL-23 | 2026-07-25 | WU-1 | 4 | RECORDED: convergence condition 3 is weaker than conditions 1 and 2 | The agent reported honestly that it could not construct a case where dropping the lookahead extension produces *wrong output* — only a wrong dirty-range extent — because output at lines ≥ k₀ is a function of `(state(k₀), text from k₀ on)`, both proved unchanged. It implemented the rule as REQUIREMENTS.md §5 and Fountain §4 mandate it anyway, as insurance against a grammar whose lookahead is not fully reflected in its state. Fountain's cue rule (Sortie 14) is the plausible candidate. If Sortie 14 finds a genuine output counterexample, the test to strengthen is `forwardConvergenceHonoursTheDeclaredLookahead`. |
+| DL-24 | 2026-07-25 | WU-1 | 5 | Model: opus | Complexity 20; override applies (foundation_score 1, 25 dependents). First grammar through the seam — the marker/content role split and the fence-flag-in-`LineState` pattern set the template every later grammar copies. |
 
 ## Overall Status
 
