@@ -18,6 +18,26 @@ private func requireEquatableType<T: Equatable>(_ type: T.Type) -> String {
   String(describing: type)
 }
 
+/// A text source declared **outside** `EscriboCore`, which is the whole point of it.
+///
+/// `SwiftEscribo` conforms `NSTextStorage` to ``UTF16TextSource`` in Sortie 9, across a
+/// module boundary. That is impossible unless the protocol and both of its requirements
+/// are `public`, and this type is the compile-time proof that they are — it is written
+/// against exactly what ships, with no `@testable` to paper over an `internal`.
+private struct ExternalTextSource: UTF16TextSource {
+  let units: [UInt16]
+
+  var utf16Count: Int { units.count }
+
+  func copyUTF16CodeUnits(in range: Range<Int>, into buffer: UnsafeMutableBufferPointer<UInt16>) {
+    var out = 0
+    for offset in range {
+      buffer[out] = units[offset]
+      out += 1
+    }
+  }
+}
+
 /// `LineState` is public but opaque, and opacity is only real if something checks it
 /// from outside. This suite is that check: it imports `EscriboCore` without
 /// `@testable`, so every line here compiles against exactly what ships.
@@ -109,5 +129,28 @@ struct PublicSurfaceTests {
     #expect(Language(rawValue: "fountain") == .fountain)
     #expect(StyleSet(rawValue: 1) == .strong)
     #expect(SpanRole(rawValue: "marker") == .marker)
+  }
+
+  // MARK: - The one thing SwiftEscribo must be able to conform
+
+  @Test("A type outside EscriboCore can conform to UTF16TextSource and be read through")
+  func textSourceIsPubliclyConformable() {
+    // `LineIndex` itself stays `internal` — REQUIREMENTS.md § What is public in 1.0 does
+    // not list it and nothing outside the core needs to name it. The *source* protocol
+    // is the exception, and this test is its justification: without it Sortie 9 cannot
+    // hand the scanner an `NSTextStorage`, and the scanner would be back to bridging
+    // 120 KB to a Swift `String` on every keystroke.
+    let source = ExternalTextSource(units: Array("a\r\nb".utf16))
+    #expect(source.utf16Count == 4)
+
+    var destination = [UInt16](repeating: 0, count: 4)
+    destination.withUnsafeMutableBufferPointer {
+      source.copyUTF16CodeUnits(in: 1..<3, into: $0)
+    }
+    #expect(destination[0] == 0x0D)
+    #expect(destination[1] == 0x0A)
+
+    // `String` satisfies the same protocol, from inside the module.
+    #expect("a\r\nb".utf16Count == 4)
   }
 }
