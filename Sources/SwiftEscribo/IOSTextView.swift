@@ -130,12 +130,17 @@
       textView.smartDashesType = .no
       textView.autocorrectionType = .no
 
-      // Spell *checking* is a separate trait from autocorrect (`spellCheckingType`, not
-      // `autocorrectionType`) and Text-system hygiene names only autocorrect, smart
-      // quotes, and smart dashes as forbidden on iOS. Left at the system default rather
-      // than forced in either direction — a decision this sortie's report flags
-      // explicitly, since the plan settles macOS spell checking (left on) but is silent
-      // on iOS.
+      // Spell *checking* is a separate trait from autocorrect, but `.default` is not a
+      // neutral choice here: UIKit defines `.default` as "enable spell checking based on
+      // the state of autocorrection", so leaving it alone with `autocorrectionType = .no`
+      // above would silently turn spell checking off too. REQUIREMENTS.md § Text-system
+      // hygiene wants checking on regardless — "permitted and encouraged," with no
+      // platform qualification, because it draws with temporary attributes that never
+      // participate in `setAttributes(_:range:)` and so cannot be clobbered by a restyle.
+      // Sortie 10 expresses the identical intent on macOS with
+      // `isContinuousSpellCheckingEnabled = true`; this is that same intent stated
+      // explicitly rather than left to an autocorrect-coupled default.
+      textView.spellCheckingType = .yes
 
       // Self-scrolling — the whole reason this type has no `scrollView` member.
       textView.isScrollEnabled = true

@@ -26,6 +26,15 @@
       #expect(editor.textView.autocorrectionType == .no)
     }
 
+    @Test("Spell checking stays on, decoupled from the autocorrect-off default")
+    func spellCheckingStaysOn() {
+      let editor = EscriboTextView(language: .markdown, theme: .markdownLight)
+      // UIKit ties `.default` to the state of autocorrection, so this is asserted
+      // explicitly rather than trusted as a system default — the same pairing Sortie 10
+      // states on macOS with `isContinuousSpellCheckingEnabled`.
+      #expect(editor.textView.spellCheckingType == .yes)
+    }
+
     @Test("The autocorrect host opt-in toggles autocorrectionType, and nothing else")
     func autocorrectHostOptIn() {
       let editor = EscriboTextView(language: .markdown, theme: .markdownLight)
@@ -34,13 +43,18 @@
       editor.isAutocorrectionEnabled = true
       #expect(editor.textView.autocorrectionType == .yes)
 
-      // Smart quotes and smart dashes have no opt-in anywhere on this type — flipping
-      // autocorrect must not have touched them.
+      // Smart quotes, smart dashes, and spell checking have no opt-in anywhere on this
+      // type — flipping autocorrect must not have touched any of them, which matters
+      // precisely because `spellCheckingType` and `autocorrectionType` are a coupled pair
+      // at `.default`; a setter that forgot to pin spell checking explicitly could leak
+      // this toggle into it.
       #expect(editor.textView.smartQuotesType == .no)
       #expect(editor.textView.smartDashesType == .no)
+      #expect(editor.textView.spellCheckingType == .yes)
 
       editor.isAutocorrectionEnabled = false
       #expect(editor.textView.autocorrectionType == .no)
+      #expect(editor.textView.spellCheckingType == .yes)
     }
 
     @Test("The text view sits on the TextKit 2 stack")
