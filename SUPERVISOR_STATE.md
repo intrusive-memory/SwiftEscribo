@@ -88,15 +88,26 @@ updated: 2026-07-26
 
 ### WU-2 Editor Substrate
 - Work unit state: **RUNNING** (unlocked 2026-07-26 — WU-1 COMPLETED)
-- Current sortie: 7 of 30 (first of 7–12)
+- Current sortie: 8 of 30 (second of 7–12)
 - Sortie state: DISPATCHED
 - Sortie type: code
 - Model: opus
-- Complexity score: 25
+- Complexity score: 20
 - Attempt: 1 of 3
-- Notes: Dispatched with three hard carry-forwards — DL-12 (internal inits, do not make
-  public), DL-26 (point size from `ElementKind`, not `SpanKind`), DL-6 (`SpanRole` is
-  `Hashable`, so the cache key composes).
+- Last verified: Sortie 7 COMPLETED, commit `9d7faf2`. Supervisor independently re-ran
+  every exit criterion: `make test` exit **0** (`SwiftEscriboTests` **22 tests / 4
+  suites**, up from 2/1; `EscriboCoreTests` unchanged at 98/11), `** TEST SUCCEEDED **`.
+  `grep -rE 'protocol .*Theme' Sources/SwiftEscribo/` → no matches. Charter re-checked:
+  no regex under `Sources/`, `EscriboCore` still imports **nothing at all**, no XCTest
+  under `Tests/`. DL-12 intact — `LineRecord`, `ScanResult`, and `LineState` still have
+  no public initializer. Sortie 12's styler-mode grep already returns no matches.
+  **DL-26 is enforced structurally, not by convention** (DL-33), and both supervisor
+  falsification probes fired correctly (DL-34).
+
+#### Sortie history — WU-2
+| Sortie | State | Model | Attempts | Commit | Verified by supervisor |
+|--------|-------|-------|----------|--------|------------------------|
+| 7 | COMPLETED | opus | 1 | `9d7faf2` | test 0 (22/4 + 98/11), theme-protocol grep clean, DL-12 intact, two falsification probes fired (DL-34) |
 
 ### WU-3 Fountain Depth
 - Work unit state: NOT_STARTED
@@ -134,7 +145,7 @@ updated: 2026-07-26
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-2 | 7 | DISPATCHED | 1/3 | opus | 25 | (session `fa1c4c1d`) | — | 2026-07-26 06:50 PDT |
+| WU-2 | 8 | DISPATCHED | 1/3 | opus | 20 | (session `fa1c4c1d`) | — | 2026-07-26 07:20 PDT |
 
 ---
 
@@ -173,13 +184,24 @@ updated: 2026-07-26
 | DL-29 | 2026-07-25 | WU-1 | 6 | Model: opus | Complexity 20; override applies. Designed around a known blind spot rather than trusting its own headline assertion. |
 | DL-30 | 2026-07-26 | — | — | **Session `fa1c4c1d` takes the con. The split brain is resolved — both prior sessions are dead.** | Verified by the DL-19 signal, not by inference: `8380d2fe` ran `/exit` at 13:42:42Z (its transcript's last record is `Bye!`), and `d1a5e802`'s transcript has been silent since 06:50:19Z. No subagent transcript under either session has been written since 23:48 PDT on 2026-07-25. Working tree clean at `43ac4e2`. One supervisor, no live agents. |
 | DL-31 | 2026-07-26 | WU-1 | 6 | **Sortie 6 EC5 met in substance, NOT as written — and the difference is a second blind spot worth recording** | EC5 asks that "temporarily returning after one converged line with no lookahead" turn the gate **red**. The supervisor ran exactly that break (replacing the `stop = min(lineCount, line + lookahead)` extension with an immediate `break`) and the gate stayed **green — 224/224 cases passed** — while only `IncrementalScannerTests`' direct convergence assertions went red. This is not a defect in the harness; it is DL-23 confirmed empirically. Output at lines ≥ the converged line is a function of `(state, text)`, both proved unchanged, so the un-repainted lines were already correct and a painted-document comparison cannot see the difference. It holds even for `CueGrammar(lookahead: 1)`, which the gate does exercise. **The gate is nonetheless falsifiable, and the supervisor proved it:** a second probe setting `backwardWidening` to `0` turned the gate **red across many seeds** (272 issues across the run, `incrementalScanEqualsFullScan` among the failures). Both probes reverted; tree clean; `make test-core` green again at 98/11. **Consequence for Sorties 13–21:** the gate is blind in *two* directions — grammar state omission (DL-25) and a too-short forward extension past convergence (here). A lookahead rule's correctness — Sortie 14's cue rule above all — must be asserted directly, by naming expected `ElementKind`s, and can never be inferred from a green gate. |
+| DL-33 | 2026-07-26 | WU-2 | 7 | **RULING: `TokenStyle` carries no size or size-scale field. DL-26 beats the plan's stage-2 wording, and the agent was right to say so rather than split the difference.** | Plan task 4 lists the kind stage as "color, font traits, **size scale**"; DL-26 requires size to come from the line's `ElementKind`. The agent resolved for DL-26 and deleted the field, moving size to `EscriboTheme.elementSizeScales: [ElementKind: [Int: Double]]` — keyed by `(ElementKind, depth)`, the same key REQUIREMENTS.md already uses for geometry and DL-7 already established for headings. **This is the stronger design and it is what REQUIREMENTS.md actually wants:** § "Marker dimming is unfalsifiable by construction" says the absence of a marker `TokenStyle` means "markers a size smaller" is a thing *the type system refuses*, not a rule someone remembers. Removing size from `TokenStyle` extends that property from markers to every span on a line. A size scale hung off `SpanKind` is now unrepresentable, not merely discouraged. Point size is computed at exactly one site, `EscriboStyler.swift:224`, as `theme.baseFontSize × metrics.pointSizeScale × theme.sizeScale(for: line.element, depth: line.depth)`. |
+| DL-34 | 2026-07-26 | WU-2 | 7 | Supervisor falsified the two claims most easily written vacuously | A cache-hit test and a "resolves to base" test both pass trivially if the styler does nothing interesting, so neither was taken on report. **Probe A** narrowed the invalidation guard to compare only the theme; the parameterized trigger test went red on exactly `.mode`, `.appearance`, and `.fontMetrics` and stayed green on `.theme` — it genuinely distinguishes the four triggers and names the broken one. **Probe B** made the role stage multiply point size by 0.9; `A marker and its content sibling differ only in foreground alpha`, `The role stage touches the foreground alpha and nothing else`, and `Every span on an indented heading line resolves to the same point size` all went red, as did the source-theme collapse tests (137 issues). Both probes reverted; tree clean; `make test` green at 22/4 + 98/11. The DL-26 guard is real. |
+| DL-35 | 2026-07-26 | WU-2 | 7 | ACCEPTED: the style cache is two-level, `[LineStyleKey: [StyleKey: ResolvedStyle]]` | The mandated `(SpanKind, StyleSet, SpanRole)` key is the **inner** key, verbatim and unmodified. The outer partition is `(ElementKind, depth)`. This is forced by DL-33, not a liberty taken: once point size is a per-line quantity, a flat `(SpanKind, StyleSet, SpanRole)` cache returns the *wrong size* for the same span shape on a heading line versus a body line. Partitioning by the key REQUIREMENTS.md already uses for geometry keeps the mandated key intact and both levels in the tens. **Sortie 30 must not "simplify" this to one level** — that reintroduces the exact bug DL-26 exists to prevent. |
+| DL-36 | 2026-07-26 | WU-2 | 7 | ACCEPTED: the styler caches `ResolvedStyle` values, not attribute dictionaries | `[NSAttributedString.Key: Any]` is not `Equatable`, so a dictionary cache cannot be asserted against the invariants this layer exists to guarantee. Dictionaries are produced on demand via `attributes(resolver:)`. The exit criterion stated in terms of an attribute dictionary is nonetheless discharged against a real `NSDictionary` comparison, not against the value type only. |
+| DL-37 | 2026-07-26 | WU-2 | 7 | ACCEPTED with a flag for Sorties 10–12: `EscriboColor` stores sRGB components; fonts are described by `FontSpec` **intent**, not by `NSFont`/`UIFont` | Buys `Sendable` + `Equatable` on the theme for free, keeps any family name out of every type a test can reach (so D-4 is enforced structurally rather than by convention), and — the real argument — keeps appearance one of the four **declared** invalidation triggers instead of an invisible mutation inside a dynamic system color. **The cost is real and is being accepted knowingly:** static sRGB does not follow macOS accent color or the increased-contrast accessibility setting the way `NSColor.labelColor` does. That is a theme-authoring problem, not a styler problem, and the appearance trigger is the seam through which a host can fix it. Sorties 10–12 must route appearance changes through `EditorStyleEnvironment.appearance` and must not reach for semantic colors to paper over it. |
+| DL-38 | 2026-07-26 | WU-2 | 7 | ACCEPTED: `FontResolver` (the D-4 chain) shipped in Sortie 7 rather than Sortie 8 | Producing an attribute dictionary at all requires a resolved font, so the alternative was a sortie that could not discharge its own exit criteria. Scope stayed bounded and verified: the chain plus a `FontSpec`-keyed cache, and **no** `ParagraphMetrics`, no character-to-point conversion, no `NSParagraphStyle`, no advance-width measurement. `Package.swift` still declares no `resources:`. **Sortie 8 extends `FontResolver`, never replaces it** — `FontSpec` is the cache key and the D-4 name list lives there. |
+| DL-39 | 2026-07-26 | WU-2 | 7 | ACCEPTED: the kind stage may override font family | REQUIREMENTS.md lists family at the base and style stages, but "everything else overrides" covers it and the requirements settle the substance directly: Architecture §3 constrains markers **relative to their content**, not content relative to other content, and REQUIREMENTS.md says in as many words that "a Markdown code span legitimately swaps to a mono family and changes advance width; that is the feature working." A fenced code block is a *kind*. Marker/content parity is untouched because a marker and its content share a kind. |
+| DL-40 | 2026-07-26 | WU-2 | 7 | ACCEPTED: `EditorMode` never reaches the styler — it is folded into the theme by `strippedToSource()` | One consequence worth naming: Sortie 12's exit criterion `grep -rE 'EditorMode\|\.source\|\.live' Sources/SwiftEscribo/*Styler*` **already returns no matches** and must stay that way. Sortie 12 switches mode by assigning `styler.environment.mode`; it must not add a mode parameter to the styler. |
+| DL-41 | 2026-07-26 | WU-2 | 7 | **PRE-AUTHORIZED for Sortie 30's audit: `EscriboColor`, `FontFamilyRole`, `FontTraits` are public and are not on the 1.0 list** | They are *forced*, not speculative: REQUIREMENTS.md § What is public in 1.0 names `TokenStyle`, and a public struct's stored-property types must be public. Same class of exception as DL-9. Sortie 30 should confirm the set is still exactly these three and record them in the report rather than re-litigating them. Everything else the sortie added — `EscriboStyler`, `FontSpec`, `ResolvedStyle`, `FontMetrics`, `EscriboAppearance`, `EditorStyleEnvironment` — is correctly `internal`. |
+| DL-42 | 2026-07-26 | WU-2 | 7 | NOTED, not a defect: the Fountain built-in themes are deliberately thin | Base monospaced at 12 pt, no per-element size scaling (a screenplay page is uniform), marker dimming, no `.inlineCode` entry. Scene-heading, cue, and dialogue entries would be decoration for `SpanKind`s that Sortie 13 has not created yet. **Sortie 13 adds them to `BuiltInThemes.swift`, never as a `default:` in the styler** — an unthemed kind rendering as base text is correct behavior, and DL-33 plus the unknown-kind test make that the guaranteed path. |
+| DL-43 | 2026-07-26 | WU-2 | 8 | Model: opus | Complexity 20 (5 turns-band + 2 file-count + 10 foundation/dependents + 3 risk). CoreText font resolution and the characters-to-points conversion are reused by both language rule sets in Sortie 27, and D-4 exists precisely because the naive version of this sortie authors a test that passes locally and fails in CI. |
 | DL-32 | 2026-07-26 | WU-2 | 7 | Model: opus | Complexity 25 (8 turns-band + 4 file-count + 10 foundation/dependents + 3 risk + 0 ambiguity). Override also applies: foundation_score 1 with 23 dependents. The theme lookup table and the styler cache are the second half of the scanner→editor seam and are consumed by all three Representables; the composition order and the single invalidation path are exactly the shape that does not retrofit. |
 
 ---
 
 ## Overall Status
 
-- Sorties completed: **6 / 30** (Sorties 1–6 — all supervisor-verified)
-- Sorties in flight: 1 (Sortie 7, WU-2)
-- Work units completed: **1 / 7** (WU-1 COMPLETE; WU-2 RUNNING; WU-3…WU-7 gated)
+- Sorties completed: **7 / 30** (Sorties 1–7 — all supervisor-verified)
+- Sorties in flight: 1 (Sortie 8, WU-2)
+- Work units completed: **1 / 7** (WU-1 COMPLETE; WU-2 RUNNING at 8 of 12; WU-3…WU-7 gated)
 - Blocked: none
