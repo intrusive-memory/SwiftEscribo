@@ -7,6 +7,62 @@ import Foundation
   import UIKit
 #endif
 
+/// Rule 3 of REQUIREMENTS.md § External text replacement, as arithmetic.
+///
+/// > Clamp the selection to the new length rather than dropping it to zero.
+///
+/// ## Why this is a free function and not four lines inside `applyExternalText`
+///
+/// Because inline, **the rule is untestable**, and worse, it looks tested.
+///
+/// The Sortie 12 supervisor deleted both `min`s from the inline version and the whole
+/// suite stayed green — including the two integration tests written specifically to cover
+/// this rule. The cause is that `NSTextView.selectedRange`'s *setter* clamps an
+/// out-of-range value on its own, so setting a selection, shortening the document, and
+/// reading the selection back measures AppKit and not this package. A test that passes
+/// with the implementation removed certifies nothing.
+///
+/// Pulled out here the rule is input → output with no text view anywhere in it, so
+/// `SelectionClampTests` can drive it over a table and a deletion goes red immediately.
+/// That is the entire justification for the indirection; there is no other reason for this
+/// type to exist.
+///
+/// The integration tests remain, as a second leg proving the clamp is actually *wired* to
+/// the replacement path — a thing the pure test cannot see — but they carry a comment
+/// saying they cannot fail on their own, so that a later sortie does not "simplify" the
+/// table-driven test away as redundant.
+enum SelectionClamp {
+
+  /// `anchor..<(anchor + extent)` confined to `0..<newLength`.
+  ///
+  /// Total by construction: every input, including nonsensical ones, yields a well-formed
+  /// `NSRange` inside the new document. There is no failure mode, because the caller is a
+  /// text-view mutation and an ill-formed `NSRange` there is an `NSRangeException` inside
+  /// the host app rather than a diagnosable error here.
+  ///
+  /// - Parameters:
+  ///   - anchor: The selection's location **before** the replacement, exactly as the text
+  ///     view reported it — including `NSNotFound`, which is the text system's "there is
+  ///     no selection" and is normalised to a caret at the start rather than propagated.
+  ///   - extent: The selection's length before the replacement.
+  ///   - newLength: The document's length in UTF-16 code units **after** the replacement.
+  /// - Returns: The clamped selection. The anchor moves only as far as it must, so a caret
+  ///   past the end of a shortened document lands at the **end** and not at zero; the
+  ///   extent is trimmed to whatever survives after the anchor, so a selection straddling
+  ///   the new end keeps the part that still exists rather than collapsing.
+  static func clampedSelection(anchor: Int, extent: Int, toLength newLength: Int) -> NSRange {
+    let length = max(0, newLength)
+
+    // `NSNotFound` is a sentinel, not a large number. Clamping it arithmetically would put
+    // the caret at the end of the document on every reset that happened to follow a
+    // "no selection" state.
+    guard anchor != NSNotFound else { return NSRange(location: 0, length: 0) }
+
+    let location = min(max(0, anchor), length)
+    return NSRange(location: location, length: min(max(0, extent), length - location))
+  }
+}
+
 /// The host-facing operations on ``EscriboTextView``: pushing a new document in from
 /// outside, and pushing a new configuration in from outside.
 ///
@@ -106,9 +162,16 @@ extension EscriboTextView {
   /// > Clamp the selection to the new length rather than dropping it to zero.
   ///
   /// Captured *before* the mutation, because the text system will have moved it by the
-  /// time the mutation returns. The anchor is clamped to the new length and the extent to
-  /// what remains after it, so a caret past the end of a shortened document lands at the
-  /// end rather than at the beginning.
+  /// time the mutation returns. The arithmetic lives in ``SelectionClamp`` rather than
+  /// inline here, and that is a testability decision with a specific history: `NSTextView`
+  /// clamps an out-of-range `selectedRange` in its own setter, so an integration test that
+  /// sets a selection, shortens the document, and reads the selection back **passes with
+  /// this clamp deleted**. Discovered by the Sortie 12 supervisor doing exactly that.
+  /// A pure function is the only shape of this rule that can be asserted against.
+  ///
+  /// AppKit's forgiveness is also not something to lean on. UIKit makes no such promise,
+  /// and without the clamp `newLength - anchor` can go negative, which is an `NSRange`
+  /// with a length of roughly 2^63 handed to a text view.
   ///
   /// ### Rule 4 — one undo action
   ///
@@ -117,10 +180,25 @@ extension EscriboTextView {
   /// An explicit undo grouping around the whole reset, on the platform's own
   /// `UndoManager`. Deliberately *not* an undo seam: REQUIREMENTS.md Known limitations §1
   /// accepts each platform's native undo granularity, and the coordinator "must not grow an
-  /// AppKit-shaped undo seam that UIKit cannot adopt." The grouping guarantees that
-  /// whatever the platform registers for this reset is **at most one** action; it does not
-  /// attempt to manufacture an action the platform did not register. See the note on
-  /// `EscriboEditorBridge` for what that means in practice on macOS today.
+  /// AppKit-shaped undo seam that UIKit cannot adopt."
+  ///
+  /// **What that grouping does and does not buy, stated plainly so it is not "fixed"
+  /// wrongly later.** The grouping bounds this reset at **at most one** undo action; it
+  /// cannot manufacture an action the platform did not register. On macOS it registers
+  /// **zero** today: `NSTextView` registers undo from
+  /// `shouldChangeText(in:replacementString:)` / `didChangeText()`, its own input path, and
+  /// a direct text-storage mutation does not go through it. So an external reset is
+  /// currently **not undoable on macOS**, and rule 4 is met in the "not more than one"
+  /// direction only.
+  ///
+  /// This is a **deliberate, ruled-on deferral, not an oversight.** Closing it here would
+  /// mean building a second, external-reset-only input path, and REQUIREMENTS.md § Undo is
+  /// explicit that mutating storage after the fact "registers a second undo group, and no
+  /// amount of `NSUndoManager` grouping reliably merges it afterward. This is a design
+  /// constraint, not an implementation detail — it determines the shape of the
+  /// coordinator." Sortie 25 builds that path **once**, for list continuation, smart Tab,
+  /// and verbatim paste together; routing this reset through it is part of that sortie's
+  /// obligation. Do not add a private one here.
   ///
   /// - Parameter incoming: The document the host wants displayed.
   /// - Returns: `true` if the document was replaced, `false` if rule 1 fired.
@@ -133,9 +211,6 @@ extension EscriboTextView {
 
     // Rule 3, first half: the selection as it stood before the reset.
     let previousSelection = textView.selectedRange
-    let previousAnchor =
-      previousSelection.location == NSNotFound ? 0 : max(0, previousSelection.location)
-    let previousExtent = max(0, previousSelection.length)
 
     // Rule 4.
     let undoManager = textView.undoManager
@@ -153,10 +228,10 @@ extension EscriboTextView {
     coordinator.restyleEverything()
 
     // Rule 3, second half.
-    let newLength = storage.length
-    let anchor = min(previousAnchor, newLength)
-    let extent = min(previousExtent, newLength - anchor)
-    textView.selectedRange = NSRange(location: anchor, length: extent)
+    textView.selectedRange = SelectionClamp.clampedSelection(
+      anchor: previousSelection.location,
+      extent: previousSelection.length,
+      toLength: storage.length)
 
     return true
   }
