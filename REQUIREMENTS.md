@@ -80,9 +80,21 @@ SwiftEscribo replaces all of it.
    the editor never uses them.
 5. **Incremental scanning by line-state convergence.** `LineIndex` holds each line's
    range and `startState` (in-code-fence, in-boneyard, in-dialogue-block, in-
-   frontmatter). On edit, rescan forward from the first affected line, stopping when a
-   recomputed `startState` matches its previous value *and* the edit is behind us.
-   Work is O(edited lines), not O(document).
+   frontmatter). On edit, rescan a window that is widened in **both** directions:
+   - **Backward.** Rescanning starts at least one line *before* the first edited line.
+     Fountain classification is backward-dependent: `BOB` followed by a blank line is
+     action, but type a word on the following line and `BOB` retroactively becomes a
+     character cue. Starting at the edited line cannot see that and will leave the
+     previous line misclassified. The backward extent is a property of the language,
+     not a constant.
+   - **Forward.** Rescanning stops when a recomputed `startState` equals its previous
+     value *and* the edit is behind us *and* the language's lookahead is satisfied —
+     one line past the match for Fountain (§4 under Fountain).
+
+   Work is O(edited lines), not O(document). Both directions are load-bearing; the
+   forward rule alone is the most likely source of "correct on full parse, wrong while
+   typing" bugs, and the backward rule is the one most likely to be forgotten because
+   nothing about the edit itself points at it.
 6. **One pass, two outputs**: inline tokens with ranges (for highlighting) *and*
    per-line element records with content ranges (for semantics). A consumer wanting a
    screenplay element list gets it as a `map` over line records, not a second parse.
@@ -103,6 +115,149 @@ SwiftEscribo replaces all of it.
     precisely on the two hardest requirements — undo coalescing (Editor §4) and
     marked-text handling (§8 above). Both Representables are built in the same slice.
     A coordinator shaped around AppKit does not retrofit to UIKit cheaply.
+
+## Core API
+
+The seam between scanner and editor. Sequencing exists to settle this first: every
+other decision in 1.0 is written against it, and it is the one thing that cannot be
+discovered by writing more grammar.
+
+Types below are a specification of shape and invariants, not final signatures.
+
+### Two axes, not one enum
+
+A span carries **what the text is** and **how it is emphasized** separately.
+
+```swift
+public struct SpanKind: Hashable, Sendable {   // .text, .sceneHeading, .character,
+  public let rawValue: String                  // .dialogue, .codeSpan, .linkURL,
+}                                              // .glosaTagName, .glosaAttributeValue…
+
+public struct StyleSet: OptionSet, Sendable {  // .strong, .emphasis, .strikethrough,
+  public let rawValue: UInt16                  // .inlineCode, .underline
+}
+```
+
+Collapsing these into one enum produces `.boldItalicDialogue` and a combinatorial
+explosion that grows every time a grammar gains a feature. Keeping them orthogonal
+means `***bold italic***` inside dialogue is `kind: .dialogue, style: [.strong,
+.emphasis]` — one span, no new cases.
+
+`SpanKind` and `ElementKind` are **structs with static members**, not enums.
+A public enum is source-breaking to extend: every consumer's exhaustive `switch`
+fails to compile when a case is added, which would make adding a Fountain construct a
+major version bump. Static members on a struct still pattern-match in a `switch` and
+still require a `default`, which is exactly the forward-compatibility wanted.
+
+### Spans — the styling output
+
+```swift
+public struct EscriboSpan: Equatable, Sendable {
+  public let range: Range<Int>   // UTF-16 code units
+  public let kind: SpanKind
+  public let style: StyleSet
+  public let role: SpanRole      // .content or .marker
+}
+```
+
+**Flat, non-overlapping, ordered, and totally tiling.** Not a tree. Every UTF-16
+offset in the scanned range belongs to exactly one span; plain text is a `.text` span
+rather than a gap. This is not a simplification of the model, it is the model:
+
+1. It maps 1:1 onto `setAttributes(_:range:)`, which replaces every attribute on a
+   range. Total tiling therefore makes stale attributes **structurally impossible** —
+   no clear-then-restyle pass, no leftover bold after deleting a `*`. A model with
+   gaps requires that extra pass and is where "the styling is haunted" bugs come from.
+2. Styling becomes a linear walk with no recursion, no accumulation stack, and no
+   allocation per nesting level, on the one path that has a per-keystroke budget.
+3. Equality is array equality, which is what the gate test compares.
+
+Nesting is flattened at scan time, not resolved at style time. `**bold `code`
+bold**` becomes consecutive spans carrying the union of the styles that cover them.
+
+**`role` is how Architecture §2 and §3 are enforced rather than merely intended.**
+A marker span carries the *same* `kind` and `style` as the content it delimits and
+differs only in `role`, so the styler is: resolve attributes from `kind` + `style`,
+then if `role == .marker`, multiply the foreground alpha. That yields "the asterisks
+show, dimmed, while the word renders bold" as a direct consequence of the data model,
+and makes "dim the marker but keep its metrics" the path of least resistance.
+
+Spans are produced for a requested range on demand and are **not retained for the
+whole document**. The editor only ever needs the range it is about to restyle.
+
+### Line records — the semantic output
+
+```swift
+public struct LineRecord: Equatable, Sendable {
+  public let index: Int
+  public let range: Range<Int>         // includes the line terminator
+  public let contentRange: Range<Int>  // excludes markers, indent, and terminator
+  public let element: ElementKind
+  public let startState: LineState
+  public let depth: Int                // list nesting, section depth
+}
+```
+
+`range` includes the terminator and `contentRange` excludes it. Stated explicitly
+because leaving it ambiguous guarantees off-by-one bugs at every call site.
+
+`startState` is the convergence key, so it must be **exact and total**: it carries
+everything that affects how the following line scans, and its `==` is real equality,
+never an approximation or a fast path. A state that omits one field converges early
+and produces exactly the class of bug the gate test exists to catch.
+
+### The scan interface
+
+```swift
+public struct ScanResult: Sendable {
+  public let dirtyRange: Range<Int>     // reapply character attributes here
+  public let spans: [EscriboSpan]       // exactly tile dirtyRange
+  public let lines: Range<Int>          // line indices rescanned
+  public let lineRecords: [LineRecord]  // one per line in `lines`
+}
+```
+
+Invariants, all of them testable and each one a bug that would otherwise ship:
+
+1. `spans` are ordered, non-overlapping, contiguous, and exactly tile `dirtyRange` —
+   the first begins at `dirtyRange.lowerBound`, the last ends at its `upperBound`.
+2. `dirtyRange` **contains the edited range** and is **line-aligned** at both ends.
+   Line alignment is required because paragraph attributes are per-paragraph;
+   applying them to a partial paragraph produces layout that depends on where the
+   range happened to start.
+3. `dirtyRange` may be much larger than the edit (Architecture §5) and is never
+   smaller.
+4. `lineRecords` covers `lines` completely, in order, with no gaps.
+
+**The two outputs drive two different application paths**, and the split is the
+answer to "who owns geometry": `spans` become character attributes; `lineRecords`
+become `NSParagraphStyle` on their line ranges. An edit that changes only emphasis
+touches the first; an edit that turns action into a character cue touches both.
+
+### Edits and text access
+
+An edit is expressed in **old-text coordinates** — the range replaced and the length
+of the replacement — which is unambiguous and derivable from
+`textStorage(_:didProcessEditing:range:changeInLength:)`. The reverse convention
+(new coordinates plus a delta) is not, and mixing the two silently corrupts offsets.
+
+The scanner **must not require the document as a Swift `String` per edit.**
+`NSTextStorage` is `NSString`-backed; bridging 120 KB on every keystroke would exceed
+the whole budget before scanning began. The scanner reads UTF-16 through an
+abstraction that both `String` and `NSTextStorage` satisfy, and reads it a line at a
+time rather than a code unit at a time, so dispatch is per line and not per character.
+
+### Concurrency and failure
+
+- **The scanner is synchronous and single-threaded.** No `async`, no actors, no
+  background queue. At the budgets in Performance budget it is fast enough to run on
+  the main actor, and introducing concurrency would add ordering hazards against
+  `NSTextStorage` mutation for no measurable gain.
+- **Scanning never fails.** No `throws`, no optional result. Every input, including
+  malformed and hostile input, produces a total tokenization; unterminated and
+  malformed constructs degrade to `.text` rather than propagating an error. Hostile
+  input is a fixture case (Verification §6), not an error path — the scanner has no
+  error path.
 
 ## Functionality
 
@@ -198,23 +353,36 @@ SwiftEscribo replaces all of it.
    `incrementalScan(edits) == fullScan(finalText)`. This catches the
    state-convergence bug class that example-based tests miss. If it is red, the
    scanner is wrong regardless of how good the fixtures look.
-3. **Round-trip test** for the writer, correctly formulated as idempotence:
+
+   The generated edits must include the cases that break convergence rather than
+   uniform random typing: editing the line *after* an ALL-CAPS line (the backward
+   dependency in Architecture §5), opening and closing fences and boneyards,
+   pasting and deleting multi-line blocks, and editing at offset 0 and at EOF.
+   A generator that only types single characters mid-paragraph passes against a
+   scanner that is wrong.
+3. **Span invariant test**, asserted on every scan in the whole suite, not as its own
+   case: spans are ordered, non-overlapping, and exactly tile `dirtyRange`, and
+   `dirtyRange` is line-aligned and contains the edit (Core API). These are cheap
+   enough to check unconditionally, and a violation means the styler will leave stale
+   attributes on screen — a symptom that is miserable to diagnose from the UI and
+   trivial to catch here.
+4. **Round-trip test** for the writer, correctly formulated as idempotence:
    `parse(write(parse(x))) == parse(x)`. Note that `write(parse(x)) == x` is *not* a
    valid assertion — writing normalizes, so it fails on any non-canonical input.
-4. **Differential test** against `swift-markdown` (test-only) for CommonMark block
+5. **Differential test** against `swift-markdown` (test-only) for CommonMark block
    structure agreement.
-5. Golden fixture corpus of `.md` and `.fountain`, including hostile input:
+6. Golden fixture corpus of `.md` and `.fountain`, including hostile input:
    unterminated fences, nested emphasis, CRLF line endings, an ALL-CAPS line at EOF,
    malformed GLOSA tags, and real org screenplays
    (`~/Projects/apps/Produciesta/fixtures/episode_10.fountain`).
-6. Performance assertions live in `EscriboPerformanceTests`, excluded from the
+7. Performance assertions live in `EscriboPerformanceTests`, excluded from the
    PR-blocking job — wall-clock budgets are too machine-dependent to gate a merge.
-7. **Only scan time is asserted.** The budget covers the scanner returning a dirty
+8. **Only scan time is asserted.** The budget covers the scanner returning a dirty
    range and its tokens, measured in `EscriboCore` with no UI. End-to-end frame time
    (TextKit 2 attribute application and relayout) is observed and reported, never
    asserted — it is not controllable by this package and would make the suite a flake
    generator.
-8. Budgets are measured over an edit sequence that includes the pathological cases,
+9. Budgets are measured over an edit sequence that includes the pathological cases,
    not average typing: an edit at line 1 of a long document, an edit inside an
    unterminated fence or boneyard, and a 10 KB paste.
 
@@ -231,7 +399,7 @@ so they are not mistaken for oversights.
 
 ## Performance budget
 
-All figures on a 120-page screenplay (~120 KB), scan time only (Verification §7),
+All figures on a 120-page screenplay (~120 KB), scan time only (Verification §8),
 measured on a native `arm64` build (requirement 2). A number from a Rosetta or
 universal build is not a measurement of anything this package ships.
 

@@ -80,6 +80,27 @@ EscriboEditor (SwiftUI)
 converts to `NSRange` with no work on the hot path. `String.Index` conversion helpers
 exist for consumers who want them; the editor never uses them.
 
+### Spans tile, they do not nest
+
+`[EscriboSpan]` is flat, ordered, non-overlapping, and **exactly tiles** the scanned
+range — plain text is a `.text` span, never a gap. Nesting is flattened at scan time:
+`kind` (what the text is) and `style` (an OptionSet of emphasis flags) are separate
+axes, so `***x***` in dialogue is one span, not a tree.
+
+This is load-bearing. `setAttributes(_:range:)` replaces every attribute on a range,
+so total tiling makes stale attributes structurally impossible — no clear-then-restyle
+pass, no bold left behind after deleting a `*`. Introduce a gap and you have
+reintroduced that whole bug class.
+
+A marker span carries the **same** `kind` and `style` as the content it delimits and
+differs only in `role`. The styler resolves attributes, then dims alpha if
+`role == .marker`. That is how "asterisks visible but dimmed, word still bold" falls
+out of the data rather than being special-cased.
+
+`SpanKind` and `ElementKind` are structs with static members, never enums — a public
+enum is source-breaking to extend, which would make adding a Fountain construct a
+major version bump.
+
 ### Incremental scanning
 
 `LineIndex` holds each line's range and its `startState` (in-code-fence,
@@ -87,11 +108,18 @@ in-boneyard, in-dialogue-block). On edit, rescan forward from the first affected
 line and stop when a line's recomputed `startState` equals its previous value *and*
 the edit is behind us. Work is O(edited lines), not O(document).
 
-**The Fountain trap:** a character cue is an ALL-CAPS line recognized only by what
-*follows* it. The scanner needs one line of lookahead, and convergence must extend
-one line past the match. Get this wrong and highlighting is correct on full parse but
-wrong while typing — the hardest bug class here to notice. The property test below
-exists specifically to catch it.
+**The Fountain trap, forward:** a character cue is an ALL-CAPS line recognized only by
+what *follows* it. The scanner needs one line of lookahead, and convergence must
+extend one line past the match. Get this wrong and highlighting is correct on full
+parse but wrong while typing — the hardest bug class here to notice.
+
+**The Fountain trap, backward:** the same rule means an edit can change the
+classification of the line *before* it. `BOB` + blank line is action; type a word on
+the following line and `BOB` becomes a character cue. So rescanning starts at least
+one line *before* the first edited line. Nothing about the edit itself points at this,
+which is why it gets forgotten.
+
+The property test below exists specifically to catch both.
 
 ### Styling rules
 
