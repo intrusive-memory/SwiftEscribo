@@ -88,13 +88,21 @@ updated: 2026-07-26
 
 ### WU-2 Editor Substrate
 - Work unit state: **RUNNING** (unlocked 2026-07-26 — WU-1 COMPLETED)
-- Current sortie: 9 of 30 (third of 7–12)
+- Current sortie: 10 of 30 (fourth of 7–12)
 - Sortie state: DISPATCHED
 - Sortie type: code
-- Model: opus
-- Complexity score: 24
+- Model: **sonnet** (first non-opus dispatch of the mission — see DL-60)
+- Complexity score: 9
 - Attempt: 1 of 3
-- Last verified: Sortie 8 COMPLETED, commit `a1947c9`. Supervisor independently re-ran
+- Last verified: Sortie 9 COMPLETED, commit `370f918`. Supervisor independently re-ran
+  every exit criterion: `make test` exit **0** and `make test-ios` exit **0**
+  (`SwiftEscriboTests` **62 tests / 11 suites**, up from 40/6; core unchanged at 98/11).
+  `setAttributedString` → no matches. `hasMarkedText` guard sited at
+  `EditorCoordinator.swift:218`, before both the scan and the styler. The
+  UI-framework-import count for `EditorCoordinator.swift` is **0** — its only imports are
+  `EscriboCore` and `Foundation`. DL-40 and DL-12 both still hold. **Both falsification
+  probes fired (DL-53), including the DL-44 hazard probe, which is the one that mattered.**
+- Previously verified: Sortie 8 COMPLETED, commit `a1947c9`. Supervisor independently re-ran
   every exit criterion: `make test` exit **0** and `make test-ios` exit **0**
   (`SwiftEscriboTests` **40 tests / 6 suites**, up from 22/4; core unchanged at 98/11).
   All four greps clean: no point constants in the theme tables, no family name anywhere
@@ -117,6 +125,7 @@ updated: 2026-07-26
 |--------|-------|-------|----------|--------|------------------------|
 | 7 | COMPLETED | opus | 1 | `9d7faf2` | test 0 (22/4 + 98/11), theme-protocol grep clean, DL-12 intact, two falsification probes fired (DL-34) |
 | 8 | COMPLETED | opus | 1 | `a1947c9` | test 0 **and test-ios 0** (40/6 + 98/11), 4/4 greps clean, one invalidation path preserved, two falsification probes fired (DL-45) |
+| 9 | COMPLETED | opus | 1 | `370f918` | test 0 and test-ios 0 (62/11 + 98/11), coordinator imports 0 UI frameworks, DL-44 hazard probed and guarded (DL-53) |
 
 ### WU-3 Fountain Depth
 - Work unit state: NOT_STARTED
@@ -154,7 +163,7 @@ updated: 2026-07-26
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-2 | 9 | DISPATCHED | 1/3 | opus | 24 | (session `fa1c4c1d`) | — | 2026-07-26 08:15 PDT |
+| WU-2 | 10 | DISPATCHED | 1/3 | sonnet | 9 | (session `fa1c4c1d`) | — | 2026-07-26 09:15 PDT |
 
 ---
 
@@ -213,13 +222,22 @@ updated: 2026-07-26
 | DL-50 | 2026-07-26 | WU-2 | 8 | ACCEPTED: the family chain uses `PlatformFont(name:size:)`, not `CTFontCreateWithName` — and the reasoning matters more than the call | Plan task 4 says the chain goes "through CoreText". `CTFontCreateWithName` **never fails**: handed an unknown name it substitutes silently. A chain built on it would always succeed at its first entry, so Courier New, Courier, and the `.monospacedSystemFont` fallback would all be unreachable — D-4's entire purpose defeated, and defeated in a way no test could observe, because the substituted font is a real font. CoreText does the **measuring** here (advance width, line height); it must not do the **choosing**. This is precisely the class of local-passes/CI-misleads defect D-4 exists to prevent. |
 | DL-51 | 2026-07-26 | — | — | PROCESS NOTE for the brief: a killed `xcodebuild` orphans an `xctest` agent that blocks the next run | The Sortie 8 agent hit this and so did the supervisor — one probe run timed out at 10 minutes with no output. The harness does not recover on its own. Symptom: `make test` hangs indefinitely with no test output. Fix: check `pgrep -fl 'xcodebuild\|xctest'` and kill survivors before re-running. Not a code defect; worth one line in the brief so the next mission does not diagnose it twice. |
 | DL-52 | 2026-07-26 | WU-2 | 9 | Model: opus | Complexity 24 (8 turns-band + 2 file-count + 10 foundation/dependents + 4 risk); override applies. The coordinator is adopted unchanged by both Representables — the plan states plainly that an AppKit-shaped seam here does not retrofit to UIKit — and it must land DL-44 correctly or the whole geometry layer renders as though switched off. |
+| DL-53 | 2026-07-26 | WU-2 | 9 | Supervisor probed the DL-44 hazard directly, because it is the one defect in this mission that would have shipped silently | **Probe A** moved the paragraph-style pass *before* the span pass — the exact bug DL-44 predicted. Four tests went red: `A styled line carries both its span attributes and its paragraph style`, `A line's paragraph style covers its terminator, not just its content`, `Marker spans are dimmed but keep the line's size and geometry`, and `Switching language builds a new scanner and restyles everything`. The composed-result assertion DL-44 demanded now exists and works. **Probe B** neutered the marked-text guard; `With marked text active, a storage edit makes zero calls into the styler` and `Edits dropped during a composition are recovered by a full rescan afterwards` both went red. Both reverted; tree clean; green at 62/11 + 98/11. **Method note against my own error:** the first attempt at Probe B used `sed` and silently failed to substitute, producing an all-green run that looked like a weak test. It was not a weak test; it was a probe that never applied. A probe that reports no failures must be checked for having actually landed before any conclusion is drawn from it. |
+| DL-54 | 2026-07-26 | WU-2 | 9 | **ACCEPTED, and this is the best structural answer to platform-neutrality the mission has produced: `EditorTextStorage` is a protocol whose conformance is empty** | `extension NSTextStorage: EditorTextStorage {}` has no body, because all five members the coordinator uses are inherited from `NSMutableAttributedString` — Foundation, not AppKit or UIKit. The coordinator therefore depends on a **subset** of the real text system rather than a wrapper over it: there is no adapter to drift, and tests exercise the real object. The rejected alternative, a `PlatformTextStorage` typealias, would have satisfied the import grep by trickery while leaving the coordinator typed against a UI-framework class. The protocol also makes it impossible for `apply` to express a character mutation or a whole-string assignment, which is `setAttributedString`'s prohibition enforced by the type system rather than by a grep. |
+| DL-55 | 2026-07-26 | WU-2 | 9 | ACCEPTED: `hasMarkedText` is a **stored closure the view binds**, not a protocol requirement | AppKit spells it `hasMarkedText()` (a method on `NSTextInputClient`); UIKit spells it `markedTextRange` (a property on `UITextInput`). No single protocol requirement is directly satisfiable by both, so whichever platform were written first would have won and the other would have needed an adapter — and macOS is written first, in Sortie 10. One line to bind on either platform. **The policy stays in the coordinator** (the guard, the skip counter, the rescan flag), so Sortie 11 cannot forget it; only the question is delegated. |
+| DL-56 | 2026-07-26 | WU-2 | 9 | ACCEPTED with a measurement obligation for Sortie 28: after a composition ends, the next edit **full-scans** | Edits skipped during marked text leave the line index describing a document that no longer exists, which is not recoverable incrementally. A full scan is the only correct recovery, and it makes a "composition ended" callback unnecessary — Sorties 10 and 11 need no extra wiring. **The cost is real and unmeasured:** CJK and other IME input composes constantly, so this is a full document scan every few keystrokes for those users, on a document that may be 120 KB. REQUIREMENTS.md budgets a cold full scan at ≤ 50 ms with a 10 ms target, so it should fit — but "should fit" is not a measurement. **Sortie 28 must add a composition-recovery case to the pathological sequence** it already measures. |
+| DL-57 | 2026-07-26 | WU-2 | 9 | ACCEPTED: `EditorCoordinator` is **not** `@MainActor` | It is a plain non-`Sendable` `final class: NSObject`, matching `EscriboScanner` (DL-28) and `EscriboStyler`. `NSTextStorageDelegate` is nonisolated in the SDK, so annotating the coordinator would have forced `MainActor.assumeIsolated` — **a trap** — onto the hot path of a text-view delegate callback, in a package whose requirements say the scan path has no error path and no precondition. Main-thread ownership is a documented contract here, not an annotation. The test suites *are* `@MainActor`, which is consistent: the contract is asserted where it can be, without putting a trap in shipping code. |
+| DL-58 | 2026-07-26 | WU-2 | 9 | ACCEPTED: two protocol-extension helpers, and genericity **rejected on purpose** | Swift will not pass `any EditorTextStorage` to a `some UTF16TextSource` parameter, and a protocol extension is where `Self` is concrete. The obvious alternative — making the coordinator generic over its storage type — was rejected because **Sortie 11's exit criterion requires both Representables to drive the same *declared* type**, and a generic coordinator makes that criterion unsatisfiable as written. Deciding this in Sortie 9 rather than discovering it in Sortie 11 is the whole reason the plan puts the coordinator first. `EditorCoordinator` is non-generic and unconditionally declared; Sortie 11's criterion is satisfiable. |
+| DL-59 | 2026-07-26 | WU-2 | 9 | **NOTED as a second instance of the DL-46 class, for the brief: a literal-grep exit criterion punishes documenting the thing it forbids** | The agent had to reword two doc comments so its prose explaining *why* `setAttributedString` is forbidden did not itself trip `grep -rn 'setAttributedString' Sources/SwiftEscribo/`. The prohibition is still documented, spelled out longhand. No call exists — verified independently. This is not misconduct and the criterion's intent is met; it is a **plan-authoring lesson**: a bare literal grep over a whole source tree cannot distinguish a call from a warning about the call, and the sortie that most deserves to explain the rule is the one penalised for doing so. Pair such criteria with a scope (`grep` excluding comment lines) or assert the absence of the *call* rather than the *token*. Same family as DL-46. |
+| DL-61 | 2026-07-26 | — | — | **ENVIRONMENTAL, pre-existing, and a real CI risk: `make test` intermittently HANGS in font resolution — it does not fail** | Every test worker blocks in `+[NSFont fontWithName:size:]` awaiting a synchronous XPC reply from an idle `fontd`. The Sortie 9 agent reproduced it on the **clean tree at `9a04922`**, before writing any code, so it is not caused by this mission; the supervisor independently lost a 10-minute probe run to it during Sortie 8 verification. Local recovery: `pgrep -fl 'xcodebuild\|xctest'`, kill survivors, re-run — the next run succeeds. **Why it matters beyond this machine:** `.github/workflows/tests.yml` declares no `timeout-minutes` on either job, so a hang there consumes the GitHub Actions default of **six hours** per job instead of failing fast. A hang is strictly worse than a failure in a gating job. **Sortie 28 and Sortie 29 must declare `timeout-minutes` on every workflow job they create, and Sortie 29 should add it to the existing `tests.yml` jobs while it is in that file.** The supervisor does not edit workflow config during execution; this is carried into both dispatch prompts. |
+| DL-60 | 2026-07-26 | WU-2 | 10 | **Model: sonnet — the first non-opus dispatch of this mission, and deliberately so** | Complexity **9**: 3 turns-band + 2 file-count + 0 foundation + 2 dependency-depth + 2 risk. Sorties 1–9 all scored ≥ 20 because each owned an algorithm, a seam, or a vocabulary that later sorties are built on. **Sortie 10 owns none of those.** Sortie 9 already built and proved the seam; per its own report the macOS wiring is three lines. What remains is constructing an `NSTextView` on a TextKit 2 stack inside an `NSScrollView`, setting four substitution flags to `false`, and leaving continuous spell checking `true` — a clear spec with machine-checkable property assertions and no ambiguity to resolve. Sending opus at 30× cost for that would be ignoring the model-selection rules the mission is supposed to follow. The known trap — `NSTextView` falling back to TextKit 1 depending on how it is constructed — is precisely what the `textLayoutManager` non-nil criterion catches, so a wrong answer fails loudly rather than silently. If it fails, the retry rule upgrades attempt 2 to opus; that path costs one sortie, and taking it is cheaper than pre-paying opus on every remaining sortie. |
 | DL-32 | 2026-07-26 | WU-2 | 7 | Model: opus | Complexity 25 (8 turns-band + 4 file-count + 10 foundation/dependents + 3 risk + 0 ambiguity). Override also applies: foundation_score 1 with 23 dependents. The theme lookup table and the styler cache are the second half of the scanner→editor seam and are consumed by all three Representables; the composition order and the single invalidation path are exactly the shape that does not retrofit. |
 
 ---
 
 ## Overall Status
 
-- Sorties completed: **8 / 30** (Sorties 1–8 — all supervisor-verified)
-- Sorties in flight: 1 (Sortie 9, WU-2)
-- Work units completed: **1 / 7** (WU-1 COMPLETE; WU-2 RUNNING at 9 of 12; WU-3…WU-7 gated)
+- Sorties completed: **9 / 30** (Sorties 1–9 — all supervisor-verified)
+- Sorties in flight: 1 (Sortie 10, WU-2)
+- Work units completed: **1 / 7** (WU-1 COMPLETE; WU-2 RUNNING at 10 of 12; WU-3…WU-7 gated)
 - Blocked: none
