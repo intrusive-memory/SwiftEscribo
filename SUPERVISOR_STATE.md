@@ -89,7 +89,10 @@ updated: 2026-07-26
 ### WU-2 Editor Substrate
 - Work unit state: **RUNNING** (unlocked 2026-07-26 — WU-1 COMPLETED)
 - Current sortie: 11 of 30 (fifth of 7–12)
-- Sortie state: DISPATCHED
+- Sortie state: **PARTIAL** — every literal exit criterion passes and was re-verified,
+  but the supervisor found a gap the criteria do not cover (DL-68). Continuation
+  dispatched to the same agent; **attempt counter NOT incremented** — partial work is
+  progress, not failure.
 - Sortie type: code
 - Model: sonnet
 - Complexity score: 7
@@ -172,7 +175,7 @@ updated: 2026-07-26
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-2 | 11 | DISPATCHED | 1/3 | sonnet | 7 | (session `fa1c4c1d`) | — | 2026-07-26 09:40 PDT |
+| WU-2 | 11 | PARTIAL → DISPATCHED (continuation) | 1/3 | sonnet | 7 | (session `fa1c4c1d`) | — | 2026-07-26 10:05 PDT |
 
 ---
 
@@ -245,6 +248,9 @@ updated: 2026-07-26
 | DL-64 | 2026-07-26 | WU-2 | 10 | ACCEPTED: `@MainActor` on `EscriboTextView`, with `EditorCoordinator` still unisolated | Forced by Swift 6 strict concurrency — `NSTextView` and `NSScrollView` are main-actor-isolated. The important part is *where* the boundary was drawn: the **view** is annotated, the **coordinator** is not, so DL-57 survives intact and no `MainActor.assumeIsolated` trap enters the text-storage delegate callback path. Sortie 11 will need the same annotation on its iOS type, for the same reason, and must not push it down into the coordinator. |
 | DL-65 | 2026-07-26 | WU-2 | 10 | ACCEPTED but UNASSERTED, and Sortie 25 must close it: `isRichText = false`, `usesFontPanel = false`, `allowsUndo = true` | The agent set these as real-usage plumbing and said plainly that no test asserts them. Two are load-bearing later. **`allowsUndo = true` is a precondition for Sortie 25's criterion** that Return-then-Cmd-Z restores the prior state in *one* undo — without it there is no undo manager to coalesce into. **`isRichText = false` is what makes Sortie 25's "paste inserts verbatim, no transformation" true** on the AppKit side, since it forces plain-text paste. Both are currently one accidental deletion away from silently regressing a criterion three sorties downstream. **Sortie 25 must assert both**, not merely rely on them. |
 | DL-66 | 2026-07-26 | WU-2 | 11 | Model: sonnet | Complexity 7 (3 turns-band + 0 file-count + 2 dependency-depth + 2 risk). Sortie 11 mirrors a shape that now exists and is proven; the coordinator it must adopt is non-generic and unconditionally declared (DL-58), so its headline criterion — both Representables driving the same declared type — is satisfiable rather than exploratory. The one genuine risk is `UITextView`'s TextKit 2 construction path, which is the same trap Sortie 10 hit and which its own criterion catches loudly. |
+| DL-67 | 2026-07-26 | WU-2 | 11 | Supervisor probed all three substantive iOS claims; the work holds | Three simultaneous independent breaks on `IOSTextView.swift`: `usingTextLayoutManager: false`, `autocorrectionType = .yes`, and `hasMarkedText = { true }`. **Six** tests went red, each naming its own break — the TextKit 2 stack, the hygiene defaults, the autocorrect opt-in, marked-text reporting, the convenience-initializer shape, and heading styling. Reverted; `make test` 0 (71/14) and `make test-ios` 0 (73/14). The parity criterion is discharged better than asked: `let coordinator: EditorCoordinator = editor.coordinator` under both `#if` branches is a **compile-time** assertion, so it cannot be satisfied by a runtime coincidence. |
+| DL-68 | 2026-07-26 | WU-2 | 11 | **RULING on the agent's question, and it goes the other way: iOS must set `spellCheckingType = .yes`. Sortie 11 is PARTIAL until it does.** | The agent left `spellCheckingType` at the system default and asked for a ruling, which was the right instinct — but `.default` on iOS does not mean "on". UIKit defines it as *"enable spell checking based on the state of autocorrection"*, and this sortie sets `autocorrectionType = .no` as a hard requirement. **The two settings interact: turning autocorrect off silently turns spell checking off.** REQUIREMENTS.md § Text-system hygiene says spell **checking** "is permitted and encouraged", with no platform qualification, and explains why it is safe — it draws with temporary attributes that do not participate in `setAttributes(_:range:)` and therefore survive restyling. Sortie 10 honors that explicitly on macOS (`isContinuousSpellCheckingEnabled = true`, asserted). Left as shipped, the same package gives a user spell checking on a Mac and none on an iPhone, from a trait they never set, with no test asserting it either way. That is exactly the class of silent platform divergence Sortie 11 exists to prevent. **One line plus one assertion**; continuation sent to the same agent rather than deferred to Sortie 12, because iOS input traits are this sortie's task 2 and Sortie 12's subject is SwiftUI binding. |
+| DL-69 | 2026-07-26 | WU-2 | 11 | Correction to the sortie report, recorded so the brief does not inherit it | The report attributes the absence of an undo seam to "DL-58". DL-58 is about the coordinator's non-genericity. The undo decision is REQUIREMENTS.md **Known limitations §1** — UIKit's native undo granularity is accepted. No action needed; the behavior is correct and only the citation was wrong. |
 | DL-32 | 2026-07-26 | WU-2 | 7 | Model: opus | Complexity 25 (8 turns-band + 4 file-count + 10 foundation/dependents + 3 risk + 0 ambiguity). Override also applies: foundation_score 1 with 23 dependents. The theme lookup table and the styler cache are the second half of the scanner→editor seam and are consumed by all three Representables; the composition order and the single invalidation path are exactly the shape that does not retrofit. |
 
 ---
