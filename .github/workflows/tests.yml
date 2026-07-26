@@ -20,13 +20,18 @@ jobs:
       - name: Show Swift version
         run: swift --version
 
+      # `SwiftEscribo-Package` — not `SwiftEscribo`. SwiftPM's per-product
+      # scheme has no test action, so `xcodebuild test -scheme SwiftEscribo`
+      # fails with "not currently configured for the test action". Both steps
+      # use the same scheme so build and test cannot drift.
+      #
       # arm64 is pinned explicitly on every invocation. Apple Silicon is the
       # only supported arch; an unpinned destination can pick up x86_64 and
       # build something nobody ships.
       - name: Build
         run: |
           xcodebuild build \
-            -scheme SwiftEscribo \
+            -scheme SwiftEscribo-Package \
             -destination 'platform=macOS,arch=arm64' \
             ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=YES
@@ -36,7 +41,7 @@ jobs:
       - name: Test
         run: |
           xcodebuild test \
-            -scheme SwiftEscribo \
+            -scheme SwiftEscribo-Package \
             -destination 'platform=macOS,arch=arm64' \
             -skip-testing:EscriboPerformanceTests \
             ARCHS=arm64 \
@@ -53,7 +58,7 @@ jobs:
       - name: Test
         run: |
           xcodebuild test \
-            -scheme SwiftEscribo \
+            -scheme SwiftEscribo-Package \
             -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.1' \
             -skip-testing:EscriboPerformanceTests \
             -skipPackagePluginValidation \

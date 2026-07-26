@@ -1,4 +1,8 @@
-SCHEME = SwiftEscribo
+# SwiftPM's auto-generated per-product scheme (`SwiftEscribo`) has no test action —
+# `xcodebuild test -scheme SwiftEscribo` fails with "not currently configured for the
+# test action". The `-Package` scheme is the one that contains every target,
+# including the three test targets, so it is the only usable scheme here.
+SCHEME = SwiftEscribo-Package
 DESTINATION = 'platform=macOS,arch=arm64'
 IOS_DESTINATION = 'platform=iOS Simulator,name=iPhone 17,OS=26.1'
 
