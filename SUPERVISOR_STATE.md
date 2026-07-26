@@ -227,7 +227,7 @@ updated: 2026-07-26
 
 ### WU-6 Editor Behavior
 - Work unit state: **RUNNING** (unlocked 2026-07-26 — Sorties 20 and 12 both COMPLETED)
-- Current sortie: **27** of 30 — **DISPATCHED** 2026-07-26, sonnet, complexity 11
+- Current sortie: **27** of 30 — **PARTIAL**, awaiting continuation (DL-134, DL-135)
 - Sortie 26: **COMPLETED — supervisor-verified**, commit `6478d8e`. Verified in an
   **isolated worktree** at that SHA (the shared tree was dirty with Sortie 17's work):
   `make test` 0 (**167/27**), `make test-ios` 0 (**148/24**), core 243/17 — counts match.
@@ -260,8 +260,8 @@ updated: 2026-07-26
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------------|-----------------|---------|-------------|---------------|
-| WU-4 | 21 | DISPATCHED | 1/3 | **opus** | 16 | (session `fa1c4c1d`, agent C) | — | 2026-07-26 round 3 |
-| WU-6 | 27 | DISPATCHED | 1/3 | **sonnet** | 11 | (session `fa1c4c1d`, agent D) | — | 2026-07-26 round 3 |
+| WU-4 | 21 | DISPATCHED — **committed `6b28dad`**, agent still verifying | 1/3 | **opus** | 16 | (session `fa1c4c1d`, agent C) | — | 2026-07-26 round 3 |
+| WU-6 | 27 | **PARTIAL** — agent returned early, work uncommitted | 1/3 (no increment) | **sonnet** | 11 | (session `fa1c4c1d`, agent D) | — | 2026-07-26 round 3 |
 
 Concurrency **2**, per DL-103 and now DL-132. File ownership is disjoint and was stated in
 both dispatch orders: Sortie 21 owns `Sources/EscriboCore/**` + `Tests/EscriboCoreTests/**`;
@@ -423,6 +423,9 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-132 | 2026-07-26 | — | 17, 26 | **Two-way concurrency is not free on this machine — it produced a hang, not a slowdown. Concurrency stays capped at 2; the plan's theoretical 3 is declined.** | Three independent observations this round: (1) Sortie 17's first `make test` in the shared tree **hung ~20 minutes with the xctest agent at 0% CPU** and had to be killed; (2) the supervisor's own probe build **exceeded a 600 s timeout** and had to be re-run after the tree went quiet, where it finished in seconds; (3) Sortie 17 saw `EscriboCoreTests` fail with 10 then 74 issues purely from reading Sortie 26's uncommitted in-flight edits in the shared working tree. **The mitigation that worked is the standing rule already on the books** — verify from a throwaway worktree at your own commit (DL-98/DL-104), which both agents did unprompted and which is why both sets of numbers were trustworthy. **A hung run rather than a failed one is the dangerous shape**, because it reads as "still working". Group C's theoretical 3-way parallelism is declined on this evidence. |
 | DL-133 | 2026-07-26 | WU-4, WU-6 | 21, 27 | Round 3 dispatch: **21 (opus) and 27 (sonnet)**, holding 23 back | Three sorties became eligible at once when Sortie 17 landed — 21, 23, 27 — the widest gate of the mission, exactly as DL-114 predicted. Chose by longest remaining chain: `21 → 22 → 28 → 29 → 30` is 5 deep and binding, so **Sortie 21 goes first and gets opus** (complexity 16; it is the hardest remaining core sortie and carries DL-112). `27 → 28 → 29 → 30` is 4 deep, so **Sortie 27 goes second at sonnet** (complexity 11, matching the DL-118 precedent where a sonnet call at 11 held). `23 → 24 → 30` is 3 deep and the writer touches files nobody else does, so it loses nothing by waiting one round — and holding it keeps concurrency at 2 per DL-132. File ownership is disjoint: 21 owns `Sources/EscriboCore/**` + `Tests/EscriboCoreTests/**`, 27 owns `Sources/SwiftEscribo/**` + `Tests/SwiftEscriboTests/**`. |
 
+| DL-134 | 2026-07-26 | — | 27 | **Concurrency dropped from 2 to 1. DL-132 was too generous and this round proved it — a 42-minute hang, killed by the supervisor.** | Sortie 27's agent returned early saying it had "kicked off the full `make test` in the background and is monitoring it", having committed nothing. The supervisor found its run still alive: PID 987 with child xctest 1041, **42 minutes elapsed at 0.0% CPU** — the exact signature DL-132 named one round earlier, now reproduced. Killed the process tree. **The hang is not a slowdown and does not resolve on its own**; it burns an agent's entire remaining budget while reading as progress, which is how this sortie died. Two `xcodebuild test` runs against the same scheme and DerivedData is the trigger. **Remaining sorties run one at a time.** The cost is near zero: the binding chain `21 → 22 → 28 → 29 → 30` is serial by construction, so the only parallelism left to give up is Sorties 23 and 27 against it. Group C's theoretical 3-way parallelism was already declined (DL-132); the plan's parallelism analysis is now formally superseded by measurement on this machine. |
+| DL-135 | 2026-07-26 | WU-6 | 27 | Sortie 27 ruled **PARTIAL**, not FAILURE — attempt counter NOT incremented | Verification cascade: real progress exists on disk — **140 lines added to `BuiltInThemes.swift` and a new 234-line `Tests/SwiftEscriboTests/GeometryRuleSetTests.swift`** — but nothing is committed and no exit criterion was verified. Per the state machine, progress made with work remaining is PARTIAL, and PARTIAL is not failure, so the attempt counter holds at 1/3. The continuation inherits the uncommitted working tree rather than starting over. **The agent did not do anything wrong except stop early**; it was defeated by the environment (DL-134), and its uncommitted work is the evidence it was on task. Continuation dispatched **solo** once Sortie 21 clears, at sonnet per the PARTIAL-minimum rule. |
+
 ---
 
 ## Overall Status
@@ -441,7 +444,10 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 
 - Sorties completed: **22 / 30** (1–20, 25, 26 — every one supervisor-verified, none
   taken on report alone)
-- Sorties in flight: **2** — Sortie 21 (WU-4, opus) and Sortie 27 (WU-6, sonnet)
+- Sorties in flight: **1** — Sortie 21 (WU-4, opus), committed `6b28dad`, agent verifying.
+  Sortie 27 is **PARTIAL** and awaiting a solo continuation (DL-134, DL-135).
+- **Concurrency is now 1.** Two-way parallelism cost a 42-minute hang this round and is
+  withdrawn for the remainder of the mission.
 - Work units: **3 / 7 COMPLETE** (WU-1, WU-2, **WU-3 closed this round**). WU-4 RUNNING at
   21; WU-6 RUNNING at 27; **WU-5 RUNNING and eligible at 23**, held one round by DL-132;
   WU-7 gated on 27, 22.
