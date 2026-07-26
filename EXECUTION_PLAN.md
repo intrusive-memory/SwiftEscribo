@@ -2,6 +2,10 @@
 type: execution-plan
 title: SwiftEscribo — Execution Plan
 updated: 2026-07-25
+feature_name: OPERATION FOUNTAIN SURGEON
+starting_point_commit: 6b8c3ee3d07ad15afe5d6f44fe7c218db334585e
+mission_branch: mission/fountain-surgeon/01
+iteration: 1
 ---
 
 # EXECUTION_PLAN.md — SwiftEscribo
