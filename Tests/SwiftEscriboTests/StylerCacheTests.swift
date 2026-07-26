@@ -29,8 +29,15 @@ struct StylerCacheTests {
       let line = try StylingFixtures.record(for: span, in: result)
       _ = styler.attributes(for: span, on: line)
     }
+    // Paragraph geometry is cached alongside the styles and dropped by the same single
+    // invalidation path, so it is warmed here rather than in a suite of its own — a
+    // geometry cache with its own clearing rule would be the fifth trigger this suite
+    // exists to make impossible.
+    _ = styler.paragraphStyleRuns(for: result.lineRecords)
     #expect(styler.cachedStyleCount > 0)
+    #expect(styler.cachedParagraphStyleCount > 0)
     #expect(styler.fontResolver.cachedFontCount > 0)
+    #expect(styler.fontResolver.cachedGeometryCount > 0)
     #expect(!styler.isCacheEmpty)
     return styler
   }
@@ -51,7 +58,9 @@ struct StylerCacheTests {
     }
 
     #expect(styler.cachedStyleCount == 0)
+    #expect(styler.cachedParagraphStyleCount == 0)
     #expect(styler.fontResolver.cachedFontCount == 0)
+    #expect(styler.fontResolver.cachedGeometryCount == 0)
     #expect(styler.isCacheEmpty)
   }
 

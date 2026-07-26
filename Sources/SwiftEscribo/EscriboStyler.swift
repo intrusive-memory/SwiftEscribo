@@ -94,6 +94,14 @@ final class EscriboStyler {
   /// Resolved styles, partitioned by line key and keyed by `(SpanKind, StyleSet, SpanRole)`.
   private var styles: [LineStyleKey: [StyleKey: ResolvedStyle]] = [:]
 
+  /// Paragraph styles, keyed by the same `(ElementKind, depth)` line key the style cache is
+  /// partitioned by — because that is the whole of what geometry depends on.
+  ///
+  /// Emptied by ``invalidate()`` and by nothing else. A geometry cache with its own
+  /// clearing rule would be a second invalidation path, and the point of the environment
+  /// being one `Equatable` value is that there is exactly one.
+  private var paragraphStyles: [LineStyleKey: NSParagraphStyle] = [:]
+
   /// The shared font cache. `internal` so ``ResolvedStyle/attributes(resolver:)`` can be
   /// called directly by the coordinator with the same resolver every span used.
   private(set) var fontResolver = FontResolver()
@@ -123,17 +131,28 @@ final class EscriboStyler {
     styles.values.reduce(0) { $0 + $1.count }
   }
 
+  /// How many paragraph styles are currently cached.
+  var cachedParagraphStyleCount: Int { paragraphStyles.count }
+
   /// Whether nothing is cached.
-  var isCacheEmpty: Bool { styles.isEmpty && fontResolver.cachedFontCount == 0 }
+  var isCacheEmpty: Bool {
+    styles.isEmpty
+      && paragraphStyles.isEmpty
+      && fontResolver.cachedFontCount == 0
+      && fontResolver.cachedGeometryCount == 0
+  }
 
   /// Empties every cache. **The only invalidation path.**
   ///
   /// Fonts go too, not only styles: a font-metric change moves the point size, which is
   /// part of a ``FontSpec``, and a font cache that outlived a size change would be a
-  /// second store to reason about for no gain.
+  /// second store to reason about for no gain. Paragraph styles go for the same reason —
+  /// they are point values converted against a face at a size, so every trigger that can
+  /// move the size can move a margin.
   func invalidate() {
     activeTheme = environment.resolvedTheme
     styles.removeAll(keepingCapacity: true)
+    paragraphStyles.removeAll(keepingCapacity: true)
     fontResolver.invalidate()
   }
 
@@ -203,6 +222,56 @@ final class EscriboStyler {
   /// Text-storage attributes for an already-resolved style.
   func attributes(for resolved: ResolvedStyle) -> [NSAttributedString.Key: Any] {
     resolved.attributes(resolver: &fontResolver)
+  }
+
+  // MARK: - Paragraph geometry
+
+  /// The paragraph style for a line classified `element` at `depth`.
+  ///
+  /// Where the character counts a theme declares become points. The conversion measures
+  /// the **line's own base font** — the family the theme's base asks for, at the size this
+  /// line resolves to after font metrics and the element's size scale. Measuring anything
+  /// else would decouple a margin from the text it indents: a heading set 1.8× larger with
+  /// margins measured at body size would sit at the wrong column, and the error would grow
+  /// with the scale.
+  ///
+  /// It is the line's **base** style specifically — the kind and emphasis stages are not
+  /// run. Bold and italic can change advance width even within a monospaced family, and a
+  /// paragraph's left margin cannot depend on whether some word inside it happened to be
+  /// emphasised; a theme that sets a trait on its *base* has set it for every line, so
+  /// that one is legitimately part of the measurement.
+  func paragraphStyle(element: ElementKind, depth: Int) -> NSParagraphStyle {
+    let key = LineStyleKey(element: element, depth: depth)
+    if let cached = paragraphStyles[key] { return cached }
+    let metrics = activeTheme.paragraphMetrics(for: element, depth: depth)
+    let geometry = fontResolver.geometry(for: baseStyle(element: element, depth: depth).font)
+    let style = metrics.paragraphStyle(in: geometry)
+    paragraphStyles[key] = style
+    return style
+  }
+
+  /// The paragraph style for `line`.
+  ///
+  /// The entry point the coordinator uses: a `LineRecord` carries both halves of the key,
+  /// so a caller holding a scan result cannot look up the geometry of a line it is not
+  /// applying it to.
+  func paragraphStyle(for line: LineRecord) -> NSParagraphStyle {
+    paragraphStyle(element: line.element, depth: line.depth)
+  }
+
+  /// A paragraph style for every line record, over that record's full range.
+  ///
+  /// One run per line rather than per coalesced group of identical lines: runs are consumed
+  /// by a rescan of a handful of lines, and merging them would mean comparing paragraph
+  /// styles for equality on a path where cached identical lines already share one object.
+  ///
+  /// **Apply these additively.** Paragraph styles are per-line and span attributes are
+  /// per-span, so a pass that replaces attributes over span ranges will drop a paragraph
+  /// style that was set first. Add the paragraph attribute over these ranges *after* the
+  /// span pass, or set it as part of the span attributes — do not set it before and assume
+  /// it survives.
+  func paragraphStyleRuns(for lines: [LineRecord]) -> [ParagraphStyleRun] {
+    lines.map { ParagraphStyleRun(range: $0.range, style: paragraphStyle(for: $0)) }
   }
 
   // MARK: - Composition

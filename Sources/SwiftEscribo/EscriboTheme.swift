@@ -62,6 +62,29 @@ public struct EscriboTheme: Equatable, Sendable {
   /// entry shape.
   public var elementSizeScales: [ElementKind: [Int: Double]]
 
+  /// Paragraph geometry by line, keyed by `ElementKind` and then by `depth` — the same
+  /// two-level shape, with the same fallback, as ``elementSizeScales``.
+  ///
+  /// Values are in **characters and multiples of line height, never points**
+  /// (``ParagraphMetrics``). The key is `(ElementKind, depth)` because Markdown list
+  /// indentation is a function of nesting depth, which is exactly why `LineRecord` carries
+  /// `depth` — and because heading level lives in `depth` too, so all six levels are one
+  /// entry shape.
+  ///
+  /// Empty in every built-in theme as of this sortie. The Fountain and Markdown rule sets
+  /// are populated later; what exists now is the layer they populate.
+  public var elementParagraphMetrics: [ElementKind: [Int: ParagraphMetrics]]
+
+  /// Whether paragraph geometry applies at all.
+  ///
+  /// REQUIREMENTS.md § Editor 6 requires geometry to be theme-controlled and switchable
+  /// off, because changing line height while typing near the top of a long document moves
+  /// the scroll position. Switching it off does not disable a code path: it makes
+  /// ``paragraphMetrics(for:depth:)`` answer ``ParagraphMetrics/default`` for every
+  /// element, which converts through the same arithmetic every other value converts
+  /// through and lands on the text system's own default paragraph style.
+  public var isGeometryEnabled: Bool
+
   /// The factor a marker span's foreground alpha is multiplied by. Stage 4, entire.
   ///
   /// **A single scalar, not a `TokenStyle` and not a per-kind value.** There is therefore
@@ -80,6 +103,8 @@ public struct EscriboTheme: Equatable, Sendable {
     kindStyles: [SpanKind: TokenStyle] = [:],
     styleStyles: [StyleSet: TokenStyle] = [:],
     elementSizeScales: [ElementKind: [Int: Double]] = [:],
+    elementParagraphMetrics: [ElementKind: [Int: ParagraphMetrics]] = [:],
+    isGeometryEnabled: Bool = true,
     markerOpacity: Double = 1
   ) {
     self.name = name
@@ -88,6 +113,8 @@ public struct EscriboTheme: Equatable, Sendable {
     self.kindStyles = kindStyles
     self.styleStyles = styleStyles
     self.elementSizeScales = elementSizeScales
+    self.elementParagraphMetrics = elementParagraphMetrics
+    self.isGeometryEnabled = isGeometryEnabled
     self.markerOpacity = markerOpacity
   }
 
@@ -98,6 +125,23 @@ public struct EscriboTheme: Equatable, Sendable {
   public func sizeScale(for element: ElementKind, depth: Int) -> Double {
     guard let byDepth = elementSizeScales[element] else { return 1 }
     return byDepth[depth] ?? byDepth[0] ?? 1
+  }
+
+  /// The paragraph geometry for a line classified `element` at `depth`.
+  ///
+  /// Total, on the same terms as ``sizeScale(for:depth:)``: an element with no table
+  /// entry, and a depth with no entry under an element that has one, both resolve to
+  /// ``ParagraphMetrics/default``. Geometry is never a reason to fail, and an element a
+  /// later release adds renders with default geometry until a theme opts into styling it.
+  ///
+  /// This is the **only** reader of ``elementParagraphMetrics``, which is what makes
+  /// ``isGeometryEnabled`` a single guard rather than a condition every call site has to
+  /// remember.
+  public func paragraphMetrics(for element: ElementKind, depth: Int) -> ParagraphMetrics {
+    guard isGeometryEnabled, let byDepth = elementParagraphMetrics[element] else {
+      return .default
+    }
+    return byDepth[depth] ?? byDepth[0] ?? .default
   }
 
   /// This theme with every table emptied and marker dimming switched off.
@@ -116,6 +160,11 @@ public struct EscriboTheme: Equatable, Sendable {
       kindStyles: [:],
       styleStyles: [:],
       elementSizeScales: [:],
+      // Emptied like every other table: raw mode indents nothing. The flag is carried
+      // through rather than forced, so stripping and unstripping a theme whose host had
+      // geometry switched off round-trips to the same value.
+      elementParagraphMetrics: [:],
+      isGeometryEnabled: isGeometryEnabled,
       markerOpacity: 1
     )
   }
