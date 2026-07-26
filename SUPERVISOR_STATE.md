@@ -57,18 +57,18 @@ updated: 2026-07-25
 
 ### WU-1 Core Substrate
 - Work unit state: RUNNING
-- Current sortie: 3 of 6
+- Current sortie: 4 of 6
 - Sortie state: DISPATCHED
 - Sortie type: code
 - Model: opus
-- Complexity score: 20 (also forced by override: foundation_score 1 + 27 dependents)
+- Complexity score: 23 (also forced by override: foundation_score 1 + 26 dependents)
 - Attempt: 1 of 3
-- Last verified: Sortie 2 COMPLETED — supervisor re-ran `make build` (exit 0) and
-  `make test-core` (exit 0, 32 tests / 4 suites), greps clean, and **independently
-  reproduced the `LineState` opacity negative** with its own throwaway probe
-  (non-`@testable` import → 3 `inaccessible due to 'internal' protection level`
-  errors for `LineState()`, `LineState.documentStart`, `ScanResult.init`). Probe
-  deleted. Commit `c30ede2`.
+- Last verified: Sortie 3 COMPLETED — supervisor re-ran `make build` (exit 0) and
+  `make test-core` (exit 0, 57 tests / 7 suites), confirmed `LineIndex` is internal
+  and `UTF16TextSource` public, confirmed no `fullScan`/`incrementalScan` identifier
+  leaked into Sources, no timing API anywhere under Tests, `EscriboCore` still
+  imports nothing at all, and all seven required terminator fixtures are present by
+  name. Commit `224a248`.
 - Notes: Sortie 1 also fixed a latent scheme defect (DL-5). Sortie 5 must honor the
   `ElementKind.heading` + `depth` decision (DL-7). Sorties 7 and 9 must honor the
   internal-initializer consequence (DL-12).
@@ -78,7 +78,8 @@ updated: 2026-07-25
 |--------|-------|-------|----------|--------|------------------------|
 | 1 | COMPLETED | opus | 1 | `6a3c8ae` | build 0, test-core 0 (13 tests), 4/4 greps clean, 5 targets |
 | 2 | COMPLETED | opus | 1 | `c30ede2` | build 0, test-core 0 (32 tests), greps clean, opacity negative reproduced by supervisor probe |
-| 3 | DISPATCHED | opus | 1 | — | — |
+| 3 | COMPLETED | opus | 1 | `224a248` | build 0, test-core 0 (57 tests), 7/7 terminator fixtures, access levels correct, no timing API, ~2,200-edit incremental sweep |
+| 4 | DISPATCHED | opus | 1 | — | — |
 
 ### WU-2 Editor Substrate
 - Work unit state: NOT_STARTED
@@ -122,7 +123,7 @@ updated: 2026-07-25
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-1 | 3 | RUNNING | 1/3 | opus | 21 |  a63919ba71a7a2082 | tasks/a63919ba71a7a2082.output | 2026-07-25 |
+| WU-1 | 4 | RUNNING | 1/3 | opus | 23 | (see dispatch below) | — | 2026-07-25 |
 
 ---
 
@@ -142,6 +143,10 @@ updated: 2026-07-25
 | DL-11 | 2026-07-25 | WU-1 | 2 | Supervisor independently reproduced the opacity negative | The committed test can only assert the positive half — a test that must *fail to compile* cannot live in a passing suite. So the supervisor wrote its own throwaway non-`@testable` probe, confirmed all three expected `inaccessible` errors, and deleted it. The exit criterion is met in substance, not just in claim. |
 | DL-12 | 2026-07-25 | WU-1 | 2 | CONSEQUENCE, carried forward: `LineRecord`/`ScanResult` inits are internal | Forced by `LineState` opacity — a public memberwise init for `LineRecord` would require a publicly-constructible `startState`. `SwiftEscriboTests` (Sortie 7 styler, Sortie 9 edit translation) must therefore `@testable import EscriboCore` or drive a real scanner. **If a later sortie "fixes" this by making those inits public, the opacity guarantee is gone.** Carried into Sorties 7 and 9 dispatch prompts. |
 | DL-13 | 2026-07-25 | WU-1 | 3 | Model: opus | Complexity 20. Terminator handling (`\r\n` as one two-code-unit terminator, lone `\r`, mixed, never normalized) plus incremental range adjustment is algorithmic, and it blocks 27 sorties. |
+| DL-14 | 2026-07-25 | WU-1 | 3 | ACCEPTED with a follow-up obligation: `LineIndex.provisionalRecord(at:)` | It assigns `.blank`/`.paragraph` from the line's *shape* (empty content range or not), which both grammars agree on — that is shape, not grammar, and it is fine. But it sets `startState = .documentStart` for **every** line, which is true only of line zero. That is false data in a real type. Tolerable as an internal Sortie-3 scaffold; **Sortie 4 must delete it or give it a real `startState`.** Carried into Sortie 4's prompt as a hard boundary. |
+| DL-15 | 2026-07-25 | WU-1 | 3 | NOTED: two different "one line back" rules | Sortie 3's backward widening is about **code units** (a `\r` can only pair with an `\n` immediately following, so one line back is provably enough). Sortie 4's is about **grammar state**. They are easy to conflate and must stay separate functions. The agent flagged this itself; carried into Sortie 4's prompt. |
+| DL-16 | 2026-07-25 | WU-1 | 3 | ACCEPTED: `LineIndex.apply` clamps out-of-range edits rather than trapping | REQUIREMENTS.md says scanning is total — no throws, no error path. An edit arriving from a text view that has already mutated is a real, survivable race. Garbage in, garbage out, but never a crash. |
+| DL-17 | 2026-07-25 | WU-1 | 4 | Model: opus | Complexity 23. The convergence engine is the highest-risk algorithm in the package and every grammar depends on its lookahead contract. |
 | DL-8 | 2026-07-25 | WU-1 | 2 | Model: opus | Complexity 21. Override also applies. The span/record model is the scanner→editor seam; the plan states plainly that a wrong answer here is rework in every later sortie. |
 
 ---
