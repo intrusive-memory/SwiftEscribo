@@ -74,10 +74,12 @@ struct MarkdownBlockState: Equatable, Sendable {
 
   /// How many levels of list nesting are tracked **exactly**.
   ///
-  /// Eight, because the stack is eight bytes. A ninth level is not an error: it is
-  /// scanned as a sibling of the eighth, so `depth` saturates rather than lying about
-  /// which item a line belongs to. Nine levels of Markdown list nesting is not a document
-  /// anyone writes, and paying an allocation per line to describe one would be.
+  /// Eight, because the stack is eight bytes. A ninth level is not an error and is not
+  /// misclassified: it takes the eighth level's slot, so its content column keeps
+  /// advancing and everything inside it still scans as list content — only `depth`
+  /// saturates, and only outdenting back through the levels past the eighth is
+  /// approximate. Nine levels of Markdown list nesting is not a document anyone writes,
+  /// and paying an allocation per line to describe one would be.
   static let maxTrackedDepth = 8
 
   /// The largest **visual column** a tracked list item's content may begin at.
@@ -153,12 +155,14 @@ struct MarkdownBlockState: Equatable, Sendable {
   /// Opens a list item whose content begins at `contentColumn`.
   ///
   /// - Parameter contentColumn: A **visual column**. Clamped into `1...255`; see
-  ///   ``maxTrackedColumn``. At ``maxTrackedDepth`` this is a no-op, which makes a deeper
-  ///   item a sibling of the deepest tracked one.
+  ///   ``maxTrackedColumn``. At ``maxTrackedDepth`` the new item **replaces** the deepest
+  ///   tracked one rather than being dropped: dropping it would freeze the content column
+  ///   the next line is measured against, and a tenth-level list item would come back as
+  ///   an indented code block. Replacing keeps the classification right and costs only the
+  ///   exact depth, which has already saturated.
   mutating func pushList(contentColumn: Int) {
-    let depth = listDepth
-    guard depth < Self.maxTrackedDepth else { return }
-    setColumn(atLevel: depth, to: min(max(contentColumn, 1), Self.maxTrackedColumn))
+    let level = min(listDepth, Self.maxTrackedDepth - 1)
+    setColumn(atLevel: level, to: min(max(contentColumn, 1), Self.maxTrackedColumn))
   }
 
   private mutating func setColumn(atLevel level: Int, to value: Int) {
@@ -537,7 +541,8 @@ struct MarkdownGrammar: LineGrammar {
       // Up to three columns of whitespace may sit between one `>` and the next.
       var probe = cursor
       var skipped = 0
-      while probe < units.count, isSpaceOrTab(units[probe]), skipped < Self.maxConstructIndentColumns
+      while probe < units.count, isSpaceOrTab(units[probe]),
+        skipped < Self.maxConstructIndentColumns
       {
         probe += 1
         skipped += 1
