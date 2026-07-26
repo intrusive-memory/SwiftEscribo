@@ -200,9 +200,15 @@ updated: 2026-07-26
 | 17 | COMPLETED | opus | 1 | `6f4b1ba` | supervisor re-ran all three at tip (260/19 + 167/27 + 148/24); 10 fixtures; boneyard-state probe fired 8 issues, gate green (DL-129); **found DL-130 and refined DL-120 → DL-131** |
 
 ### WU-4 Markdown Breadth
-- Work unit state: **RUNNING — UNSTALLED 2026-07-26** by Sortie 17's completion.
-- Current sortie: **21** of 30 — **DISPATCHED** 2026-07-26, opus, complexity 16.
-  Carries **DL-112**, the mission's standing critical warning.
+- Work unit state: **RUNNING** — Sortie 21 COMPLETED; **Sortie 22 is the last one**.
+- Current sortie: **22** of 30 — PENDING (terminal for WU-4; gates Sortie 28)
+- Sortie 21: **COMPLETED — supervisor-verified**, commit `6b28dad`. Verified in an isolated
+  worktree at the tip (the shared tree is dirty with Sortie 27's partial work and reported
+  a false macOS 179/28): `make test-core` 0 (**271/20**), `make test` 0 (**167/27**),
+  `make test-ios` 0 (**148/24**). Editor counts **identical to baseline** — zero
+  editor-layer regressions, the check Sortie 13 missed. **DL-112 is discharged properly**
+  (DL-136): a real second field, not a packing scheme. Supervisor probe fired **22 issues**
+  (DL-137). Raised `MarkdownGrammar.lookahead` 0 → 1 — **mission-wide consequence, DL-138**.
 - Sortie 20 (previous): COMPLETED, commit `e911cad`, **worktree-verified — the first
   sortie under the corrected DL-98 rule, which worked** (DL-104). Core **235/16**.
   Three mutations fired while the gate stayed green at 235/235 (DL-105).
@@ -212,6 +218,7 @@ updated: 2026-07-26
 |--------|-------|-------|----------|--------|------------------------|
 | 18 | COMPLETED | opus | 1 | `c1c5b1d` | test-core 0 (143/13), UTF-16 column probe fired (DL-85), emoji criterion ruled met in substance (DL-86) |
 | 19 | COMPLETED | opus | 1 | `fd34bed` + `0aecb21` | all three 0 (181/14 + 92/18 + 95/18), 51 new tests; two unfailable criteria flagged and given real assertions (DL-100) |
+| 21 | COMPLETED | opus | 1 | `6b28dad` | supervisor worktree-verified (271/20 + 167/27 + 148/24); DL-112 discharged with a real second field; equality probe fired 22 issues (DL-137); lookahead 0→1 (DL-138) |
 | 20 | COMPLETED | opus | 1 | `e911cad` | all three 0 (235/16), **worktree-verified** (DL-104); 3 mutations fired, gate green 235/235 (DL-105); 7th unfailable criterion flagged; autolinks deferred to Sortie 22 (DL-107) |
 
 ### WU-5 Writer
@@ -426,6 +433,11 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-134 | 2026-07-26 | — | 27 | **Concurrency dropped from 2 to 1. DL-132 was too generous and this round proved it — a 42-minute hang, killed by the supervisor.** | Sortie 27's agent returned early saying it had "kicked off the full `make test` in the background and is monitoring it", having committed nothing. The supervisor found its run still alive: PID 987 with child xctest 1041, **42 minutes elapsed at 0.0% CPU** — the exact signature DL-132 named one round earlier, now reproduced. Killed the process tree. **The hang is not a slowdown and does not resolve on its own**; it burns an agent's entire remaining budget while reading as progress, which is how this sortie died. Two `xcodebuild test` runs against the same scheme and DerivedData is the trigger. **Remaining sorties run one at a time.** The cost is near zero: the binding chain `21 → 22 → 28 → 29 → 30` is serial by construction, so the only parallelism left to give up is Sorties 23 and 27 against it. Group C's theoretical 3-way parallelism was already declined (DL-132); the plan's parallelism analysis is now formally superseded by measurement on this machine. |
 | DL-135 | 2026-07-26 | WU-6 | 27 | Sortie 27 ruled **PARTIAL**, not FAILURE — attempt counter NOT incremented | Verification cascade: real progress exists on disk — **140 lines added to `BuiltInThemes.swift` and a new 234-line `Tests/SwiftEscriboTests/GeometryRuleSetTests.swift`** — but nothing is committed and no exit criterion was verified. Per the state machine, progress made with work remaining is PARTIAL, and PARTIAL is not failure, so the attempt counter holds at 1/3. The continuation inherits the uncommitted working tree rather than starting over. **The agent did not do anything wrong except stop early**; it was defeated by the environment (DL-134), and its uncommitted work is the evidence it was on task. Continuation dispatched **solo** once Sortie 21 clears, at sonnet per the PARTIAL-minimum rule. |
 
+| DL-136 | 2026-07-26 | WU-4 | 21 | **DL-112 discharged — the mission's longest-standing critical warning, honored exactly as written** | Carried since Sortie 20 and aimed at Sortie 21: `openConstruct` is one field shared by two grammars, and nesting needs **a second field, not a cleverer tag**. Sortie 21 added `LineState.nestedFountain: NestedFountainState` carrying the *whole* inner half — region tag, `inDialogueBlock`, `followsNonBlankLine`, `titlePage` — with the type declared in `LineState.swift` per DL-93 rule 2. No bit-packing was attempted. The proof it needed two fields is concrete: a boneyard spanning lines 4–5 of a fenced screenplay yields `openConstruct == fountainFenceTag` on lines 1–9 **and** `nestedFountain.openConstruct == boneyardTag` on lines 4–5 — two different non-zero patterns over the same span, which one scalar cannot hold. Carrying all four inner fields rather than just the region tag is what prevents early convergence: a state saying only "we are in a fence" is byte-identical on every body line. |
+| DL-137 | 2026-07-26 | WU-4 | 21 | **Supervisor probe on Sortie 21 — and the first time in this mission the gate itself caught the defect. DL-25/DL-31 needs refining, not repealing.** | The supervisor deliberately chose a *different* angle from the agent's (which stopped carrying the field, 14 issues): instead, keep carrying it but make `NestedFountainState.==` return `true` unconditionally, so the state is present and convergence simply cannot see it change. **22 issues** — and unlike all seven prior probes, the **scan gate fired**, on the `fountain in markdown` document specifically, across seeds 1, 5, 81985529216486895, 16045690984503098046, 6148914691236517205 and 1311693406324658740. **The refinement:** the gate is blind to state *omission* (a grammar that never records a fact produces the same wrong answer incrementally and fully, so they agree). It is **not** blind to a state *equality* bug, because premature convergence makes the incremental result differ from the full result — which is precisely what the gate measures. Both halves of DL-25 still stand; this names the boundary between them. Reverted; worktree clean. |
+| DL-138 | 2026-07-26 | WU-4 | 21 | **`MarkdownGrammar.lookahead` raised 0 → 1 — correct, but the blast radius is every Markdown document, not just fenced ones** | The engine sizes the `LineWindow` from the **host** grammar, so a host declaring zero hands the nested Fountain scan an empty window: `line(ahead:)` answers `nil` for every line of every fenced screenplay and no natural character cue is ever recognized inside one. Raising it is the right fix and the agent documented it well. Two consequences the supervisor is recording rather than leaving implicit: (1) `backwardExtent` was already floored at `max(1, lookahead) == 1`, so **no edit rescans further back** — no regression there; (2) the forward rescan window now extends one line further past convergence **for every Markdown document in the package**, which is a cost **Sortie 28 must measure against its ≤1 ms in-line-edit budget**, not assume away. **→ Sortie 28.** |
+| DL-139 | 2026-07-26 | WU-4 | 21 | Documentation drift caught by the supervisor, not the agent — `MarkdownGrammar`'s type doc still says lookahead is zero | The `lookahead` property at `MarkdownGrammar.swift:364` returns `1` and its own doc comment explains why. But the **type-level** doc still opens its lookahead section with "**Zero.** Every construct here is decided by the line's own text…" and reasons "**because lookahead is zero**, a setext underline classifies *itself* as `heading` and does not retro-classify the paragraph above it". The *behavior* is unchanged and the gap is still real — the grammar does not consume the lookahead for setext — but the stated **reason** is now false, and the number it cites is wrong. Harmless today; exactly the comment a future reader trusts. **→ Sortie 30.** |
+
 ---
 
 ## Overall Status
@@ -442,10 +454,10 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   necessity and is now behind us.
 ### Current position (2026-07-26, round 3 — Sorties 21 and 27 in flight)
 
-- Sorties completed: **22 / 30** (1–20, 25, 26 — every one supervisor-verified, none
+- Sorties completed: **23 / 30** (1–21, 25, 26 — every one supervisor-verified, none
   taken on report alone)
-- Sorties in flight: **1** — Sortie 21 (WU-4, opus), committed `6b28dad`, agent verifying.
-  Sortie 27 is **PARTIAL** and awaiting a solo continuation (DL-134, DL-135).
+- Sorties in flight: **1** — Sortie 27 continuation (WU-6, sonnet), dispatched **solo**
+  under DL-134. Its PARTIAL work was left uncommitted in the tree for it to inherit.
 - **Concurrency is now 1.** Two-way parallelism cost a 42-minute hang this round and is
   withdrawn for the remainder of the mission.
 - Work units: **3 / 7 COMPLETE** (WU-1, WU-2, **WU-3 closed this round**). WU-4 RUNNING at
@@ -456,8 +468,13 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   (**148/24**). Charter clean: no regex, `EscriboCore` imports **nothing at all**, no XCTest.
 - **Four supervisor probes fired this round** (DL-126, DL-127, DL-128, DL-129), all
   reverted, tree clean after each. The gate stayed green through the one that mattered.
-- **Remaining critical chain**: `21 → 22 → 28 → 29 → 30`. Five sorties, and Sortie 21 is
-  the only thing standing between the mission and its last work unit.
+- **Remaining critical chain**: `22 → 28 → 29 → 30`. Four sorties. Sortie 21 cleared the
+  hardest link; WU-4 has one sortie left.
+- **Serial queue from here** (DL-134): 27 continuation → 23 → 22 → 24 → 28 → 29 → 30.
+- **Tree is GREEN** at `1906c3e` + `6b28dad`: core **271/20**, macOS **167/27**, iOS
+  **148/24** — all re-run by the supervisor in an isolated worktree, because the shared
+  tree is dirty with Sortie 27's partial work and reports a false **179/28** on macOS.
+  That contamination is itself DL-132/DL-134 evidence and will clear when 27 commits.
 - Work units: **2 / 7 COMPLETE** (WU-1, WU-2). WU-3 RUNNING at **17**; WU-4 **STALLED**
   at 21 pending Sortie 17 (DL-114); WU-6 RUNNING at **26**; WU-5 gated on 17; WU-7 gated
   on 27, 17, 22.
