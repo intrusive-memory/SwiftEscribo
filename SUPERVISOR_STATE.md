@@ -57,23 +57,28 @@ updated: 2026-07-25
 
 ### WU-1 Core Substrate
 - Work unit state: RUNNING
-- Current sortie: 2 of 6
+- Current sortie: 3 of 6
 - Sortie state: DISPATCHED
 - Sortie type: code
 - Model: opus
-- Complexity score: 21 (also forced by override: foundation_score 1 + 28 dependents)
+- Complexity score: 20 (also forced by override: foundation_score 1 + 27 dependents)
 - Attempt: 1 of 3
-- Last verified: Sortie 1 COMPLETED — supervisor re-ran `make build` (exit 0) and
-  `make test-core` (exit 0, 13 tests / 2 suites), all four greps no-match,
-  `swift package describe` lists five targets, commit `6a3c8ae` exists.
-- Notes: Sortie 1 also fixed a latent scheme defect (see DL-5). Sortie 5 must honor
-  the `ElementKind.heading` + `depth` decision from Sortie 1 (DL-7).
+- Last verified: Sortie 2 COMPLETED — supervisor re-ran `make build` (exit 0) and
+  `make test-core` (exit 0, 32 tests / 4 suites), greps clean, and **independently
+  reproduced the `LineState` opacity negative** with its own throwaway probe
+  (non-`@testable` import → 3 `inaccessible due to 'internal' protection level`
+  errors for `LineState()`, `LineState.documentStart`, `ScanResult.init`). Probe
+  deleted. Commit `c30ede2`.
+- Notes: Sortie 1 also fixed a latent scheme defect (DL-5). Sortie 5 must honor the
+  `ElementKind.heading` + `depth` decision (DL-7). Sorties 7 and 9 must honor the
+  internal-initializer consequence (DL-12).
 
 #### Sortie history — WU-1
 | Sortie | State | Model | Attempts | Commit | Verified by supervisor |
 |--------|-------|-------|----------|--------|------------------------|
 | 1 | COMPLETED | opus | 1 | `6a3c8ae` | build 0, test-core 0 (13 tests), 4/4 greps clean, 5 targets |
-| 2 | DISPATCHED | opus | 1 | — | — |
+| 2 | COMPLETED | opus | 1 | `c30ede2` | build 0, test-core 0 (32 tests), greps clean, opacity negative reproduced by supervisor probe |
+| 3 | DISPATCHED | opus | 1 | — | — |
 
 ### WU-2 Editor Substrate
 - Work unit state: NOT_STARTED
@@ -117,7 +122,7 @@ updated: 2026-07-25
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-1 | 1 | RUNNING | 1/3 | opus | 21 | aa9520e72b3ffd764 | tasks/aa9520e72b3ffd764.output | 2026-07-25 |
+| WU-1 | 3 | RUNNING | 1/3 | opus | 21 |  a63919ba71a7a2082 | tasks/a63919ba71a7a2082.output | 2026-07-25 |
 
 ---
 
@@ -132,6 +137,11 @@ updated: 2026-07-25
 | DL-5 | 2026-07-25 | WU-1 | 1 | ACCEPTED: Makefile + CI scheme changed to `SwiftEscribo-Package` | SwiftPM's per-product `SwiftEscribo` scheme has no test action, so **every** `xcodebuild test` in the repo — local and CI — was broken from scaffolding and could not surface until test targets existed. Supervisor confirmed the diff and re-ran both targets. Out of the sortie's literal scope but required to satisfy its exit criteria; fixing it is strictly correct. |
 | DL-6 | 2026-07-25 | WU-1 | 1 | RULING: `SpanRole` stays a `Hashable, Sendable` struct | The agent asked for a ruling. The plan required only `Equatable, Sendable`; `Hashable` is a superset and Sortie 7's cache key `(SpanKind, StyleSet, SpanRole)` needs it. The styler must not exhaustively switch on role anyway — it multiplies alpha for `.marker` and does nothing otherwise, a single comparison. Consistency with the rest of the vocabulary beats exhaustive switching. |
 | DL-7 | 2026-07-25 | WU-1 | 1 | RULING: `ElementKind.heading` carries level in `LineRecord.depth` | Not `.heading1…heading6`. REQUIREMENTS.md keys geometry by `(ElementKind, depth)`, so one entry shape covers all six levels. Sorties 5 and 27 must honor this; carried forward in their dispatch prompts. |
+| DL-9 | 2026-07-25 | WU-1 | 2 | KEPT: `TextEdit.changeInLength` (public computed) | Not in the plan's field list; the agent added it and flagged it. Kept: it is derived (`replacementLength - range.count`), it names the same quantity `NSTextStorage` names — which is what makes the translation formula legible — and Sorties 3, 4, 9, and 12 would each otherwise recompute it, with a sign error being exactly the bug the coordinate convention exists to prevent. **Pre-authorized for Sortie 30's API audit**; it does not need re-litigating there. |
+| DL-10 | 2026-07-25 | WU-1 | 2 | KEPT: `ScanResult: Equatable` | The plan says `Equatable`; REQUIREMENTS.md line 211 declares only `Sendable`. Followed the plan. Sortie 6's gate test asserts `incrementalScan(edits) == fullScan(finalText)` by comparing results wholesale, which needs it. Strictly additive. |
+| DL-11 | 2026-07-25 | WU-1 | 2 | Supervisor independently reproduced the opacity negative | The committed test can only assert the positive half — a test that must *fail to compile* cannot live in a passing suite. So the supervisor wrote its own throwaway non-`@testable` probe, confirmed all three expected `inaccessible` errors, and deleted it. The exit criterion is met in substance, not just in claim. |
+| DL-12 | 2026-07-25 | WU-1 | 2 | CONSEQUENCE, carried forward: `LineRecord`/`ScanResult` inits are internal | Forced by `LineState` opacity — a public memberwise init for `LineRecord` would require a publicly-constructible `startState`. `SwiftEscriboTests` (Sortie 7 styler, Sortie 9 edit translation) must therefore `@testable import EscriboCore` or drive a real scanner. **If a later sortie "fixes" this by making those inits public, the opacity guarantee is gone.** Carried into Sorties 7 and 9 dispatch prompts. |
+| DL-13 | 2026-07-25 | WU-1 | 3 | Model: opus | Complexity 20. Terminator handling (`\r\n` as one two-code-unit terminator, lone `\r`, mixed, never normalized) plus incremental range adjustment is algorithmic, and it blocks 27 sorties. |
 | DL-8 | 2026-07-25 | WU-1 | 2 | Model: opus | Complexity 21. Override also applies. The span/record model is the scanner→editor seam; the plan states plainly that a wrong answer here is rework in every later sortie. |
 
 ---
