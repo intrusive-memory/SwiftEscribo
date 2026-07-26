@@ -99,6 +99,14 @@
       // `insertText("\n")` where AppKit spells it `insertNewline(_:)`; both land on the same
       // `EscriboTextView.handleReturnKey()`, which is the point of Architecture §10.
       textView.returnKeyHandler = { [weak self] in self?.handleReturnKey() ?? false }
+
+      // Sortie 26, wired identically to macOS. UIKit spells the Tab key as
+      // `insertText("\t")` where AppKit spells it `insertTab(_:)`; both land on the same
+      // `EscriboTextView.handleTabKey()`. Undo granularity for what it does is whatever UIKit
+      // provides (Known limitations §1); the *shape* — one transaction through the text
+      // view's own input path — is identical on both platforms, which is what Architecture
+      // §10 requires.
+      textView.tabKeyHandler = { [weak self] in self?.handleTabKey() ?? false }
     }
 
     /// Builds the view over a fresh styler constructed from `theme`.

@@ -77,6 +77,12 @@
       // nothing here but is retained by the scroll view, and a strong capture would make
       // this object immortal.
       textView.returnKeyHandler = { [weak self] in self?.handleReturnKey() ?? false }
+
+      // Sortie 26. Tab goes through `EscriboTextView.handleTabKey()`, which either performs
+      // Fountain's scaffolding as one trip through the input path, swallows the keystroke
+      // because the document already says what it would have said, or declines and lets
+      // `NSTextView` insert a literal tab.
+      textView.tabKeyHandler = { [weak self] in self?.handleTabKey() ?? false }
     }
 
     /// Builds the view over a fresh styler constructed from `theme`.

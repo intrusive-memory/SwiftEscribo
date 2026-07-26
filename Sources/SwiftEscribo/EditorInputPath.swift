@@ -37,6 +37,31 @@ struct InputPathEdit: Equatable {
   }
 }
 
+/// The caret's line as an affordance sees it: text, position, and the scanner's verdict on it
+/// and on the line above.
+///
+/// Assembled once per keystroke by ``EscriboTextView/caretLine()`` and consumed by the pure
+/// rules. It carries no text view and no storage, so a rule that takes one of these cannot
+/// reach back into the editor and cannot be satisfied by a framework standing in for it —
+/// the property `MarkdownListContinuationTests`' header explains at length.
+struct CaretLineContext: Equatable {
+
+  /// The caret's line, **without its terminator**.
+  let line: String
+
+  /// That line's first UTF-16 offset in the document.
+  let lineStart: Int
+
+  /// The caret's UTF-16 offset in the document.
+  let caret: Int
+
+  /// The scanner's classification of the caret's line.
+  let element: ElementKind
+
+  /// The scanner's classification of the line above, or `nil` at the top of the document.
+  let previousElement: ElementKind?
+}
+
 // MARK: - The text view that owns the Return key
 
 #if os(macOS)
@@ -75,9 +100,23 @@ struct InputPathEdit: Equatable {
     /// type lets the handler call main-actor API without a hop or an assumption.
     var returnKeyHandler: (@MainActor () -> Bool)?
 
+    /// Called on every Tab. Returns `true` when it has already done whatever the keystroke
+    /// meant — which for one row of REQUIREMENTS.md § Fountain Tab and Return is *nothing*
+    /// (``FountainAffordanceOutcome/consume``), so a `true` here does not imply the document
+    /// changed. It implies only that `super` must not also insert a tab.
+    ///
+    /// Tab arrives as `doCommandBySelector(insertTab:)`, the same route Return takes, so
+    /// Sortie 26 hangs here rather than inventing a second mechanism.
+    var tabKeyHandler: (@MainActor () -> Bool)?
+
     override func insertNewline(_ sender: Any?) {
       if returnKeyHandler?() == true { return }
       super.insertNewline(sender)
+    }
+
+    override func insertTab(_ sender: Any?) {
+      if tabKeyHandler?() == true { return }
+      super.insertTab(sender)
     }
   }
 
@@ -103,8 +142,18 @@ struct InputPathEdit: Equatable {
     /// Called on every Return. Returns `true` when it has already performed the edit.
     var returnKeyHandler: (@MainActor () -> Bool)?
 
+    /// Called on every Tab — the UIKit half of ``EscriboNativeTextView/tabKeyHandler`` on
+    /// macOS, with the identical contract.
+    ///
+    /// UIKit has no `insertTab(_:)` any more than it has `insertNewline(_:)`. A hardware Tab
+    /// in a `UITextView` arrives through `UIKeyInput` as `insertText("\t")`, so both
+    /// affordances hang off the same override and are told apart by the string, which is the
+    /// only thing UIKit gives to tell them apart by.
+    var tabKeyHandler: (@MainActor () -> Bool)?
+
     override func insertText(_ text: String) {
       if text == "\n", returnKeyHandler?() == true { return }
+      if text == "\t", tabKeyHandler?() == true { return }
       super.insertText(text)
     }
   }
@@ -206,10 +255,137 @@ extension EscriboTextView {
   ///   newline. `false` means "do the boring thing", and the boring thing is `super`'s.
   @discardableResult
   func handleReturnKey() -> Bool {
+    if coordinator.language == .fountain { return perform(fountainReturnOutcome()) }
+
     guard case .rewrite(let range, let replacement) = listContinuationOutcome() else {
       return false
     }
     return performInputPathEdit(InputPathEdit(replacing: range, with: replacement))
+  }
+
+  // MARK: - The Tab key
+
+  /// The Tab-key affordance: Fountain's positional scaffolding (Sortie 26).
+  ///
+  /// Wired to ``EscriboNativeTextView/tabKeyHandler`` at construction, so it runs for every
+  /// Tab the writer presses and for no other key. Markdown has no Tab affordance at all —
+  /// REQUIREMENTS.md gives Tab a column only in § Fountain Tab and Return — so in a Markdown
+  /// document this declines before it asks the scanner anything.
+  ///
+  /// - Returns: `true` when the text view must **not** also insert a tab. That covers two
+  ///   different situations, which is why this is not spelled "performed a rewrite": a
+  ///   rewrite happened, or the row's post-condition already held and the keystroke was
+  ///   swallowed (``FountainAffordanceOutcome/consume``).
+  @discardableResult
+  func handleTabKey() -> Bool {
+    perform(fountainTabOutcome())
+  }
+
+  /// Applies an outcome, and is the only place the three cases are turned into behaviour.
+  ///
+  /// ``FountainAffordanceOutcome/consume`` returns `true` **without** touching the document,
+  /// which is the whole reason it is a separate case: performing it as an empty edit would
+  /// travel the input path, register an undo action, and give the writer a Cmd-Z that appears
+  /// to do nothing.
+  private func perform(_ outcome: FountainAffordanceOutcome) -> Bool {
+    switch outcome {
+    case .literal:
+      return false
+    case .consume:
+      return true
+    case .rewrite(let range, let replacement):
+      return performInputPathEdit(InputPathEdit(replacing: range, with: replacement))
+    }
+  }
+
+  /// What Tab should do at the current caret.
+  ///
+  /// Assembles the inputs ``FountainAffordances/tabOutcome(line:lineStart:caret:element:previousElement:)``
+  /// needs and does no deciding of its own, exactly as ``listContinuationOutcome()`` does for
+  /// Return. Every guard is a *precondition of asking*:
+  ///
+  /// - **Fountain only.** Markdown's Tab is not an affordance in this package.
+  /// - **An empty selection.** Tab with a selection replaces it, and what the writer wants
+  ///   from the selected lines' structure is not knowable.
+  /// - **A classification for the line.** If the scanner cannot say what the line is, this
+  ///   package will not guess.
+  ///
+  /// The classification of the line *above* comes from the same seam
+  /// (``EditorCoordinator/elementKind(atUTF16Offset:)``) rather than from re-reading the text:
+  /// "the previous block is dialogue" is a question only the scanner can answer, because
+  /// whether `BOB` is a cue or a shouted line of action depends on the lines around it.
+  func fountainTabOutcome() -> FountainAffordanceOutcome {
+    guard coordinator.language == .fountain else { return .literal }
+    guard let caret = caretLine() else { return .literal }
+
+    return FountainAffordances.tabOutcome(
+      line: caret.line,
+      lineStart: caret.lineStart,
+      caret: caret.caret,
+      element: caret.element,
+      previousElement: caret.previousElement)
+  }
+
+  /// What Return should do at the current caret in a Fountain document.
+  ///
+  /// It is a literal newline in every row, and ``FountainAffordances/returnOutcome(element:)``
+  /// is where that is written down and asserted. This function exists so the decision is
+  /// reached the same way Tab's is — through the scanner's classification, from the text
+  /// view's own key handler — rather than by Fountain simply never being asked.
+  func fountainReturnOutcome() -> FountainAffordanceOutcome {
+    guard coordinator.language == .fountain else { return .literal }
+    guard let caret = caretLine() else { return .literal }
+    return FountainAffordances.returnOutcome(element: caret.element)
+  }
+
+  /// The caret's line, its classification, and the classification of the line above it.
+  ///
+  /// `nil` whenever an affordance must decline outright: a non-empty selection, a caret
+  /// outside the document, or a line the scanner cannot classify.
+  ///
+  /// The line is bridged to a `String` here, and only the line. REQUIREMENTS.md § Edits and
+  /// text access forbids bridging *the document* per edit — "bridging 120 KB on every
+  /// keystroke would exceed the whole budget before scanning began" — and this is one line,
+  /// once per keystroke, off the scan path entirely.
+  private func caretLine() -> CaretLineContext? {
+    let selection = textView.selectedRange
+    guard selection.length == 0 else { return nil }
+
+    let text = documentStorage.mutableString
+    let caret = selection.location
+    guard caret >= 0, caret <= text.length else { return nil }
+
+    // `getLineStart(_:end:contentsEnd:for:)` is the one call that gets `\r\n` right: it
+    // reports `contentsEnd` before the terminator and `end` after it, whether that terminator
+    // is one code unit or two. REQUIREMENTS.md § Line termination — terminators are never
+    // normalized, so nothing here may assume a length.
+    var lineStart = 0
+    var lineEnd = 0
+    var contentsEnd = 0
+    text.getLineStart(
+      &lineStart, end: &lineEnd, contentsEnd: &contentsEnd,
+      for: NSRange(location: caret, length: 0))
+
+    guard let element = coordinator.elementKind(atUTF16Offset: lineStart) else { return nil }
+
+    var previousElement: ElementKind?
+    if lineStart > 0 {
+      var previousStart = 0
+      var previousEnd = 0
+      var previousContentsEnd = 0
+      text.getLineStart(
+        &previousStart, end: &previousEnd, contentsEnd: &previousContentsEnd,
+        for: NSRange(location: lineStart - 1, length: 0))
+      previousElement = coordinator.elementKind(atUTF16Offset: previousStart)
+    }
+
+    return CaretLineContext(
+      line: text.substring(
+        with: NSRange(location: lineStart, length: max(0, contentsEnd - lineStart))),
+      lineStart: lineStart,
+      caret: caret,
+      element: element,
+      previousElement: previousElement)
   }
 
   /// What Return should do at the current caret.
