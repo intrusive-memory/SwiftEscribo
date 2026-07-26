@@ -47,6 +47,7 @@ extension EscriboTheme {
     ],
     styleStyles: markdownStyleFlags,
     elementSizeScales: [.heading: headingSizeScale],
+    elementParagraphMetrics: markdownParagraphMetrics,
     markerOpacity: 0.4
   )
 
@@ -75,6 +76,7 @@ extension EscriboTheme {
     ],
     styleStyles: markdownStyleFlags,
     elementSizeScales: [.heading: headingSizeScale],
+    elementParagraphMetrics: markdownParagraphMetrics,
     markerOpacity: 0.5
   )
 
@@ -98,6 +100,7 @@ extension EscriboTheme {
     // Deliberately empty. A screenplay page is uniform 12-point: nothing on it is set
     // larger than anything else, so there is no scale to declare.
     elementSizeScales: [:],
+    elementParagraphMetrics: fountainParagraphMetrics,
     markerOpacity: 0.4
   )
 
@@ -117,6 +120,7 @@ extension EscriboTheme {
     ],
     styleStyles: screenplayStyleFlags,
     elementSizeScales: [:],
+    elementParagraphMetrics: fountainParagraphMetrics,
     markerOpacity: 0.5
   )
 
@@ -183,5 +187,141 @@ extension EscriboTheme {
     .emphasis: TokenStyle(traits: .italic),
     .underline: TokenStyle(underline: true),
     .strikethrough: TokenStyle(strikethrough: true),
+  ]
+
+  // MARK: - Paragraph geometry (Sortie 27)
+
+  /// Screenplay margins, in **characters at 10 CPI** (REQUIREMENTS.md § Editor 3),
+  /// expressed as offsets from the action column's own left and right edges.
+  ///
+  /// Sourced from the standard screenplay page (1.5" action margin, 1" right margin,
+  /// on 8.5"-wide paper) and converted at 10 characters per inch:
+  ///
+  /// | Element        | Left edge | Offset from action | Right edge | Offset from action |
+  /// |----------------|-----------|---------------------|------------|---------------------|
+  /// | Action         | 1.5"      | 0"                  | 7.5"       | 0"                  |
+  /// | Character cue  | 3.7"      | 2.2" → 22 ch         | 7.5"       | 0"                  |
+  /// | Parenthetical  | 3.1"      | 1.6" → 16 ch         | 5.1"       | 2.4" → 24 ch         |
+  /// | Dialogue       | 2.5"      | 1.0" → 10 ch         | 6.0"       | 1.5" → 15 ch         |
+  ///
+  /// Named rather than inlined into the tables below for two reasons: a reviewer can
+  /// see the whole margin scheme in one place, and DL-46's grep — which forbids a
+  /// hardcoded point constant in a theme table — reads a named character constant at
+  /// every `leftIndentChars:` call site, never a bare number.
+  private enum FountainMargins {
+    /// Character cue: 22 characters right of the action margin.
+    static let characterIndentChars: Double = 22
+    /// Parenthetical: 16 characters right of the action margin.
+    static let parentheticalIndentChars: Double = 16
+    /// Parenthetical's right margin, inward from the action column's own right edge.
+    static let parentheticalRightMarginChars: Double = 24
+    /// Dialogue: 10 characters right of the action margin.
+    static let dialogueIndentChars: Double = 10
+    /// Dialogue's right margin, inward from the action column's own right edge.
+    static let dialogueRightMarginChars: Double = 15
+  }
+
+  /// The Fountain paragraph-geometry rule set, shared by both Fountain themes.
+  ///
+  /// One layer, two rule sets (REQUIREMENTS.md § Editor 6): this table and
+  /// ``markdownParagraphMetrics`` are both consumed by the same
+  /// `ParagraphMetrics.paragraphStyle(in:)` conversion in `ParagraphGeometry.swift` —
+  /// nothing here builds a second `NSParagraphStyle` code path.
+  ///
+  /// Every entry sets `alignment` explicitly to something other than ``ParagraphAlignment/natural``
+  /// — `.left`, `.right`, or `.center`. Fountain paragraph geometry is **LTR-only**
+  /// (REQUIREMENTS.md § Editor 3 fixes physical margins in characters at 10 CPI); that is a
+  /// scope statement, not an oversight, and `.natural` would silently reopen the RTL question
+  /// this rule set does not answer.
+  private static let fountainParagraphMetrics: [ElementKind: [Int: ParagraphMetrics]] = [
+    // Action and scene headings sit at the action column's own margin — no extra
+    // indent — but still declare `.left` explicitly rather than leaving alignment
+    // at its `.natural` default, for the reason above.
+    .sceneHeading: [0: ParagraphMetrics(alignment: .left)],
+    .action: [0: ParagraphMetrics(alignment: .left)],
+    .character: [
+      0: ParagraphMetrics(
+        leftIndentChars: FountainMargins.characterIndentChars, alignment: .left)
+    ],
+    .parenthetical: [
+      0: ParagraphMetrics(
+        leftIndentChars: FountainMargins.parentheticalIndentChars,
+        rightIndentChars: FountainMargins.parentheticalRightMarginChars,
+        alignment: .left)
+    ],
+    .dialogue: [
+      0: ParagraphMetrics(
+        leftIndentChars: FountainMargins.dialogueIndentChars,
+        rightIndentChars: FountainMargins.dialogueRightMarginChars,
+        alignment: .left)
+    ],
+    // Flush right within the action column — CUT TO:, and any line forced with `>`.
+    .transition: [0: ParagraphMetrics(alignment: .right)],
+    // Centered within the action column — `>THE END<`.
+    .centered: [0: ParagraphMetrics(alignment: .center)],
+  ]
+
+  /// Markdown indent unit, in characters, per level of nesting (REQUIREMENTS.md § Editor 6:
+  /// list and blockquote indents via `firstLineHeadIndent` / `headIndent`).
+  ///
+  /// Named for the same DL-46 reason ``FountainMargins`` is: every `leftIndentChars:`
+  /// argument below is a named constant or an arithmetic expression over one, never a bare
+  /// number.
+  private enum MarkdownMargins {
+    /// Characters of indent contributed by *each* level of list nesting. A depth-0
+    /// (unnested) item carries no geometry of its own beyond its marker text — nesting is
+    /// what this constant charges for — so `leftIndentChars` at depth *n* is this constant
+    /// times *n*, and depth 2 is therefore always exactly twice depth 1.
+    static let listIndentUnitChars: Double = 4
+    /// Characters of indent contributed by *each* level of blockquote nesting, including
+    /// the outermost: unlike a list marker, `>` earns a margin at every depth, so
+    /// `leftIndentChars` at depth *n* is this constant times *n + 1*.
+    static let blockquoteIndentUnitChars: Double = 4
+  }
+
+  /// `leftIndentChars` scaled linearly by nesting depth — the shape both the list and
+  /// blockquote tables below share, differing only in whether depth 0 is bare.
+  private static func linearIndentTable(
+    unit: Double, throughDepth: Int, startingAt firstDepth: Int = 0
+  ) -> [Int: ParagraphMetrics] {
+    var table: [Int: ParagraphMetrics] = [:]
+    for depth in 0...throughDepth {
+      table[depth] = ParagraphMetrics(
+        leftIndentChars: unit * Double(depth + firstDepth), alignment: .natural)
+    }
+    return table
+  }
+
+  /// The Markdown paragraph-geometry rule set, shared by both Markdown themes.
+  ///
+  /// `.paragraph` and every list/blockquote entry declare ``ParagraphAlignment/natural``
+  /// explicitly: unlike the Fountain rule set, Markdown geometry works in RTL, because
+  /// nothing here fixes a physical left or right edge.
+  private static let markdownParagraphMetrics: [ElementKind: [Int: ParagraphMetrics]] = [
+    // A small paragraph-to-paragraph gap. Non-default (so this is a real table entry, not
+    // the absent-element fallback) while still `.natural`.
+    .paragraph: [0: ParagraphMetrics(spaceBeforeLines: 0.5, alignment: .natural)],
+    // Heading level lives in `depth`, exactly as `elementSizeScales` above reads it — more
+    // space before a bigger heading, tapering as the level number grows.
+    .heading: [
+      0: ParagraphMetrics(spaceBeforeLines: 0.6, alignment: .natural),
+      1: ParagraphMetrics(spaceBeforeLines: 1.2, alignment: .natural),
+      2: ParagraphMetrics(spaceBeforeLines: 1.0, alignment: .natural),
+      3: ParagraphMetrics(spaceBeforeLines: 0.9, alignment: .natural),
+      4: ParagraphMetrics(spaceBeforeLines: 0.8, alignment: .natural),
+      5: ParagraphMetrics(spaceBeforeLines: 0.7, alignment: .natural),
+      6: ParagraphMetrics(spaceBeforeLines: 0.6, alignment: .natural),
+    ],
+    // List nesting saturates at `MarkdownBlockState.maxTrackedDepth - 1` (7); every depth
+    // up to and including it gets its own entry so a deeply nested list never falls back to
+    // depth 0's bare geometry.
+    .unorderedListItem: linearIndentTable(
+      unit: MarkdownMargins.listIndentUnitChars, throughDepth: 7),
+    .orderedListItem: linearIndentTable(
+      unit: MarkdownMargins.listIndentUnitChars, throughDepth: 7),
+    // Blockquote nesting has no scanner-enforced ceiling; seven levels covers any quote a
+    // human would actually write, and depth 0 already carries one unit of margin.
+    .blockquote: linearIndentTable(
+      unit: MarkdownMargins.blockquoteIndentUnitChars, throughDepth: 7, startingAt: 1),
   ]
 }
