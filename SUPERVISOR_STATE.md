@@ -88,13 +88,21 @@ updated: 2026-07-26
 
 ### WU-2 Editor Substrate
 - Work unit state: **RUNNING** (unlocked 2026-07-26 — WU-1 COMPLETED)
-- Current sortie: 8 of 30 (second of 7–12)
+- Current sortie: 9 of 30 (third of 7–12)
 - Sortie state: DISPATCHED
 - Sortie type: code
 - Model: opus
-- Complexity score: 20
+- Complexity score: 24
 - Attempt: 1 of 3
-- Last verified: Sortie 7 COMPLETED, commit `9d7faf2`. Supervisor independently re-ran
+- Last verified: Sortie 8 COMPLETED, commit `a1947c9`. Supervisor independently re-ran
+  every exit criterion: `make test` exit **0** and `make test-ios` exit **0**
+  (`SwiftEscriboTests` **40 tests / 6 suites**, up from 22/4; core unchanged at 98/11).
+  All four greps clean: no point constants in the theme tables, no family name anywhere
+  under `Tests/`, no `resources:` in `Package.swift`, and DL-40's styler-mode grep still
+  empty. One `invalidate()` remains the only invalidation path and now clears both the
+  style and paragraph caches. `TokenStyle` still has no size field (DL-33). Two
+  falsification probes fired correctly (DL-45).
+- Previously verified: Sortie 7 COMPLETED, commit `9d7faf2`. Supervisor independently re-ran
   every exit criterion: `make test` exit **0** (`SwiftEscriboTests` **22 tests / 4
   suites**, up from 2/1; `EscriboCoreTests` unchanged at 98/11), `** TEST SUCCEEDED **`.
   `grep -rE 'protocol .*Theme' Sources/SwiftEscribo/` → no matches. Charter re-checked:
@@ -108,6 +116,7 @@ updated: 2026-07-26
 | Sortie | State | Model | Attempts | Commit | Verified by supervisor |
 |--------|-------|-------|----------|--------|------------------------|
 | 7 | COMPLETED | opus | 1 | `9d7faf2` | test 0 (22/4 + 98/11), theme-protocol grep clean, DL-12 intact, two falsification probes fired (DL-34) |
+| 8 | COMPLETED | opus | 1 | `a1947c9` | test 0 **and test-ios 0** (40/6 + 98/11), 4/4 greps clean, one invalidation path preserved, two falsification probes fired (DL-45) |
 
 ### WU-3 Fountain Depth
 - Work unit state: NOT_STARTED
@@ -145,7 +154,7 @@ updated: 2026-07-26
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-2 | 8 | DISPATCHED | 1/3 | opus | 20 | (session `fa1c4c1d`) | — | 2026-07-26 07:20 PDT |
+| WU-2 | 9 | DISPATCHED | 1/3 | opus | 24 | (session `fa1c4c1d`) | — | 2026-07-26 08:15 PDT |
 
 ---
 
@@ -195,13 +204,22 @@ updated: 2026-07-26
 | DL-41 | 2026-07-26 | WU-2 | 7 | **PRE-AUTHORIZED for Sortie 30's audit: `EscriboColor`, `FontFamilyRole`, `FontTraits` are public and are not on the 1.0 list** | They are *forced*, not speculative: REQUIREMENTS.md § What is public in 1.0 names `TokenStyle`, and a public struct's stored-property types must be public. Same class of exception as DL-9. Sortie 30 should confirm the set is still exactly these three and record them in the report rather than re-litigating them. Everything else the sortie added — `EscriboStyler`, `FontSpec`, `ResolvedStyle`, `FontMetrics`, `EscriboAppearance`, `EditorStyleEnvironment` — is correctly `internal`. |
 | DL-42 | 2026-07-26 | WU-2 | 7 | NOTED, not a defect: the Fountain built-in themes are deliberately thin | Base monospaced at 12 pt, no per-element size scaling (a screenplay page is uniform), marker dimming, no `.inlineCode` entry. Scene-heading, cue, and dialogue entries would be decoration for `SpanKind`s that Sortie 13 has not created yet. **Sortie 13 adds them to `BuiltInThemes.swift`, never as a `default:` in the styler** — an unthemed kind rendering as base text is correct behavior, and DL-33 plus the unknown-kind test make that the guaranteed path. |
 | DL-43 | 2026-07-26 | WU-2 | 8 | Model: opus | Complexity 20 (5 turns-band + 2 file-count + 10 foundation/dependents + 3 risk). CoreText font resolution and the characters-to-points conversion are reused by both language rule sets in Sortie 27, and D-4 exists precisely because the naive version of this sortie authors a test that passes locally and fails in CI. |
+| DL-44 | 2026-07-26 | WU-2 | 8 | **HAZARD for Sortie 9, and the most consequential thing this sortie found: paragraph styles are produced separately from span attributes and must be applied AFTER the span pass.** | `paragraphStyleRuns(for:)` returns `(range, NSParagraphStyle)` pairs; `attributes(for:on:)` is unchanged and carries no paragraph style. Merging them would have broken `SourceThemeTests.everySpanCollapsesToBase`, which compares one-arg and two-arg attribute dictionaries for equality. **The consequence is a live collision with Sortie 9's plan text**, which says to apply attributes with `setAttributes(_:range:)` over the rescanned range: `setAttributes` **replaces** the entire dictionary for a range, so a paragraph style set beforehand is silently dropped and the geometry layer renders as if it were switched off. Sortie 9 must apply the paragraph attribute additively *after* the span pass (`addAttribute(.paragraphStyle:range:)`), or fold the run's style into each span dictionary before setting. Runs are one per line, uncoalesced, over the **full `LineRecord.range` including the terminator** — a paragraph style stopping short of its terminator leaves the newline carrying the previous paragraph's geometry. |
+| DL-45 | 2026-07-26 | WU-2 | 8 | Supervisor falsified both properties the sortie exists to establish | **Probe A** replaced the advance-width multiplier in `ParagraphMetrics.paragraphStyle(in:)` with a constant `7.0`; four tests went red, including `Doubling the resolved font size doubles the computed point indent` and `A line's margins are measured against that line's own point size`. **Probe B** dropped the `isGeometryEnabled` guard from `paragraphMetrics(for:depth:)`; `Geometry switched off produces the default paragraph style for every ElementKind` went red — so the geometry-off test is asserted against a *populated* table and cannot pass vacuously. Both reverted; tree clean; `make test` green at 40/6 + 98/11. |
+| DL-46 | 2026-07-26 | WU-2 | 8 | **PLAN DEFECT recorded, not repaired: Sortie 8's point-constant grep is broader than its intent and must not become a standing invariant.** | The criterion `grep -rE '(leftIndent\|headIndent\|firstLineHeadIndent)[A-Za-z]*: *[0-9.]+' Sources/SwiftEscribo/` also matches `leftIndentChars: 10` — a **character** constant, which is exactly what Sortie 27 is required to write. It passes today only because Sortie 8 leaves the tables empty. Checked, and the good news is narrow: **Sortie 27 does not carry this grep among its own exit criteria**, so it is not gated on a check it must fail. The risk is that Sortie 30's audit or a regression sweep resurrects it as a standing invariant and reads Sortie 27's correct work as a violation. **The correct standing form of the check is not a text pattern over the tables at all**: `ParagraphMetrics`'s fields are all `…Chars` or `…Lines`, so a point constant can only enter through an `NSMutableParagraphStyle` property assignment, and those occur at exactly one site — `ParagraphMetrics.paragraphStyle(in:)`, where each is a `CGFloat(...)` of a product with `geometry.advanceWidth` or `geometry.lineHeight`. The invariant to assert after Sortie 27 is **"the only writes to `firstLineHeadIndent`, `headIndent`, `tailIndent`, and `paragraphSpacingBefore` live in `paragraphStyle(in:)`"**. EXECUTION_PLAN.md is not edited during execution, so this is recorded here and carried into Sortie 27's and Sortie 30's dispatch prompts. |
+| DL-47 | 2026-07-26 | WU-2 | 8 | ACCEPTED: `firstLineIndentChars` is **relative to** `leftIndentChars`, not absolute | A hanging indent is then negative, an ordinary first-line indent positive, and "no special first line" is `0` — the common case is the zero value, which is the property worth having. Absolute would force every rule set to repeat `leftIndentChars`, and any rule that forgot would silently render its first line flush left. Converted as `left + firstLineIndentChars * advanceWidth` into `NSParagraphStyle.firstLineHeadIndent`, which is itself absolute. **Sortie 27 must know this** — it is carried into that dispatch. |
+| DL-48 | 2026-07-26 | WU-2 | 8 | ACCEPTED: `ParagraphAlignment`, not `Alignment` | REQUIREMENTS.md's sketch names the *field* `alignment`, which is preserved; only the type name differs. `SwiftUI.Alignment` owns the obvious name and Sortie 12 brings a file importing SwiftUI into this target. A public type that collides there is a rename waiting to happen, and renaming public API after 1.0 is a major release under this package's own semver commitments. Cheap now, expensive later. |
+| DL-49 | 2026-07-26 | WU-2 | 8 | ACCEPTED: geometry is measured against the **line's own** `baseStyle` font, at the line's scaled size | Kind and emphasis stages skipped; base family and traits at `sizeScale(for:element,depth:)`. A heading set 1.8× larger with margins measured at body size sits at the wrong column, and the error grows with the scale. Consistent with DL-33: size is a per-line quantity, so the thing margins are measured against is a per-line quantity too. |
+| DL-50 | 2026-07-26 | WU-2 | 8 | ACCEPTED: the family chain uses `PlatformFont(name:size:)`, not `CTFontCreateWithName` — and the reasoning matters more than the call | Plan task 4 says the chain goes "through CoreText". `CTFontCreateWithName` **never fails**: handed an unknown name it substitutes silently. A chain built on it would always succeed at its first entry, so Courier New, Courier, and the `.monospacedSystemFont` fallback would all be unreachable — D-4's entire purpose defeated, and defeated in a way no test could observe, because the substituted font is a real font. CoreText does the **measuring** here (advance width, line height); it must not do the **choosing**. This is precisely the class of local-passes/CI-misleads defect D-4 exists to prevent. |
+| DL-51 | 2026-07-26 | — | — | PROCESS NOTE for the brief: a killed `xcodebuild` orphans an `xctest` agent that blocks the next run | The Sortie 8 agent hit this and so did the supervisor — one probe run timed out at 10 minutes with no output. The harness does not recover on its own. Symptom: `make test` hangs indefinitely with no test output. Fix: check `pgrep -fl 'xcodebuild\|xctest'` and kill survivors before re-running. Not a code defect; worth one line in the brief so the next mission does not diagnose it twice. |
+| DL-52 | 2026-07-26 | WU-2 | 9 | Model: opus | Complexity 24 (8 turns-band + 2 file-count + 10 foundation/dependents + 4 risk); override applies. The coordinator is adopted unchanged by both Representables — the plan states plainly that an AppKit-shaped seam here does not retrofit to UIKit — and it must land DL-44 correctly or the whole geometry layer renders as though switched off. |
 | DL-32 | 2026-07-26 | WU-2 | 7 | Model: opus | Complexity 25 (8 turns-band + 4 file-count + 10 foundation/dependents + 3 risk + 0 ambiguity). Override also applies: foundation_score 1 with 23 dependents. The theme lookup table and the styler cache are the second half of the scanner→editor seam and are consumed by all three Representables; the composition order and the single invalidation path are exactly the shape that does not retrofit. |
 
 ---
 
 ## Overall Status
 
-- Sorties completed: **7 / 30** (Sorties 1–7 — all supervisor-verified)
-- Sorties in flight: 1 (Sortie 8, WU-2)
-- Work units completed: **1 / 7** (WU-1 COMPLETE; WU-2 RUNNING at 8 of 12; WU-3…WU-7 gated)
+- Sorties completed: **8 / 30** (Sorties 1–8 — all supervisor-verified)
+- Sorties in flight: 1 (Sortie 9, WU-2)
+- Work units completed: **1 / 7** (WU-1 COMPLETE; WU-2 RUNNING at 9 of 12; WU-3…WU-7 gated)
 - Blocked: none
