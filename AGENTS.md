@@ -131,6 +131,29 @@ The property test below exists specifically to catch both.
 - Skip restyling while `hasMarkedText` is true; restyling mid-composition breaks CJK
   input.
 
+### Theme
+
+A theme is a **value table**, not a protocol with a resolver method. The styler caches
+`(SpanKind, StyleSet, SpanRole) -> attributes` and invalidates on exactly four events:
+theme change, mode change, appearance change, font-metric change. Adding a fifth
+trigger without invalidating is how you get dark text on a dark background.
+
+Composition order is normative: base → kind → style → role. Traits union; everything
+else overrides. Marker dimming is the last stage and is alpha only.
+
+`markerOpacity` is a single scalar on the theme — not a per-kind value, not a
+`TokenStyle`. There is deliberately no way to give a marker its own font or size.
+
+Paragraph geometry is declared in **characters and line heights**, never points —
+screenplay margins are defined at 10 CPI, and points would break on any font-size
+change. Looked up by `(ElementKind, depth)`.
+
+Source mode is a built-in theme that maps everything to base attributes. It is not a
+code path. If you find yourself branching on mode inside the styler, the design has
+been broken.
+
+An unknown `SpanKind` resolves to the base style. Never `fatalError` in a `default:`.
+
 ## Testing
 
 `make test-core` is the fast inner loop — pure functions over strings, no UI, no

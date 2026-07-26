@@ -259,6 +259,115 @@ time rather than a code unit at a time, so dispatch is per line and not per char
   input is a fixture case (Verification §6), not an error path — the scanner has no
   error path.
 
+## Theme and styling
+
+Lives in `SwiftEscribo`, never in `EscriboCore` — colors and fonts are AppKit/UIKit
+types, and requirement 6 forbids importing them into the core. The core emits spans
+and line records; the theme is the only thing that decides how they look.
+
+### The theme declares intent; the styler resolves and caches it
+
+A theme is a **value type holding a lookup table**, not a protocol with a
+`attributes(for:)` method. A protocol call per span allocates an attribute dictionary
+per span — tolerable for a three-span keystroke, wasteful across the ~10⁴ spans of a
+cold 120 KB document, and awkward to make `Sendable`.
+
+Instead the styler owns a cache keyed by `(SpanKind, StyleSet, SpanRole)`. The number
+of distinct combinations actually occurring in a document is in the tens, so after the
+first few lines every lookup is a hit and the hot path is a dictionary read rather
+than a computation.
+
+**The cache is invalidated by exactly four things**: theme change, mode change,
+appearance change (light/dark), and font-metric change (user font size, Dynamic Type).
+One invalidation path, four triggers — a fifth trigger that forgets to invalidate is
+how an editor ends up with dark-mode text on a light background.
+
+### Composition order
+
+Attributes resolve in four stages, and the order is normative:
+
+1. **Base** — family, size, foreground, background.
+2. **Kind** — per-`SpanKind` overrides: color, font traits, size scale.
+3. **Style** — `StyleSet` flags applied additively: `.strong` adds the bold trait,
+   `.emphasis` italic, `.inlineCode` swaps to the mono family, `.strikethrough` and
+   `.underline` set their attributes.
+4. **Role** — if `role == .marker`, multiply the foreground alpha by `markerOpacity`.
+   Nothing else.
+
+Within a stage, **traits union and everything else overrides**. Stating this matters:
+it is the difference between a code span inside a bold heading rendering bold-mono
+and rendering mono-only, and it is not the kind of thing two implementers guess the
+same way.
+
+### Marker dimming is unfalsifiable by construction
+
+`markerOpacity` is a **single scalar on the theme**, not a `TokenStyle` for markers
+and not a per-kind value. There is therefore no way to express "markers in a different
+font" or "markers a size smaller" — the type system refuses. Combined with a marker
+span carrying the same `kind` and `style` as its content (Core API), Architecture §3
+stops being a rule someone has to remember and becomes a property that cannot be
+violated without changing the theme type itself.
+
+Note that Architecture §3 constrains markers **relative to their content**, not
+content relative to other content. A Markdown code span legitimately swaps to a mono
+family and changes advance width; that is the feature working. What is forbidden is a
+`*` rendering at a different size from the word it wraps.
+
+### Geometry is declared in characters, not points
+
+```swift
+public struct ParagraphMetrics: Equatable, Sendable {
+  var leftIndentChars: Double
+  var rightIndentChars: Double
+  var firstLineIndentChars: Double
+  var spaceBeforeLines: Double    // multiples of line height
+  var alignment: Alignment
+}
+```
+
+Screenplay margins are defined in characters at 10 CPI (Editor §3), so the theme
+stores characters and the styler converts to points against the resolved font's
+advance width. Storing points would silently break every margin the moment a user
+changes font size — and would make the Courier requirement a hidden coupling instead
+of an explicit one.
+
+Geometry is looked up by `(ElementKind, depth)`, because Markdown list indentation is
+a function of nesting depth, which is exactly why `LineRecord` carries `depth`.
+
+### Source mode is a theme, not a code path
+
+Editor §2 requires that switching between live and source mode is a theme swap rather
+than a content transformation. That is a real constraint on this API: **the theme type
+must be able to express "no styling at all."** A built-in source theme maps every kind
+and every style combination to the base attributes and every element to default
+metrics.
+
+This is testable, and it is worth testing, because it is the cheapest possible proof
+that the abstraction did not leak: **for the source theme, every span in a document
+resolves to identical attributes regardless of kind, style, or role.** If that test
+cannot be written, mode switching has grown a code path it was not supposed to have.
+
+### Unknown kinds fall back, never fail
+
+A theme is not required to have an entry for every `SpanKind`. An unrecognized kind
+resolves to the base style — never a crash, never a blank, never a fatal `default:`.
+This pairs with kinds being structs rather than enums (Core API): a theme written
+against 1.0 must keep working when 1.1 adds a Fountain construct, rendering the new
+kind as plain text until the theme opts into styling it.
+
+### Built-ins and what is deferred
+
+Built-in themes: light and dark, for both languages (Editor §5).
+
+Explicitly **not** in 1.0, listed so they are not mistaken for oversights:
+
+- **Computed styling** — a closure or protocol that colors a span by its *content*
+  rather than its kind, e.g. a distinct color per character name in a screenplay.
+  This is a genuinely wanted feature and the value-table design does not preclude
+  adding it later, but it changes the caching story and is not free.
+- **Consumer-defined kinds.** Themes restyle the kinds the scanners emit; they cannot
+  introduce new ones, because nothing would ever produce them.
+
 ## Functionality
 
 ### Fountain
@@ -310,6 +419,7 @@ time rather than a code unit at a time, so dispatch is per line and not per char
    parenthetical) and Return. **Every rewrite must register as a single coalesced undo
    action** on both platforms, or Cmd-Z unwinds character by character.
 5. Themeable: fonts, colors, and marker opacity, with built-in light and dark themes.
+   See Theme and styling for the API and its constraints.
 6. **Markdown paragraph geometry**: heading size scale and list/blockquote indents
    (`firstLineHeadIndent` / `headIndent`), sharing the geometry layer Fountain
    requires (§3 above). One layer, two rule sets. Size varies per line, never within
@@ -366,6 +476,11 @@ time rather than a code unit at a time, so dispatch is per line and not per char
    enough to check unconditionally, and a violation means the styler will leave stale
    attributes on screen — a symptom that is miserable to diagnose from the UI and
    trivial to catch here.
+
+   Two theme assertions belong here for the same reason (Theme and styling):
+   under the source theme every span resolves to identical attributes regardless of
+   kind, style, or role; and an unrecognized `SpanKind` resolves to the base style
+   rather than failing.
 4. **Round-trip test** for the writer, correctly formulated as idempotence:
    `parse(write(parse(x))) == parse(x)`. Note that `write(parse(x)) == x` is *not* a
    valid assertion — writing normalizes, so it fails on any non-canonical input.
