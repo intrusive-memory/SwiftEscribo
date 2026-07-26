@@ -51,11 +51,17 @@ enum CoordinatorFixtures {
 
   // MARK: - Theme
 
-  /// A theme with real span styling **and** real geometry, on two different elements.
+  /// A theme with real span styling **and** real geometry, on three different elements.
   ///
   /// Both halves are needed and neither is decorative: DL-44 is invisible unless a line
   /// has attributes from the span pass *and* a non-default paragraph style, and unless the
-  /// two elements' paragraph styles differ from each other.
+  /// elements' paragraph styles differ from each other.
+  ///
+  /// ``ElementKind/section`` is here for the language switch: `# Title` is a Markdown
+  /// ``ElementKind/heading`` under one grammar and a Fountain ``ElementKind/section``
+  /// under the other, so giving both a distinct, non-default geometry is what lets
+  /// ``EditorCoordinatorOwnershipTests/languageSwitchIsAFullRescan()`` tell a replaced
+  /// scanner from a reused one by looking at the page.
   static let probeTheme = EscriboTheme(
     name: "coordinator probe",
     baseFontSize: 12,
@@ -68,6 +74,7 @@ enum CoordinatorFixtures {
     elementParagraphMetrics: [
       .heading: [1: ParagraphMetrics(leftIndentChars: 5, spaceBeforeLines: 2)],
       .paragraph: [0: ParagraphMetrics(leftIndentChars: 1, firstLineIndentChars: 2)],
+      .section: [1: ParagraphMetrics(leftIndentChars: 9, spaceBeforeLines: 3)],
     ],
     markerOpacity: 0.4
   )
@@ -462,14 +469,26 @@ struct EditorCoordinatorOwnershipTests {
     #expect(editor.coordinator.restyleCount == before + 1)
     #expect(editor.coordinator.lastAppliedRange == 0..<editor.storage.length)
 
-    // Fountain has no grammar until Sortie 13 and degrades to plain text, so `# Title`
-    // stops being a heading and becomes an ordinary paragraph. Its geometry changing to
-    // the paragraph element's is the observable proof that the scanner was replaced
-    // rather than reused — a reused scanner would have kept the line's heading state.
+    // `# Title` is the probe, because it is the one line the two grammars disagree
+    // about: a Markdown ATX heading at depth 1 under one, a Fountain section at depth 1
+    // under the other. Both have a distinct, non-default geometry in `probeTheme`, so
+    // the line's paragraph style says which grammar painted it.
+    //
+    // That geometry — not `restyleCount` — is what proves the scanner was **replaced**.
+    // A coordinator that mutated the language on the existing scanner would still hold
+    // line 0's cached Markdown state and repaint it with `.heading`'s indents, and it
+    // would still bump `restyleCount` and still report a full `lastAppliedRange`. Both
+    // of those pass in the broken world; only the geometry does not. Never reduce this
+    // to the count.
+    //
+    // (Before Sortie 13, `Language.fountain` had no grammar and degraded to plain text,
+    // so this asserted `.paragraph` instead. It is a section now because Fountain can
+    // read the line, not because the invariant changed.)
     let firstLine = editor.storage.attributes(at: 0, effectiveRange: nil)
     let paragraph = try #require(firstLine[.paragraphStyle] as? NSParagraphStyle)
-    #expect(paragraph.isEqual(editor.styler.paragraphStyle(element: .paragraph, depth: 0)))
+    #expect(paragraph.isEqual(editor.styler.paragraphStyle(element: .section, depth: 1)))
     #expect(!paragraph.isEqual(editor.styler.paragraphStyle(element: .heading, depth: 1)))
+    #expect(!paragraph.isEqual(editor.styler.paragraphStyle(element: .paragraph, depth: 0)))
   }
 
   @Test("Setting the same language is a no-op")
