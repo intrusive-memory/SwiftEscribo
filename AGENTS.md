@@ -154,6 +154,22 @@ been broken.
 
 An unknown `SpanKind` resolves to the base style. Never `fatalError` in a `default:`.
 
+### Things that look like details and are not
+
+- **`\r\n` is one terminator, two code units.** Never normalized. A trailing
+  terminator produces a final empty line: `"a\n"` is two lines.
+- **Never split a surrogate pair** at a span boundary.
+- **Nothing may be worse than linear in line length.** A one-megabyte line must scan.
+- **Smart quotes, smart dashes, text replacement, and autocorrect are disabled.**
+  `--` silently becoming `—` destroys `---` thematic breaks. In an editor whose
+  premise is that the string is the value, these are corruption, not convenience.
+- **When an affordance's context is ambiguous, do the boring thing** — insert a literal
+  tab or newline. An affordance that guesses costs more keystrokes than it saves.
+- **When the binding is set to a value equal to current storage, do nothing.** Without
+  that check SwiftUI feeds the editor its own output and the view fights the typist.
+- **`LineState` is public but opaque.** Exposing its shape freezes the scanner's
+  internals and makes every convergence fix a breaking change.
+
 ## Testing
 
 `make test-core` is the fast inner loop — pure functions over strings, no UI, no

@@ -259,6 +259,78 @@ time rather than a code unit at a time, so dispatch is per line and not per char
   input is a fixture case (Verification §6), not an error path — the scanner has no
   error path.
 
+## Text model
+
+Architecture §1 says the raw string is the value, byte for byte. That has consequences
+that must be stated, because every one of them is an off-by-one waiting to happen.
+
+### Line termination
+
+- `\n`, `\r\n`, and a lone `\r` are all line terminators. A document may mix them.
+- Terminators are **never normalized**. `\r\n` stays `\r\n` through scan, style, and
+  write. Normalizing would violate Architecture §1 and would make the writer's
+  idempotence test pass for the wrong reason.
+- `LineRecord.range` includes the whole terminator, so it is 2 code units for `\r\n`.
+  A scanner that assumes 1 breaks every offset after the first CRLF.
+- **A trailing terminator produces a final empty line.** `"a\n"` is two lines: `"a\n"`
+  and `""`. `"a"` is one. This matches where a text view lets the caret go, and
+  disagreeing with the text view about line count is unrecoverable.
+- The empty document is one empty line, zero spans, and an empty `dirtyRange` at 0.
+
+### Unicode
+
+- Span boundaries **never split a surrogate pair**. This is a hard guarantee and a
+  cheap one to check.
+- All syntax markers in both grammars are ASCII, so boundaries fall on grapheme
+  cluster boundaries in practice; the scanner does not do cluster segmentation on the
+  hot path and does not need to.
+- Astral-plane characters (emoji, and the ones that appear in real screenplays more
+  often than you would guess) occupy 2 code units. Column arithmetic — Markdown
+  indentation, Fountain centering — counts **code units, not characters**, and any
+  place that means "visual column" must say so.
+
+### Degenerate input
+
+- **No document-size limit and no assumption one exists.** Budgets are stated for
+  120 KB (Performance budget); correctness is unbounded.
+- **No algorithm may be worse than linear in line length.** A one-megabyte single
+  line must scan in time proportional to its length. Quadratic line handling is the
+  classic way a scanner that benchmarks well hangs on a minified file.
+- A tab is a legal indent character. Column computation for indented code uses the
+  CommonMark 4-column tab stop, not a width of 1.
+
+## Language and dispatch
+
+```swift
+public struct Language: Hashable, Sendable {  // .markdown, .fountain
+  public let rawValue: String
+}
+```
+
+A struct with static members for the same reason as `SpanKind` (Core API) — adding a
+language must not break a consumer's exhaustive `switch`.
+
+### Fountain inside Markdown
+
+A fence tagged `fountain` scans its contents with the Fountain scanner (Markdown §4).
+Three requirements make that work rather than merely sound reasonable:
+
+1. **The inner scan is offset, not separate.** Spans come back in outer-document
+   coordinates. The inner scanner is never handed a substring — that would allocate
+   per keystroke and lose the offset, which is how ranges end up subtly wrong only
+   inside fenced blocks.
+2. **The inner state is part of the outer `startState`.** Convergence (Architecture
+   §5) must work across the boundary, so a line inside a fenced Fountain block has a
+   `startState` that carries the Fountain scanner's state as well as the Markdown
+   scanner's. A `startState` that only tracks "we are in a fence" converges early
+   inside the block and produces the exact bug the gate test exists to catch.
+3. **One level, no recursion.** Markdown may host Fountain. Fountain hosts nothing —
+   it has no fence syntax — so there is no nesting beyond depth one and no reentrancy
+   to reason about.
+
+An unterminated `fountain` fence scans to end of document. It does not fail, and it
+does not fall back to Markdown (Core API: scanning never fails).
+
 ## Theme and styling
 
 Lives in `SwiftEscribo`, never in `EscriboCore` — colors and fonts are AppKit/UIKit
@@ -368,6 +440,148 @@ Explicitly **not** in 1.0, listed so they are not mistaken for oversights:
 - **Consumer-defined kinds.** Themes restyle the kinds the scanners emit; they cannot
   introduce new ones, because nothing would ever produce them.
 
+## Editing behavior
+
+### "Input shortcuts" is the wrong frame
+
+Editor §4 lists Markdown input shortcuts as `# `, `- `, `1. `, `- [ ] `. In an editor
+that **hides** markers, those are conversions: you type `# ` and it disappears into a
+heading style. Here markers are never hidden (Architecture §2), so typing `# ` needs
+no shortcut at all — the characters are the syntax and they are already correct.
+
+What is actually wanted is **continuation**, not conversion:
+
+| Trigger | Behavior |
+|---|---|
+| Return at end of `- item` | Insert `\n- ` |
+| Return at end of `3. item` | Insert `\n4. ` |
+| Return at end of `- [ ] item` | Insert `\n- [ ] ` (always unchecked) |
+| Return on an item that is empty apart from its marker | Delete the marker, leaving an empty line — do not insert another |
+| Return at end of an indented nested item | Continue at the same indent |
+
+Ordered-list **renumbering** of following items is deferred. It is a document-wide
+rewrite triggered by a single keystroke, which fights coalesced undo and the
+line-local edit model for a cosmetic gain — `1. 1. 1.` renders as 1, 2, 3 in every
+CommonMark implementation anyway.
+
+### Fountain Tab and Return
+
+Fountain structure is positional — blank lines and capitalization — so these
+affordances insert scaffolding rather than markup:
+
+| Context | Tab | Return |
+|---|---|---|
+| Empty line, previous block is dialogue or blank | Begin a character cue | — |
+| On a character cue | Move to the next line as dialogue | Next line as dialogue, no blank line between |
+| On a dialogue line | Wrap the line in `()` as a parenthetical | Continue dialogue |
+| On a parenthetical | Move to the next line as dialogue | Next line as dialogue |
+| Anywhere ambiguous | Insert a literal tab | Insert a newline |
+
+**The last row is the important one.** When context is ambiguous, an affordance does
+the boring thing. An affordance that guesses is worse than no affordance, because the
+user cannot predict it and the correction costs more keystrokes than it saved.
+
+### Undo
+
+**Every affordance-driven rewrite is one undo action, together with the keystroke that
+triggered it.** Pressing Return once and Cmd-Z once must return to exactly the prior
+state — not to a half-inserted list marker.
+
+The binding constraint: the rewrite must go through the text view's own input path, in
+the same transaction as the user's input. Mutating text storage after the fact
+registers a second undo group, and no amount of `NSUndoManager` grouping reliably
+merges it afterward. This is a design constraint, not an implementation detail — it
+determines the shape of the coordinator.
+
+On iOS, undo is deferred (Known limitations §1). The affordances still apply; their
+undo granularity is whatever UIKit provides until that work is done.
+
+Paste inserts verbatim with no transformation, as a single undo action, and rescans as
+an ordinary edit.
+
+### Text-system hygiene
+
+The following **must be disabled**, on both platforms, and this is not a preference:
+
+- Smart quotes. `"` becoming `"` corrupts Markdown link titles and Fountain notes.
+- Smart dashes. `--` becoming `—` silently destroys `---` thematic breaks, and the
+  user cannot see why their document stopped parsing.
+- Automatic text replacement, and automatic spelling correction on macOS.
+- Autocorrect on iOS, by default. A host may opt in; it mutates text and can eat
+  markers.
+
+Every one of these is a system feature that rewrites the user's source behind their
+back. In a plain-text editor whose entire premise is that the string is the value
+(Architecture §1), they are corruption, not convenience.
+
+Spell **checking** is permitted and encouraged — it draws with temporary attributes,
+which do not participate in `setAttributes(_:range:)` and therefore survive restyling
+untouched.
+
+### External text replacement
+
+Setting the `@Binding` from outside is a reset, not an edit:
+
+1. If the incoming string equals the current storage contents, **do nothing.** Not an
+   optimization — without this check, SwiftUI's update cycle feeds the editor its own
+   output and the view fights the user's typing.
+2. Otherwise replace the full range with `replaceCharacters(in:with:)` inside
+   `beginEditing()`/`endEditing()` — never `setAttributedString` (Architecture §8) —
+   then full-scan and restyle.
+3. Clamp the selection to the new length rather than dropping it to zero.
+4. Register as a single undo action.
+
+## API surface and stability
+
+### What is public in 1.0
+
+`EscriboCore`: `Language`, `EscriboSpan`, `SpanKind`, `StyleSet`, `SpanRole`,
+`LineRecord`, `ElementKind`, `ScanResult`, `TextEdit`, the scanner entry points, and
+the writer. `SwiftEscribo`: the editor view, `EscriboTheme`, `TokenStyle`,
+`ParagraphMetrics`, `EditorMode`.
+
+`LineState` is public but **opaque** — no public cases, no public properties. It
+exists in the API only because `LineRecord` carries it. Exposing its shape would
+freeze the scanner's internals at 1.0 and make every convergence improvement a
+breaking change.
+
+Everything else is `internal`. Nothing becomes `public` speculatively: if neither
+`SwiftEscribo` nor a test consumes it, it stays internal until something does.
+Removing public API is expensive; never having added it is free.
+
+### Semver commitments
+
+- Adding a `SpanKind` or `ElementKind` static member is a **minor** release. This is
+  the entire reason they are structs rather than enums (Core API), and it is what
+  makes "we found another Fountain construct" a routine event.
+- Adding a `StyleSet` case is **minor**; raw values are stable, so existing bit
+  positions never move.
+- Changing what an existing kind is emitted for is **major**, even though it does not
+  break compilation. It silently changes how every existing theme renders, which is
+  worse than a compile error.
+- Reordering or renumbering anything with a raw value is **major**.
+- Deprecation runs one minor release with `@available(*, deprecated)` before removal.
+
+## Scope boundaries
+
+### Accessibility
+
+Because display text is character-identical to source (Architecture §2), VoiceOver
+reads the source directly and needs no custom mapping — that is a real benefit of the
+visible-marker design and it comes for free.
+
+The honest tradeoff: a screen-reader user hears the markers. `**bold**` is read with
+its asterisks. 1.0 accepts this rather than adding an accessibility text mapping,
+because such a mapping is exactly the source↔display index map that Architecture §2
+exists to avoid, and half of one is worse than none.
+
+### Writing direction
+
+Markdown uses natural paragraph alignment and works in RTL text. **Fountain paragraph
+geometry is LTR-only** — screenplay margins are defined in characters from a left
+margin at 10 CPI, and a mirrored screenplay layout is not a format that exists. This
+is a scope statement, not a defect.
+
 ## Functionality
 
 ### Fountain
@@ -414,10 +628,12 @@ Explicitly **not** in 1.0, listed so they are not mistaken for oversights:
    parenthetical margins, right-aligned transitions, centered text. Screenplay margins
    are defined in characters at 10 CPI, so a Courier face is required
    (Courier Prime → Courier New → Courier, resolved through CoreText).
-4. Editing affordances: Markdown input shortcuts (`# `, `- `, `1. `, `- [ ] `), list
-   continuation and outdent-on-empty-Return; Fountain smart Tab (cue → dialogue →
-   parenthetical) and Return. **Every rewrite must register as a single coalesced undo
-   action** on both platforms, or Cmd-Z unwinds character by character.
+4. Editing affordances: Markdown list continuation and outdent-on-empty-Return;
+   Fountain smart Tab (cue → dialogue → parenthetical) and Return. **Every rewrite
+   must register as a single coalesced undo action**, or Cmd-Z unwinds character by
+   character. Specified in Editing behavior, which also explains why "input
+   shortcuts" is the wrong frame for an editor with visible markers, and which
+   text-system features must be disabled to keep the source intact.
 5. Themeable: fonts, colors, and marker opacity, with built-in light and dark themes.
    See Theme and styling for the API and its constraints.
 6. **Markdown paragraph geometry**: heading size scale and list/blockquote indents
@@ -560,6 +776,18 @@ Two caveats that make this a live constraint rather than a settled fact:
    on SwiftEscribo and fail the build if `swift-markdown` or `cmark-gfm` appears in
    its `Package.resolved`. This is the only thing standing between requirement 8 and
    requirement 3.
+
+Two things the guard must get right, or it will pass while proving nothing:
+
+- **Depend the way real consumers do.** The measurement above used a *versioned git*
+  dependency. Whether pruning behaves identically for a `path:` dependency was not
+  tested, and a guard built on an untested code path is not evidence. Either use a
+  git dependency on the commit under test, or verify the path-dependency case
+  explicitly before relying on it.
+- **Prove the guard can fail.** Once, deliberately, add `import Markdown` to a
+  shipping target and confirm the job goes red. A guard that has never failed is
+  indistinguishable from a guard that cannot fail, and the second kind is worse than
+  none because it is trusted.
 
 [spm7007]: https://github.com/swiftlang/swift-package-manager/issues/7007
 
