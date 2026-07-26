@@ -1,7 +1,7 @@
 ---
 type: supervisor-state
 title: OPERATION FOUNTAIN SURGEON — Supervisor State
-updated: 2026-07-25
+updated: 2026-07-26
 ---
 
 # SUPERVISOR_STATE.md — OPERATION FOUNTAIN SURGEON
@@ -29,6 +29,7 @@ updated: 2026-07-25
 - max_retries: 3
 - Pre-build dependency purge: skipped (no-op — package declares zero dependencies)
 - Purge decision recorded: 2026-07-25 (see Decisions Log DL-1)
+- **Supervising session: `fa1c4c1d` (has the con since 2026-07-26 06:43 PDT — see DL-30)**
 
 ---
 
@@ -56,34 +57,24 @@ updated: 2026-07-25
 ## Work Unit States
 
 ### WU-1 Core Substrate
-- Work unit state: RUNNING
-- Current sortie: 6 of 6
-- Sortie state: RUNNING — dispatched 23:12 by supervisor session `d1a5e802` as agent
-  `a064d745fdbce6c8a`, confirmed live and growing at 23:14:30. **Not** dispatched by
-  session `8380d2fe`, which stood down instead — see DL-22.
-- Sortie type: code
-- Model: opus
-- Complexity score: 20
-- Attempt: 1 of 3 (Sortie 4 closed at attempt 1; the redundant re-dispatch was NOT an attempt)
-- Last verified: Sortie 4 COMPLETED, commit `26ad85f` (+1,436 / −54 across 8 files).
-  Supervisor independently re-ran every exit criterion: `make test-core` **TEST
-  SUCCEEDED**, 73 tests / 8 suites; the EC2 grep returns no match and both entry points
-  read `-> ScanResult` with no `throws`/`async`; EC3–EC6 are asserted by a shared
-  `expectInvariants` helper driven over 8 corpus documents × every start offset ×
-  deletion length × replacement × 3 grammars — thousands of distinct edits against a
-  floor of 20. Charter re-checked: no regex, `EscriboCore` still imports nothing at all.
-  DL-14 discharged — `provisionalRecord` returns zero hits across `Sources/` and
-  `Tests/`. Bonus: `expectIncrementalMatchesFull` already asserts incremental ≡ full,
-  pre-empting Sortie 6's gate one layer up.
-- Previously verified: Sortie 3 COMPLETED — supervisor re-ran `make build` (exit 0) and
-  `make test-core` (exit 0, 57 tests / 7 suites), confirmed `LineIndex` is internal
-  and `UTF16TextSource` public, confirmed no `fullScan`/`incrementalScan` identifier
-  leaked into Sources, no timing API anywhere under Tests, `EscriboCore` still
-  imports nothing at all, and all seven required terminator fixtures are present by
-  name. Commit `224a248`.
-- Notes: Sortie 1 also fixed a latent scheme defect (DL-5). Sortie 5 must honor the
-  `ElementKind.heading` + `depth` decision (DL-7). Sorties 7 and 9 must honor the
-  internal-initializer consequence (DL-12).
+- Work unit state: **COMPLETED**
+- Current sortie: 6 of 6 — all complete
+- Sortie state: COMPLETED
+- Last verified: Sortie 6 COMPLETED, commit `43ac4e2`. Supervisor independently re-ran
+  every exit criterion on 2026-07-26: `make test-core` exit **0**, **98 tests / 11
+  suites**, `** TEST SUCCEEDED **`. Gate runs **224** parameterized cases (32 seeds × 7
+  documents) × 3 grammars × 7 edits; the ≥200 floor is asserted in-suite at
+  `ScanGateTests.swift:674`, not claimed in a comment. `grep 'import XCTest' Tests/` →
+  no matches. Every `Int.random(in:)` under `Tests/EscriboCoreTests/` passes
+  `using: &generator` (13 sites, all checked); no `Date()`, no `randomElement()`, no
+  bare `shuffled()`. Invariant-helper coverage confirmed structurally rather than by
+  count: `IncrementalScannerTests.expectInvariants` (line 55) and
+  `MarkdownGrammarTests.fullScan` (line 32) both forward to `ScanInvariants.check`, so
+  the 79 scan sites reduce to 27 direct + wrapped. Charter re-checked: no regex anywhere
+  under `Sources/`, `EscriboCore` still imports **nothing at all**.
+  **EC5 discharged in substance but not as written — see DL-31.**
+- Notes: DL-25's blind spot (the gate cannot catch grammar state omission) now has a
+  companion, DL-31. Both must be honored by Sorties 13–21.
 
 #### Sortie history — WU-1
 | Sortie | State | Model | Attempts | Commit | Verified by supervisor |
@@ -91,13 +82,21 @@ updated: 2026-07-25
 | 1 | COMPLETED | opus | 1 | `6a3c8ae` | build 0, test-core 0 (13 tests), 4/4 greps clean, 5 targets |
 | 2 | COMPLETED | opus | 1 | `c30ede2` | build 0, test-core 0 (32 tests), greps clean, opacity negative reproduced by supervisor probe |
 | 3 | COMPLETED | opus | 1 | `224a248` | build 0, test-core 0 (57 tests), 7/7 terminator fixtures, access levels correct, no timing API, ~2,200-edit incremental sweep |
-| 4 | COMPLETED | opus | 1 | `26ad85f` | test-core 0 (73 tests / 8 suites), EC2 grep clean, DL-14 fully discharged, thousands-of-edits sweep asserts all four invariants, no regex, still imports nothing |
+| 4 | COMPLETED | opus | 1 | `26ad85f` | test-core 0 (73 tests / 8 suites), EC2 grep clean, DL-14 discharged, thousands-of-edits sweep, no regex |
+| 5 | COMPLETED | opus | 1 | `fbb14c0` | test-core 0 (93 tests / 10 suites), public `EscriboScanner` facade created per DL-20, fence flag in `LineState` |
+| 6 | COMPLETED | opus | 1 | `43ac4e2` | test-core 0 (98 tests / 11 suites), 224 gate cases, seed audit clean, XCTest-free, **gate falsified by supervisor probe 2** (DL-31) |
 
 ### WU-2 Editor Substrate
-- Work unit state: NOT_STARTED
-- Current sortie: 7 of 30
-- Sortie state: PENDING
-- Notes: Gated on WU-1 (Sortie 6).
+- Work unit state: **RUNNING** (unlocked 2026-07-26 — WU-1 COMPLETED)
+- Current sortie: 7 of 30 (first of 7–12)
+- Sortie state: DISPATCHED
+- Sortie type: code
+- Model: opus
+- Complexity score: 25
+- Attempt: 1 of 3
+- Notes: Dispatched with three hard carry-forwards — DL-12 (internal inits, do not make
+  public), DL-26 (point size from `ElementKind`, not `SpanKind`), DL-6 (`SpanRole` is
+  `Hashable`, so the cache key composes).
 
 ### WU-3 Fountain Depth
 - Work unit state: NOT_STARTED
@@ -135,8 +134,7 @@ updated: 2026-07-25
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-1 | 6 | RUNNING | 1/3 | opus | 20 | (dispatched this session) | — | 2026-07-25 |
-
+| WU-2 | 7 | DISPATCHED | 1/3 | opus | 25 | (session `fa1c4c1d`) | — | 2026-07-26 06:50 PDT |
 
 ---
 
@@ -146,44 +144,42 @@ updated: 2026-07-25
 |----|-----------|-----------|--------|----------|-----------|
 | DL-1 | 2026-07-25 | — | — | Pre-build dependency purge SKIPPED | `Package.swift` declares zero dependencies (charter), there is no `Package.resolved`, and no DerivedData exists for this project. The purge's stated value — bumping `intrusive-memory/*` floors and forcing a clean resolve — is nil here, while clearing the *global* SPM cache would force every other Swift project on this machine to re-download. Zero benefit, real cost. |
 | DL-2 | 2026-07-25 | — | — | Operation named OPERATION FOUNTAIN SURGEON (haiku) | THE RITUAL. Branch slug `fountain-surgeon`. |
-| DL-3 | 2026-07-25 | WU-1 | 1 | Model: opus | Complexity 21 (5 turns-band + 4 file-count + 10 foundation + 2 risk). Override also forces opus: foundation_score 1 with 29 dependents. The kind vocabulary is source-breaking to get wrong. |
-| DL-4 | 2026-07-25 | WU-7 | 29 | FLAGGED, not resolved | Sortie 29 exit criteria require the CI lint job to invoke `make lint`, but the existing `make lint` target runs `swift format -i -r .`, not SwiftLint. Sortie 29's agent must reconcile the Makefile target with the SwiftLint requirement. Recorded now so it is not discovered at sortie time as a surprise. |
-| DL-5 | 2026-07-25 | WU-1 | 1 | ACCEPTED: Makefile + CI scheme changed to `SwiftEscribo-Package` | SwiftPM's per-product `SwiftEscribo` scheme has no test action, so **every** `xcodebuild test` in the repo — local and CI — was broken from scaffolding and could not surface until test targets existed. Supervisor confirmed the diff and re-ran both targets. Out of the sortie's literal scope but required to satisfy its exit criteria; fixing it is strictly correct. |
-| DL-6 | 2026-07-25 | WU-1 | 1 | RULING: `SpanRole` stays a `Hashable, Sendable` struct | The agent asked for a ruling. The plan required only `Equatable, Sendable`; `Hashable` is a superset and Sortie 7's cache key `(SpanKind, StyleSet, SpanRole)` needs it. The styler must not exhaustively switch on role anyway — it multiplies alpha for `.marker` and does nothing otherwise, a single comparison. Consistency with the rest of the vocabulary beats exhaustive switching. |
-| DL-7 | 2026-07-25 | WU-1 | 1 | RULING: `ElementKind.heading` carries level in `LineRecord.depth` | Not `.heading1…heading6`. REQUIREMENTS.md keys geometry by `(ElementKind, depth)`, so one entry shape covers all six levels. Sorties 5 and 27 must honor this; carried forward in their dispatch prompts. |
-| DL-9 | 2026-07-25 | WU-1 | 2 | KEPT: `TextEdit.changeInLength` (public computed) | Not in the plan's field list; the agent added it and flagged it. Kept: it is derived (`replacementLength - range.count`), it names the same quantity `NSTextStorage` names — which is what makes the translation formula legible — and Sorties 3, 4, 9, and 12 would each otherwise recompute it, with a sign error being exactly the bug the coordinate convention exists to prevent. **Pre-authorized for Sortie 30's API audit**; it does not need re-litigating there. |
-| DL-10 | 2026-07-25 | WU-1 | 2 | KEPT: `ScanResult: Equatable` | The plan says `Equatable`; REQUIREMENTS.md line 211 declares only `Sendable`. Followed the plan. Sortie 6's gate test asserts `incrementalScan(edits) == fullScan(finalText)` by comparing results wholesale, which needs it. Strictly additive. |
-| DL-11 | 2026-07-25 | WU-1 | 2 | Supervisor independently reproduced the opacity negative | The committed test can only assert the positive half — a test that must *fail to compile* cannot live in a passing suite. So the supervisor wrote its own throwaway non-`@testable` probe, confirmed all three expected `inaccessible` errors, and deleted it. The exit criterion is met in substance, not just in claim. |
-| DL-12 | 2026-07-25 | WU-1 | 2 | CONSEQUENCE, carried forward: `LineRecord`/`ScanResult` inits are internal | Forced by `LineState` opacity — a public memberwise init for `LineRecord` would require a publicly-constructible `startState`. `SwiftEscriboTests` (Sortie 7 styler, Sortie 9 edit translation) must therefore `@testable import EscriboCore` or drive a real scanner. **If a later sortie "fixes" this by making those inits public, the opacity guarantee is gone.** Carried into Sorties 7 and 9 dispatch prompts. |
-| DL-13 | 2026-07-25 | WU-1 | 3 | Model: opus | Complexity 20. Terminator handling (`\r\n` as one two-code-unit terminator, lone `\r`, mixed, never normalized) plus incremental range adjustment is algorithmic, and it blocks 27 sorties. |
-| DL-14 | 2026-07-25 | WU-1 | 3 | ACCEPTED with a follow-up obligation: `LineIndex.provisionalRecord(at:)` | It assigns `.blank`/`.paragraph` from the line's *shape* (empty content range or not), which both grammars agree on — that is shape, not grammar, and it is fine. But it sets `startState = .documentStart` for **every** line, which is true only of line zero. That is false data in a real type. Tolerable as an internal Sortie-3 scaffold; **Sortie 4 must delete it or give it a real `startState`.** Carried into Sortie 4's prompt as a hard boundary. |
-| DL-15 | 2026-07-25 | WU-1 | 3 | NOTED: two different "one line back" rules | Sortie 3's backward widening is about **code units** (a `\r` can only pair with an `\n` immediately following, so one line back is provably enough). Sortie 4's is about **grammar state**. They are easy to conflate and must stay separate functions. The agent flagged this itself; carried into Sortie 4's prompt. |
-| DL-16 | 2026-07-25 | WU-1 | 3 | ACCEPTED: `LineIndex.apply` clamps out-of-range edits rather than trapping | REQUIREMENTS.md says scanning is total — no throws, no error path. An edit arriving from a text view that has already mutated is a real, survivable race. Garbage in, garbage out, but never a crash. |
-| DL-17 | 2026-07-25 | WU-1 | 4 | Model: opus | Complexity 23. The convergence engine is the highest-risk algorithm in the package and every grammar depends on its lookahead contract. |
-| DL-8 | 2026-07-25 | WU-1 | 2 | Model: opus | Complexity 21. Override also applies. The span/record model is the scanner→editor seam; the plan states plainly that a wrong answer here is rework in every later sortie. |
-| DL-18 | 2026-07-25 | WU-1 | 4 | ~~Sortie 4 RE-DISPATCHED at attempt 1~~ **RETRACTED — the liveness verification behind this decision was WRONG. See DL-19.** | Original (incorrect) reasoning, preserved for the brief: "The first supervisor session ended before the Sortie 4 agent returned. On resume: `TaskList` empty, no `claude` process older than the new session, no stranded build, working tree clean at `40e98a9`. The agent produced nothing." Every one of those observations was true and the conclusion drawn from them was still false. |
-| DL-X1 | 2026-07-25 | WU-1 | 4 | CLEARED (supervisor's own DL-15 flag withdrawn): `backwardExtent` defaulting to `max(1, lookahead)` is sound, not a conflation | The stand-down agent flagged, and the supervisor repeated, that folding `lookahead` into the backward rule looked like the coupling DL-15 warns about. Inspection says otherwise, and the coupling is *required*: if line L's classification depends on lines L+1…L+n, then an edit at line E can change the classification of lines E−n…E, so correct rescanning **must** start at least `n` lines back. `backwardExtent ≥ lookahead` is a soundness obligation, and the engine's `max(1, backwardExtent, lookahead)` is a defensive floor that repairs an unsound grammar declaration rather than an arbitrary merge. DL-15's actual concern — Sortie 3's **code-unit** widening (`\r\n` pairing) vs Sortie 4's **grammar-state** widening — remains correctly honored: they are separate functions in separate types (`LineIndex` vs `IncrementalScanner.backwardWidening`). No action needed; do not "fix" this in a later sortie. |
-| DL-X2 | 2026-07-25 | WU-1 | 5 | Sortie 5 dispatch HELD by session `8380d2fe`, then MOOT — `d1a5e802` dispatched it first | The hold was the right instinct (never dispatch into a tree another live agent is touching) and it is what prevented a second Sortie 5 collision: while `8380d2fe` waited on transcript quiescence, `d1a5e802` dispatched Sortie 5 at 23:12. Had this session dispatched instead of waiting, two Sortie 5 agents would have been in one tree. See DL-X3. |
-| DL-X3 | 2026-07-25 | — | — | **SPLIT BRAIN: two live supervisor sessions on one mission. Session `8380d2fe` STANDS DOWN. `d1a5e802` has the con.** | Root cause of everything from DL-18 onward — not "an agent died" but *two supervisors resumed the same mission in parallel*. Timeline: `a448d579` dispatched Sortie 4 at 22:47, ended 22:51:49. `d1a5e802` started 22:51:50 and **inherited the running agent's handle**, so it kept receiving that agent's notifications. `8380d2fe` started 22:52 with no handle, saw an empty task list plus a clean tree, and wrongly concluded the agent was dead (DL-18). Both then drove one branch: `27552ab`/`587bf80`/`17da8a6` are `8380d2fe`'s, `7aebb73` is `d1a5e802`'s, interleaved. Both also wrote this file concurrently, producing duplicate DL-20/DL-21 IDs — this session's are renamed to the `DL-X*` namespace so `d1a5e802`'s numbering stays authoritative. **Why `d1a5e802` keeps the con:** it holds live agent handles, so it polls via `TaskOutput` and gets completion notifications; `8380d2fe` can only infer from transcript mtimes. Handles beat inference. **Two supervisors are far more dangerous than two agents:** agents collide on files and one notices, whereas supervisors collide on state and dispatch decisions — and a duplicate dispatch into the WU-3/WU-4 parallel layer would put four agents in one tree with nobody aware. |
-| DL-19 | 2026-07-25 | WU-1 | 4 | CORRECTION: the original Sortie 4 agent was ALIVE the whole time. Redundant re-dispatch stood down with zero footprint. | The incumbent is `agent-ade45006d96f0f850` in session `a448d579`, dispatched 22:47 (the Sortie 4 dispatch minute), transcript still being written at 23:02:51 and growing past 458 KB. It had simply read for ~12 minutes before its first write — EXECUTION_PLAN.md is 58 KB and REQUIREMENTS.md 45 KB. **Why the check failed:** (a) `TaskList` is per-session and cannot see another session's agents; (b) `ps` cannot see an agent that is between tool calls, because there is no long-lived per-agent process to find; (c) "clean tree at the dispatch commit" is satisfied identically by a dead agent and by a live one that has read but not yet written. Three independent signals, all consistent with death, none capable of detecting life. The re-dispatched agent caught this itself — its first `Write` was rejected because the incumbent had created that exact file seconds earlier — and it stood down without writing a single line rather than corrupt the tree. Correct call; it is credited with the catch, not charged with the redundancy. **Reliable liveness signal, adopted going forward:** mtime of the agent's own transcript at `~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl`, cross-checked against source-tree mtimes. Never `ps`, never task lists across sessions, never a clean tree alone. |
+| DL-3 | 2026-07-25 | WU-1 | 1 | Model: opus | Complexity 21. Override also forces opus: foundation_score 1 with 29 dependents. The kind vocabulary is source-breaking to get wrong. |
+| DL-4 | 2026-07-25 | WU-7 | 29 | FLAGGED, not resolved | Sortie 29 exit criteria require the CI lint job to invoke `make lint`, but the existing `make lint` target runs `swift format -i -r .`, not SwiftLint. Sortie 29's agent must reconcile the Makefile target with the SwiftLint requirement. |
+| DL-5 | 2026-07-25 | WU-1 | 1 | ACCEPTED: Makefile + CI scheme changed to `SwiftEscribo-Package` | SwiftPM's per-product `SwiftEscribo` scheme has no test action, so **every** `xcodebuild test` in the repo was broken from scaffolding and could not surface until test targets existed. |
+| DL-6 | 2026-07-25 | WU-1 | 1 | RULING: `SpanRole` stays a `Hashable, Sendable` struct | The plan required only `Equatable, Sendable`; `Hashable` is a superset and Sortie 7's cache key `(SpanKind, StyleSet, SpanRole)` needs it. |
+| DL-7 | 2026-07-25 | WU-1 | 1 | RULING: `ElementKind.heading` carries level in `LineRecord.depth` | Not `.heading1…heading6`. REQUIREMENTS.md keys geometry by `(ElementKind, depth)`. Sorties 5 and 27 must honor this. |
+| DL-8 | 2026-07-25 | WU-1 | 2 | Model: opus | Complexity 21. The span/record model is the scanner→editor seam. |
+| DL-9 | 2026-07-25 | WU-1 | 2 | KEPT: `TextEdit.changeInLength` (public computed) | Derived, names the quantity `NSTextStorage` names, and prevents four later sorties each recomputing it with a possible sign error. **Pre-authorized for Sortie 30's API audit.** |
+| DL-10 | 2026-07-25 | WU-1 | 2 | KEPT: `ScanResult: Equatable` | Plan says `Equatable`; REQUIREMENTS.md line 211 declares only `Sendable`. Sortie 6's gate needs wholesale comparison. Strictly additive. |
+| DL-11 | 2026-07-25 | WU-1 | 2 | Supervisor independently reproduced the opacity negative | A test that must *fail to compile* cannot live in a passing suite, so the supervisor wrote a throwaway non-`@testable` probe, confirmed three `inaccessible` errors, and deleted it. |
+| DL-12 | 2026-07-25 | WU-1 | 2 | CONSEQUENCE, carried forward: `LineRecord`/`ScanResult` inits are internal | Forced by `LineState` opacity. `SwiftEscriboTests` (Sortie 7 styler, Sortie 9 edit translation) must `@testable import EscriboCore` or drive a real scanner. **If a later sortie "fixes" this by making those inits public, the opacity guarantee is gone.** |
+| DL-13 | 2026-07-25 | WU-1 | 3 | Model: opus | Complexity 20. Terminator handling plus incremental range adjustment is algorithmic and blocks 27 sorties. |
+| DL-14 | 2026-07-25 | WU-1 | 3 | ACCEPTED with follow-up: `LineIndex.provisionalRecord(at:)` | Set `startState = .documentStart` for every line — false data in a real type. Sortie 4 deleted it; discharged. |
+| DL-15 | 2026-07-25 | WU-1 | 3 | NOTED: two different "one line back" rules | Sortie 3's backward widening is about **code units**; Sortie 4's is about **grammar state**. They must stay separate functions. |
+| DL-16 | 2026-07-25 | WU-1 | 3 | ACCEPTED: `LineIndex.apply` clamps out-of-range edits rather than trapping | Scanning is total. An edit from an already-mutated text view is a real, survivable race. |
+| DL-17 | 2026-07-25 | WU-1 | 4 | Model: opus | Complexity 23. Highest-risk algorithm in the package. |
+| DL-18 | 2026-07-25 | WU-1 | 4 | ~~Sortie 4 RE-DISPATCHED~~ **RETRACTED — see DL-19.** | The liveness verification behind this decision was wrong. |
+| DL-19 | 2026-07-25 | WU-1 | 4 | CORRECTION: the original Sortie 4 agent was ALIVE the whole time | `TaskList` is per-session; `ps` cannot see an agent between tool calls; a clean tree is satisfied identically by a dead agent and a live one that has read but not written. **Reliable liveness signal, adopted going forward:** mtime of the agent's own transcript at `~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl`. Never `ps`, never cross-session task lists, never a clean tree alone. |
+| DL-20 | 2026-07-25 | WU-1 | 4 | ACCEPTED with follow-up: scanner entry points are **internal**, not public | Public generic scanner ⇒ public `LineGrammar` ⇒ public `LineState` ⇒ opacity gone. Sortie 5 created the non-generic `Language`-dispatching facade (`EscriboScanner`). Discharged. |
+| DL-21 | 2026-07-25 | WU-1 | 4 | ACCEPTED: `LineState` gained one internal field, `openConstruct: UInt16` | Without at least one field every `LineState` equals every other and a stateful test grammar is impossible. A scalar, not a stack — one state per line, so an allocating field would put an allocation per line on the hot path. |
+| DL-22 | 2026-07-25 | WU-1 | 4 | NOTED for Sortie 28: one `[UInt16]` allocation per line scanned | The bulk-read contract holds, but the array is a real allocation on the hot path. **Sortie 28 must measure it**; the fix, if needed, is local to `grammarLine(at:in:)`. |
+| DL-23 | 2026-07-25 | WU-1 | 4 | RECORDED: convergence condition 3 is weaker than conditions 1 and 2 | The agent could not construct a case where dropping the lookahead extension produces *wrong output* — only a wrong dirty-range extent. Implemented anyway as insurance. **Confirmed empirically by DL-31.** |
+| DL-24 | 2026-07-25 | WU-1 | 5 | Model: opus | Complexity 20; override applies. First grammar through the seam. |
+| DL-25 | 2026-07-25 | WU-1 | 5 | **CRITICAL: the gate property has a structural blind spot** | Breaking the fence flag turned six classification tests red and left `incrementalScan == fullScan` **green**, because both sides ran the same broken grammar. **The gate catches convergence bugs in the *engine* and can never catch state-omission bugs in a *grammar*.** Sorties 13–21 must not treat a green gate as grammar evidence. |
+| DL-26 | 2026-07-25 | WU-1 | 5 | ACCEPTED with carry-forward to Sortie 7: leading indent is engine `.text` filler | A heading's leading indent is emitted as `.text`-kind filler, not as part of the `.marker` span. **Sortie 7's styler must take point size from the line's `ElementKind`, not from the span's `SpanKind`** — otherwise a `.text`-kind indent span on a scaled heading line breaks the within-line size uniformity REQUIREMENTS.md Architecture §3 requires and Sortie 27 asserts. |
+| DL-27 | 2026-07-25 | WU-1 | 5 | ACCEPTED: `contentRange` inside a fence keeps all leading indentation | Deviates from CommonMark, which strips to the opening fence's indent. Chosen so Sortie 23/24's writer stays lossless. Correct trade for a package whose writer must round-trip. |
+| DL-28 | 2026-07-25 | WU-1 | 5 | ACCEPTED: `EscriboScanner` is deliberately not `Sendable`, and `language` is `let` | It carries mutable scan state and scanning is synchronous and single-threaded. **Sortie 9 should hold one scanner per document beside the text storage.** Switching language means a new scanner and a full scan. |
+| DL-29 | 2026-07-25 | WU-1 | 6 | Model: opus | Complexity 20; override applies. Designed around a known blind spot rather than trusting its own headline assertion. |
+| DL-30 | 2026-07-26 | — | — | **Session `fa1c4c1d` takes the con. The split brain is resolved — both prior sessions are dead.** | Verified by the DL-19 signal, not by inference: `8380d2fe` ran `/exit` at 13:42:42Z (its transcript's last record is `Bye!`), and `d1a5e802`'s transcript has been silent since 06:50:19Z. No subagent transcript under either session has been written since 23:48 PDT on 2026-07-25. Working tree clean at `43ac4e2`. One supervisor, no live agents. |
+| DL-31 | 2026-07-26 | WU-1 | 6 | **Sortie 6 EC5 met in substance, NOT as written — and the difference is a second blind spot worth recording** | EC5 asks that "temporarily returning after one converged line with no lookahead" turn the gate **red**. The supervisor ran exactly that break (replacing the `stop = min(lineCount, line + lookahead)` extension with an immediate `break`) and the gate stayed **green — 224/224 cases passed** — while only `IncrementalScannerTests`' direct convergence assertions went red. This is not a defect in the harness; it is DL-23 confirmed empirically. Output at lines ≥ the converged line is a function of `(state, text)`, both proved unchanged, so the un-repainted lines were already correct and a painted-document comparison cannot see the difference. It holds even for `CueGrammar(lookahead: 1)`, which the gate does exercise. **The gate is nonetheless falsifiable, and the supervisor proved it:** a second probe setting `backwardWidening` to `0` turned the gate **red across many seeds** (272 issues across the run, `incrementalScanEqualsFullScan` among the failures). Both probes reverted; tree clean; `make test-core` green again at 98/11. **Consequence for Sorties 13–21:** the gate is blind in *two* directions — grammar state omission (DL-25) and a too-short forward extension past convergence (here). A lookahead rule's correctness — Sortie 14's cue rule above all — must be asserted directly, by naming expected `ElementKind`s, and can never be inferred from a green gate. |
+| DL-32 | 2026-07-26 | WU-2 | 7 | Model: opus | Complexity 25 (8 turns-band + 4 file-count + 10 foundation/dependents + 3 risk + 0 ambiguity). Override also applies: foundation_score 1 with 23 dependents. The theme lookup table and the styler cache are the second half of the scanner→editor seam and are consumed by all three Representables; the composition order and the single invalidation path are exactly the shape that does not retrofit. |
 
 ---
 
-| DL-20 | 2026-07-25 | WU-1 | 4 | ACCEPTED with a follow-up obligation: scanner entry points are **internal**, not public | REQUIREMENTS.md § What is public in 1.0 lists "the scanner entry points", so this appears to violate it. The agent's reasoning is sound and I checked it: `IncrementalScanner` is generic over `LineGrammar`, so making it public makes `LineGrammar` public, which requires an external conformer to construct a `LineState` — whose initializer is internal by design. Public scanner ⇒ public `LineState` ⇒ opacity gone. The correct public surface is a **non-generic `Language`-dispatching facade over an internal grammar**. **Sortie 5 must create it** — otherwise Sortie 30's audit finds no public scanner entry point at all and REQUIREMENTS.md goes unmet. Carried into Sortie 5's prompt as a hard exit obligation. |
-| DL-21 | 2026-07-25 | WU-1 | 4 | ACCEPTED: `LineState` gained one internal field, `openConstruct: UInt16` | A grammar-defined tag; zero means nothing open. Without at least one field every `LineState` equals every other and a stateful test grammar is impossible. A scalar rather than a stack because one state is stored per line for the whole document, and an allocating field would put an allocation per line on the cheapest thing the scanner does. Sortie 5 may add named fields beside it. |
-| DL-22 | 2026-07-25 | WU-1 | 4 | NOTED for Sortie 28: one `[UInt16]` allocation per line scanned | `GrammarLine` owns its content units. The bulk-read contract holds (one `copyUTF16CodeUnits` per line, never per code unit), but the array is a real allocation on the hot path. The agent chose clarity over a pooled ring buffer on the highest-risk algorithm in the package — the right call at this stage. **Sortie 28 must measure it**; if it bites, the fix is local to `grammarLine(at:in:)` and the window. |
-| DL-23 | 2026-07-25 | WU-1 | 4 | RECORDED: convergence condition 3 is weaker than conditions 1 and 2 | The agent reported honestly that it could not construct a case where dropping the lookahead extension produces *wrong output* — only a wrong dirty-range extent — because output at lines ≥ k₀ is a function of `(state(k₀), text from k₀ on)`, both proved unchanged. It implemented the rule as REQUIREMENTS.md §5 and Fountain §4 mandate it anyway, as insurance against a grammar whose lookahead is not fully reflected in its state. Fountain's cue rule (Sortie 14) is the plausible candidate. If Sortie 14 finds a genuine output counterexample, the test to strengthen is `forwardConvergenceHonoursTheDeclaredLookahead`. |
-| DL-24 | 2026-07-25 | WU-1 | 5 | Model: opus | Complexity 20; override applies (foundation_score 1, 25 dependents). First grammar through the seam — the marker/content role split and the fence-flag-in-`LineState` pattern set the template every later grammar copies. |
-
-| DL-25 | 2026-07-25 | WU-1 | 5 | **CRITICAL carry-forward to Sortie 6**: the gate property has a structural blind spot | The Sortie 5 agent discovered and reported this against its own interest. When it deliberately broke the fence flag, six direct classification tests went red — but its `incrementalScan == fullScan` comparison stayed **green**, because both sides ran the same broken grammar. Self-consistency is invariant to a grammar losing state. **Sortie 6's gate property therefore catches convergence bugs in the *engine* and can never catch state-omission bugs in a *grammar*.** A mission that trusted the gate alone would ship false confidence. Sortie 6 must pair the gate with direct classification assertions, and must say so in its own doc comments so Sorties 13–21 do not assume the gate covers them. |
-| DL-26 | 2026-07-25 | WU-1 | 5 | ACCEPTED with a carry-forward to Sortie 7: leading indent is engine `.text` filler | A heading's or fence's leading indent is emitted as `.text`-kind filler rather than as part of the `.marker` span, while a *closing* hash run does swallow surrounding whitespace. The agent flagged the asymmetry itself. Accepted, but it has a consequence: REQUIREMENTS.md Architecture §3 says point size varies **per line, never within a line**, and Sortie 27 asserts a heading's marker and content resolve to the same point size. **Sortie 7's styler must take point size from the line's `ElementKind`, not from the span's `SpanKind`** — otherwise a `.text`-kind indent span on a scaled heading line breaks within-line size uniformity. Carried into Sortie 7's prompt. |
-| DL-27 | 2026-07-25 | WU-1 | 5 | ACCEPTED: `contentRange` of a line inside a fence keeps all leading indentation | Deviates from CommonMark, which strips up to the opening fence's indent. Chosen so Sortie 23/24's writer stays lossless. Cost: an indented fence renders its code one to three columns wide of spec. Correct trade for a package whose writer must round-trip. |
-| DL-28 | 2026-07-25 | WU-1 | 5 | ACCEPTED: `EscriboScanner` is deliberately not `Sendable`, and `language` is `let` | It carries mutable scan state and the requirements make scanning synchronous and single-threaded; conforming it would invite misuse. **Sortie 9 should hold one scanner per document beside the text storage.** Switching language means a new scanner and a full scan, since every line's state is meaningless under another grammar. |
-| DL-29 | 2026-07-25 | WU-1 | 6 | Model: opus | Complexity 20; override applies. The invariant helper and gate property are reused by every subsequent scanner sortie, and DL-25 means this sortie has to be designed around a known blind spot rather than trusting its own headline assertion. |
-
 ## Overall Status
 
-- Sorties completed: 5 / 30 (Sorties 1–4 — all supervisor-verified)
-- Sorties in flight: 0 (Sortie 5 PENDING, held per DL-21)
-- Work units completed: 0 / 7 (WU-1 RUNNING at 5 of 6; WU-2…WU-7 gated)
+- Sorties completed: **6 / 30** (Sorties 1–6 — all supervisor-verified)
+- Sorties in flight: 1 (Sortie 7, WU-2)
+- Work units completed: **1 / 7** (WU-1 COMPLETE; WU-2 RUNNING; WU-3…WU-7 gated)
 - Blocked: none
