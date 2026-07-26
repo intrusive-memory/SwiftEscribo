@@ -62,7 +62,7 @@ updated: 2026-07-25
 - Sortie type: code
 - Model: opus
 - Complexity score: 23 (also forced by override: foundation_score 1 + 26 dependents)
-- Attempt: 1 of 3
+- Attempt: 1 of 3 (re-dispatched after session loss — see DL-18; attempt NOT incremented)
 - Last verified: Sortie 3 COMPLETED — supervisor re-ran `make build` (exit 0) and
   `make test-core` (exit 0, 57 tests / 7 suites), confirmed `LineIndex` is internal
   and `UTF16TextSource` public, confirmed no `fullScan`/`incrementalScan` identifier
@@ -123,7 +123,7 @@ updated: 2026-07-25
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-1 | 4 | RUNNING | 1/3 | opus | 23 | (see dispatch below) | — | 2026-07-25 |
+| WU-1 | 4 | DISPATCHED | 1/3 | opus | 23 | re-dispatch (session 2) | — | 2026-07-25 (2nd dispatch) |
 
 ---
 
@@ -148,12 +148,13 @@ updated: 2026-07-25
 | DL-16 | 2026-07-25 | WU-1 | 3 | ACCEPTED: `LineIndex.apply` clamps out-of-range edits rather than trapping | REQUIREMENTS.md says scanning is total — no throws, no error path. An edit arriving from a text view that has already mutated is a real, survivable race. Garbage in, garbage out, but never a crash. |
 | DL-17 | 2026-07-25 | WU-1 | 4 | Model: opus | Complexity 23. The convergence engine is the highest-risk algorithm in the package and every grammar depends on its lookahead contract. |
 | DL-8 | 2026-07-25 | WU-1 | 2 | Model: opus | Complexity 21. Override also applies. The span/record model is the scanner→editor seam; the plan states plainly that a wrong answer here is rework in every later sortie. |
+| DL-18 | 2026-07-25 | WU-1 | 4 | Sortie 4 RE-DISPATCHED at attempt 1 (counter NOT incremented) | The first supervisor session ended before the Sortie 4 agent returned. On resume: `TaskList` empty, no `claude` process older than the new session, no `xcodebuild`/`swift-frontend` stranded, working tree clean at `40e98a9`, no commit beyond the dispatch record. The agent produced **nothing** — so there is no failure attributable to it and no partial work to preserve. Incrementing the attempt counter would burn a retry on a supervisor-side session death and, worse, would trip the "attempt ≥ 2 forces opus" override for a reason unrelated to task difficulty. Re-dispatched as a fresh attempt 1, same model (opus, already correct per DL-17), with DL-14/15/16/12/10 carried into the prompt. |
 
 ---
 
 ## Overall Status
 
-- Sorties completed: 0 / 30
-- Sorties in flight: 1 (Sortie 1)
-- Work units completed: 0 / 7
+- Sorties completed: 3 / 30 (Sorties 1, 2, 3 — all supervisor-verified)
+- Sorties in flight: 1 (Sortie 4, WU-1)
+- Work units completed: 0 / 7 (WU-1 RUNNING at 4 of 6; WU-2…WU-7 gated)
 - Blocked: none
