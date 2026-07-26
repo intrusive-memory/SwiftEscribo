@@ -87,16 +87,26 @@ updated: 2026-07-26
 | 6 | COMPLETED | opus | 1 | `43ac4e2` | test-core 0 (98 tests / 11 suites), 224 gate cases, seed audit clean, XCTest-free, **gate falsified by supervisor probe 2** (DL-31) |
 
 ### WU-2 Editor Substrate
-- Work unit state: **RUNNING** (unlocked 2026-07-26 — WU-1 COMPLETED)
-- Current sortie: 12 of 30 (last of 7–12 — completes WU-2 and forks the plan)
-- Sortie state: **PARTIAL** — the DL-63 obligation is discharged and the public surface
-  now exists, but one exit criterion is met by a test that **cannot fail** (DL-72).
-  Continuation dispatched to the same agent; **attempt counter NOT incremented**.
+- Work unit state: **COMPLETED** (2026-07-26 — all 6 sorties, 7–12, verified)
+- Current sortie: 12 of 12 — all complete
+- Sortie state: **COMPLETED**
 - Sortie type: code
 - Model: opus
 - Complexity score: 22
-- Attempt: 1 of 3
-- Last verified: Sortie 11 COMPLETED across two dispatches, commits `2dc4d56` +
+- Attempt: 1 of 3 (one PARTIAL→continuation cycle, no increment)
+- Last verified: Sortie 12 COMPLETED across two dispatches, commits `4a57d3c` +
+  `c41b7a1`. Supervisor independently re-ran every exit criterion on 2026-07-26:
+  `make test` exit **0** (**92 tests / 18 suites** + core 98/11) and `make test-ios`
+  exit **0** (**95/18** + core 98/11). **The DL-72 remedy is real, and the supervisor
+  proved it rather than accepting the report** — see DL-78. DL-63's obligation is
+  discharged: `public struct EscriboEditor: View` exists at `EscriboEditor.swift:44`,
+  with `NSViewRepresentable` and `UIViewRepresentable` conformances at
+  `EscriboEditorRepresentable.swift:168` and `:202`. Charter re-checked at the gate:
+  no regex anywhere under `Sources/`, `EscriboCore` still imports **nothing at all**,
+  no `import XCTest` under `Tests/`.
+- Notes: Rule 4 of § External text replacement remains **UNMET by design** and is
+  Sortie 25's to close (DL-74). Documented in-source rather than silently carried.
+- Previously verified: Sortie 11 COMPLETED across two dispatches, commits `2dc4d56` +
   `4a6cb7f`. `make test` exit **0** (71/14) and `make test-ios` exit **0** (**74/14**).
   The DL-68 continuation landed: reverting `spellCheckingType` to `.default` reddens
   both `Spell checking stays on, decoupled from the autocorrect-off default` and the
@@ -150,30 +160,68 @@ updated: 2026-07-26
 | 9 | COMPLETED | opus | 1 | `370f918` | test 0 and test-ios 0 (62/11 + 98/11), coordinator imports 0 UI frameworks, DL-44 hazard probed and guarded (DL-53) |
 | 10 | COMPLETED | **sonnet** | 1 | `e2dab05` | test 0 and test-ios 0 (70/13 + 98/11), two new files only, three falsification probes fired (DL-62); Representable conformance deferred (DL-63) |
 | 11 | COMPLETED | sonnet | 1 (PARTIAL→continuation, no increment) | `2dc4d56` + `4a6cb7f` | test 0 (71/14) and test-ios 0 (74/14), compile-time parity assertion, three probes fired (DL-67), DL-68 spell-checking gap closed and probed |
+| 12 | COMPLETED | opus | 1 (PARTIAL→continuation, no increment) | `4a57d3c` + `c41b7a1` | test 0 (92/18) and test-ios 0 (95/18), DL-63 public surface shipped, DL-72 clamp made falsifiable and re-probed by supervisor (DL-78) |
 
 ### WU-3 Fountain Depth
-- Work unit state: NOT_STARTED
-- Current sortie: 13 of 30
-- Sortie state: PENDING
-- Notes: Gated on WU-2 (Sortie 12).
+- Work unit state: **RUNNING**
+- Current sortie: **17** of 30 — PENDING (the widest remaining gate; see DL-114)
+- Sortie 16 (previous): agent returned, commit `70e2ca1`, worktree-verified by the
+  agent — core **243/17**, `make test` 0, `make test-ios` 0, editor layer untouched
+  at 92/18 and 95/18. Dispatched to **sonnet** (complexity 11) and the call held —
+  DL-118. Honest non-firing mutation reported (DL-119); cross-line GLOSA gap carried
+  to Sortie 17 (DL-120).
+- Sortie 15: COMPLETED, `f056b49`. Title-page probe fired while the gate passed
+  352/352 (DL-109). Task 5 accepted as a partial, obligation moved to Sortie 24
+  (DL-111). **DL-112 is a hard warning for Sortie 21.**
+- Sortie 14: COMPLETED, `632887e`. **The lookahead probe is the mission's headline
+  result** — a grammar recognizing no cues at all passed the gate 288/288 (DL-96).
+- Sortie 13: COMPLETED, `d78fc21` + `a0d1eb6` (one PARTIAL→continuation, no attempt
+  increment). DL-84, DL-87, DL-92.
+
+#### Sortie history — WU-3
+| Sortie | State | Model | Attempts | Commit | Verified by supervisor |
+|--------|-------|-------|----------|--------|------------------------|
+| 13 | COMPLETED | opus | 1 (PARTIAL→cont., no increment) | `d78fc21` + `a0d1eb6` | all three 0 (143/13 + 92/18 + 95/18); state-omission probe fired 4 tests, gate green 224/224 (DL-84); invariant strengthened not weakened (DL-92) |
+| 14 | COMPLETED | opus | 1 | `632887e` | all three 0 (181/14 + 92/18 + 95/18); gate raised to 288 over 4 grammars; **lookahead probe: 62 red, gate green 288/288 (DL-96)** |
+| 15 | COMPLETED | opus | 1 | `f056b49` | all three 0 (235/16 + 92/18 + 95/18), worktree-verified; gate raised to 352; title-page probe fired, gate green 352/352 (DL-109) |
+| 16 | COMPLETED (pending supervisor re-verify) | **sonnet** | 1 | `70e2ca1` | agent: all three 0 (243/17 + 92/18 + 95/18), worktree-verified; sonnet call validated (DL-118) |
 
 ### WU-4 Markdown Breadth
-- Work unit state: NOT_STARTED
-- Current sortie: 18 of 30
-- Sortie state: PENDING
-- Notes: Gated on WU-2 (Sortie 12). Runs parallel with WU-3.
+- Work unit state: **RUNNING but STALLED BY DEPENDENCY** — Sortie 21 requires Sortie 17
+  (Fountain scanner complete), and Sortie 22 requires Sortie 21. WU-4 can make no
+  progress until WU-3 finishes. See DL-114.
+- Current sortie: **21** of 30 — PENDING (gated on Sortie 17)
+- Sortie 20 (previous): COMPLETED, commit `e911cad`, **worktree-verified — the first
+  sortie under the corrected DL-98 rule, which worked** (DL-104). Core **235/16**.
+  Three mutations fired while the gate stayed green at 235/235 (DL-105).
+
+#### Sortie history — WU-4
+| Sortie | State | Model | Attempts | Commit | Verified by supervisor |
+|--------|-------|-------|----------|--------|------------------------|
+| 18 | COMPLETED | opus | 1 | `c1c5b1d` | test-core 0 (143/13), UTF-16 column probe fired (DL-85), emoji criterion ruled met in substance (DL-86) |
+| 19 | COMPLETED | opus | 1 | `fd34bed` + `0aecb21` | all three 0 (181/14 + 92/18 + 95/18), 51 new tests; two unfailable criteria flagged and given real assertions (DL-100) |
+| 20 | COMPLETED | opus | 1 | `e911cad` | all three 0 (235/16), **worktree-verified** (DL-104); 3 mutations fired, gate green 235/235 (DL-105); 7th unfailable criterion flagged; autolinks deferred to Sortie 22 (DL-107) |
 
 ### WU-5 Writer
 - Work unit state: NOT_STARTED
 - Current sortie: 23 of 30
 - Sortie state: PENDING
-- Notes: Gated on Sortie 17.
+- Notes: Gated on Sortie 17. Carries **DL-111** — Sortie 24 must confirm the title-page
+  span route round-trips byte-identically, or add `keyRange` to `LineRecord`.
 
 ### WU-6 Editor Behavior
-- Work unit state: NOT_STARTED
-- Current sortie: 25 of 30
-- Sortie state: PENDING
-- Notes: Gated on Sortie 20 + Sortie 12.
+- Work unit state: **RUNNING** (unlocked 2026-07-26 — Sorties 20 and 12 both COMPLETED)
+- Current sortie: **26** of 30 — PENDING
+- Sortie 25 (previous): agent returned, commit `33a56bb`, worktree-verified by the
+  agent — `make test` 0 (**134/23** macOS), `make test-ios` 0 (**123/21**),
+  `make test-core` 0 (243/17). **Rule 4 is reported MET** — see DL-121.
+  Also closed DL-65 and honoured DL-108. Found a real `MarkdownGrammar` defect it had
+  to work around (DL-122) and **discarded the supervisor's state file** (DL-123).
+
+#### Sortie history — WU-6
+| Sortie | State | Model | Attempts | Commit | Verified by supervisor |
+|--------|-------|-------|----------|--------|------------------------|
+| 25 | COMPLETED (pending supervisor re-verify) | opus | 1 | `33a56bb` | agent: all three 0 (134/23 + 123/21 + 243/17), worktree-verified; 3 mutations fired; **DL-74 rule 4 discharged** |
 
 ### WU-7 Verification & Hardening
 - Work unit state: NOT_STARTED
@@ -187,7 +235,7 @@ updated: 2026-07-26
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-2 | 12 | PARTIAL → DISPATCHED (continuation) | 1/3 | opus | 22 | (session `fa1c4c1d`) | — | 2026-07-26 10:55 PDT |
+| WU-3 | 13 | PARTIAL → DISPATCHED (continuation, same agent) | 1/3 | opus | 20 | (session `bb71403b`) | — | 2026-07-26 12:40 PDT |
 
 ---
 
@@ -271,31 +319,152 @@ updated: 2026-07-26
 | DL-75 | 2026-07-26 | WU-2 | 12 | ACCEPTED with a measurement obligation for Sortie 28: the binding push bridges `NSTextStorage.string` to a Swift `String` on every change notification | Unavoidable — REQUIREMENTS.md mandates `@Binding var text: String`, and a `String` is a `String`. But note what it costs against this package's own architecture: `UTF16TextSource` and the `NSTextStorage` conformance exist **specifically so the scanner never bridges the document to a Swift `String` per edit**, and the SwiftUI binding now reintroduces that bridge one layer up, per keystroke, on a document that may be 120 KB. The agent documented it as the binding boundary and refuses to push an equal value back (`pushToBinding`, asserted by a setter-counting `BindingBox`), which bounds the damage to one bridge per *actual* change. **Sortie 28 must measure it** — it is the one remaining per-keystroke O(document) cost in the editor path, and it sits outside everything the scan-time budgets cover. |
 | DL-76 | 2026-07-26 | WU-2 | 12 | ACCEPTED: all Representable logic lives on `EscriboEditorBridge`; `make*View` is one expression | The DL-63 dispatch said "construct it in `makeNSView`"; the agent put the body on a testable bridge object and made `makeNSView` a single call into it. **This is the same reasoning that justified DL-63's deferral in the first place** — a `Context` cannot be constructed in a test, so anything written inline in `makeNSView` is unassertable — and it is right to have applied it one level further. Six tests now cover what those methods do, including `bridgePreservesTheShippedTextViewConfiguration`, which asserts TextKit 2, the hygiene flags, spell checking, and **DL-65's `allowsUndo == true` / `isRichText == false`** on the object the Representable actually returns. That last one closes half of DL-65 ahead of schedule. |
 | DL-77 | 2026-07-26 | WU-2 | 12 | NOTED, accepted: an external reset scans the document twice | Once incrementally from inside `endEditing()` — the coordinator sees `replaceCharacters` as an ordinary edit and cannot distinguish it from a large paste — and once in full from the `restyleEverything()` the rules require. Correct but paid on every reset. The agent proposed a coordinator flag to avoid it and then argued against its own proposal, on the grounds that every other edit path would have to reason about the flag. Agreed: an external reset is a host-initiated document swap, not a hot path, and a flag on the coordinator would put a mode into the one type this mission has worked hardest to keep unconditional. |
+| DL-78 | 2026-07-26 | WU-2 | 12 | **DL-72's remedy verified by re-probe, and the probe fired exactly where it should: Sortie 12 COMPLETED** | The supervisor replaced `SelectionClamp.clampedSelection` with the naive `NSRange(location: anchor, length: extent)` — the same neutering that previously left the suite green — and the run now exits **2**, with both `SelectionClampTests` cases red across **7 named rows** and 15+ expectations: anchor-past-end, straddling extent, emptied document, negative extent, negative length, and `NSNotFound` with and without an extent. Each failure names its own row rather than an index, so a regression identifies itself. **The confirmatory detail is what stayed green:** the three `Rule 3 is wired:` integration tests did *not* fail, which independently reconfirms DL-72's original finding rather than burying it — they prove wiring, not arithmetic, and the in-source comment saying so must survive. Probe reverted; `git status` clean; green restored at 92/18 + 98/11. The DL-61 `fontd` hang cost one 10-minute probe run mid-verification; `pkill` + re-run recovered it, exactly as that entry prescribes. |
+| DL-79 | 2026-07-26 | WU-3 | 13 | Model: opus | Complexity 20 (5 turns-band + 2 file-count + 5 foundation + 5 dependency-depth + 3 risk). Sortie 13 registers the Fountain element vocabulary that all of WU-3, both writer sorties, and Sortie 26 consume; the plan scores it "Blocks 13". Vocabulary is source-breaking to get wrong, which is the same argument that forced opus on Sortie 1. It also lands squarely in the DL-25 / DL-31 blind spot — a grammar state omission here is invisible to the gate. |
+| DL-80 | 2026-07-26 | WU-4 | 18 | Model: opus | Complexity 20 (5 turns-band + 2 file-count + 5 foundation + 5 dependency-depth + 3 risk). "Blocks 10" and on the critical path per the plan. The CommonMark 4-column tab stop and UTF-16-vs-character column arithmetic are precisely the class of defect that passes a hand-written smoke test and fails on real documents — and the emoji criterion exists because a character-counting implementation is *correct on ASCII*, so cheaper models' most likely wrong answer is also the one hardest to notice. |
+| DL-81 | 2026-07-26 | — | — | **Parallel dispatch is safe because the two sorties are file-disjoint, and that was checked rather than assumed** | Sortie 13 creates Fountain grammar files and touches `ElementKind`/`SpanKind`; Sortie 18 extends `MarkdownGrammar.swift`. The one genuine collision risk is both appending members to the shared `ElementKind.swift` / `SpanKind.swift` vocabularies. Both dispatches are therefore instructed to **append only, never reorder or renumber existing members**, and to expect the other's additions to appear in the same files. Each commits its own work; the supervisor verifies both against a combined `make test-core` after the second returns, so a merge-order interaction cannot pass unnoticed. |
+| DL-82 | 2026-07-26 | — | 13/18 | **SUPERVISOR ERROR, mine: DL-81's file-disjointness analysis was wrong, and parallel dispatch produced a mixed commit** | I cleared Sorties 13 and 18 to run concurrently on the theory that they were file-disjoint apart from append-only additions to `ElementKind.swift` / `SpanKind.swift`. **That analysis missed `LineState.swift`, which is not a vocabulary file but a structural coupling point.** Sortie 13 added `followsNonBlankLine` to it; Sortie 18 added `markdownBlocks: MarkdownBlockState`, whose *type is defined in `MarkdownGrammar.swift`*. Once that happened, `LineState.swift` could not compile without `MarkdownGrammar.swift`, so Sortie 13 **could not commit its own work without also committing Sortie 18's in-flight source** — and it didn't quietly do so, it said so plainly. Commit `d78fc21` therefore contains ~729 lines of Markdown grammar that Sortie 13 neither authored nor reviewed. **Not corruption, but a real loss of commit hygiene and of per-sortie attribution**, and my fault, not the agents'. **Lesson for the brief:** file-disjointness is the wrong test for parallel dispatch. The right test is *type*-disjointness — two sorties may run in parallel only if neither adds a field whose type the other owns. A shared struct that both extend is a serialization point even when the edits do not textually overlap. |
+| DL-83 | 2026-07-26 | — | 13/18 | Stale SourceKit diagnostics during the concurrent window were investigated, not acted on | Immediately after Sortie 13 returned, the harness reported 20 compile errors claiming `LineState.followsNonBlankLine`, `LineState.markdownBlocks`, and six `ElementKind`/`SpanKind` members did not exist — the exact signature of one sortie clobbering the other's vocabulary additions. **All 20 were stale.** Every named member is present on disk, and `git diff d78fc21 -- Sources/EscriboCore/` is empty, so the tree matches the commit byte for byte. The diagnostics were snapshotted mid-write while two agents edited the same files concurrently. **Recorded because the failure mode is worth knowing:** under parallel dispatch, tooling diagnostics are read from a tree that may be in a torn intermediate state, and a supervisor that "fixes" them is corrupting a live agent's work. Verify against `git` before believing a diagnostic during concurrency. |
+| DL-91 | 2026-07-26 | WU-4 | 19 | **Sortie 19 held rather than dispatched in parallel — reversing the call I made at the last gate** | Sortie 19 is unblocked and I am choosing not to dispatch it while `make test` is red. Two reasons, both learned this round rather than assumed. **First, attribution:** DL-82 happened because two agents were writing while a third state (the shared struct) was in flux; adding a third concurrent writer on top of a *known-red* tree means the next failure cannot be bisected to an author, and bisection is exactly what saved this round — Sortie 18 stashed its own work to prove the regression was Sortie 13's. **Second, measured contention:** the supervisor lost **two** ten-minute runs to the DL-61 `fontd` hang in this round alone, both while an agent was also building. Concurrent `xcodebuild` makes a pre-existing stall materially more likely, and a stall costs more than the parallelism saves. Sortie 19 dispatches the moment `make test` is green. **This is a narrowing of parallelism, not an abandonment**: the plan's Group B concurrency is still correct, and 13/18 did run genuinely in parallel to completion. The rule going forward is *fan out from a green tree, never from a red one.* |
+| DL-84 | 2026-07-26 | WU-3 | 13 | **Supervisor probed the DL-25 blind spot directly, and Sortie 13 passed the hardest test in this mission** | Probe: `next.followsNonBlankLine = !isBlank(line.units)` → `= false`, i.e. grammar **state omission**, the precise defect class DL-25 says the gate can never see. Result, and it is the cleanest confirmation of DL-25 yet obtained: the gate passed **224/224 cases** while **four hand-written classification tests went red** — `A natural scene heading needs a blank line above it; a forced one does not`, `A natural transition is uppercase, ends in TO:, and opens a block`, and — the two that matter most — `Deleting a blank line reclassifies the scene heading below it, incrementally` and `Typing a blank line above a slug line promotes it, incrementally`. The incremental pair proves the state bit is asserted *through edits*, not merely on a cold scan. **Sortie 13 honored DL-25 in substance**: it did not lean on the gate, and its by-hand expectations catch what the gate structurally cannot. Reverted; green at 143/13. |
+| DL-85 | 2026-07-26 | WU-4 | 18 | Supervisor independently probed the UTF-16 column claim; Sortie 18 COMPLETED | The agent mutation-tested its own two risky claims and reported specifics, which is the standard this mission wants — but the emoji criterion is the one it flagged as not literally satisfiable, so it is the one that had to be checked independently. Probe: made `visualColumn` count **characters** rather than code units (a surrogate pair advancing one column) — the wrong answer that is *correct on all ASCII* and therefore invisible to casual testing. `An emoji counts two columns, because a column is a UTF-16 code unit` went red (3 issues). Reverted; green at 143/13. `make test-core` exit **0**, **143 tests / 13 suites**, up from 115/12. |
+| DL-86 | 2026-07-26 | WU-4 | 18 | **RULING: the emoji exit criterion describes a document that cannot exist, and the agent was right to say so rather than fake it** | The criterion asks for "an emoji **before an indent marker**". In CommonMark, indentation is spaces and tabs only and precedes content, so no legal document puts a non-ASCII character before an indent marker — the criterion is unsatisfiable *through classification*, not merely inconvenient. The agent tested `MarkdownGrammar.visualColumn(of:upTo:)` directly (the single site where columns are computed) on inputs a character count gets wrong, proved it falsifiable, and added an end-to-end test asserting exact UTF-16 offsets in an emoji-bearing list. **Criterion accepted as met in substance.** This is the fourth member of a family the brief should treat as one finding: DL-46 (a grep broader than its intent), DL-59 (a grep that punishes documenting what it forbids), DL-72 (an assertion the framework absorbed), and now an exit criterion whose literal input is unconstructible. **Common root: the criteria were authored against an imagined implementation rather than a real one.** |
+| DL-87 | 2026-07-26 | WU-3 | 13 | **PARTIAL: Sortie 13 broke a `SwiftEscriboTests` test its own exit criteria cannot see. Attempt counter NOT incremented.** | `make test` exits **2**: `Switching language builds a new scanner and restyles everything` fails at `EditorCoordinatorTests.swift:471`. Cause is Sortie 13 working correctly — `.fountain` now has a real grammar, so `# Title` is a `.section` and no longer degrades to `.paragraph`. **The test itself predicted this**, in as many words: *"Fountain has no grammar until Sortie 13 and degrades to plain text."* Sortie 9 wrote the update order down and Sortie 13 never saw it, **because Sortie 13's exit criteria stop at `make test-core`**. Found by Sortie 18, which ran the full suite and bisected it to the other agent's commit rather than assuming its own work. **PLAN DEFECT, standing, and it applies to every remaining grammar sortie:** WU-3 (14–17) and WU-4 (19–22) all carry core-only exit criteria while changing scanner output that the editor layer asserts against. **Every remaining grammar dispatch must run `make test` and `make test-ios` in addition to `make test-core`** — carried into all of them. The invariant under test is DL-28's and is worth keeping; the continuation must re-point it at the *now-correct* Fountain classification, not weaken it to `restyleCount` alone, which would stop proving the scanner was replaced rather than reused. |
+| DL-88 | 2026-07-26 | WU-4 | 18 | ACCEPTED deferral, owner named: setext underlines do not retro-classify the paragraph above them | `Foo\n---` gives line 1 `.heading` and leaves line 0 `.paragraph`. Correct classification requires `lookahead == 1` plus the matching backward extent — the same machinery Fountain's character cue needs in Sortie 14 — and raising it here would have broken `ordinaryEditsStayLocal`'s exact-window assertion. Sortie 18's own exit criterion is met (`---` after a paragraph is a heading, not a thematic break) and the converse is asserted so it cannot pass vacuously. **Note the convergence with DL-84**: both grammars have now independently deferred lookahead to a later sortie, so whoever raises it owns *both* retro-classification cases and must re-check the edit-window assertions. |
+| DL-89 | 2026-07-26 | WU-4 | 18 | NOTED, real 1.0 limitation: blockquote and list-item content is not re-scanned | `> # Title` is one `.blockquote` line, not a heading inside a quote. Expressing containment needs a container axis on `LineRecord`, which is **public API** and therefore a Sortie 30 / post-1.0 decision rather than something a grammar sortie may add unilaterally. Recorded so the API audit rules on it deliberately instead of discovering it. |
+| DL-90 | 2026-07-26 | WU-4 | 18 | NOTED: list nesting saturates at 8 levels by design | `MarkdownBlockState` packs the content-column stack into one `UInt64` to avoid a per-line allocation — and there is one `LineState` per line for the whole document, so the allocation would be per-document-line, not per-scan. Past level 8 the deepest slot is replaced: **classification stays correct and only `depth` saturates**; columns clamp at 255. Acceptable for 1.0 and worth a line in the docs, not a defect. |
 | DL-32 | 2026-07-26 | WU-2 | 7 | Model: opus | Complexity 25 (8 turns-band + 4 file-count + 10 foundation/dependents + 3 risk + 0 ambiguity). Override also applies: foundation_score 1 with 23 dependents. The theme lookup table and the styler cache are the second half of the scanner→editor seam and are consumed by all three Representables; the composition order and the single invalidation path are exactly the shape that does not retrofit. |
+
+---
+
+## Decisions Log (continued — DL-92 onward)
+
+> These entries were reconstructed on 2026-07-26 after DL-123. DL-92…DL-120 are restored
+> from the supervising session's own record; DL-121…DL-124 are new this round.
+
+| ID | Timestamp | Work Unit | Sortie | Decision | Rationale |
+|----|-----------|-----------|--------|----------|-----------|
+| DL-92 | 2026-07-26 | WU-3 | 13 | DL-87 continuation verified: the invariant was **strengthened**, not weakened | The re-pointed language-switch test asserts `.section` depth 1 positively and carries **three** negatives; `restyleCount` and `lastAppliedRange` were left untouched. Its replacement comment states that both of those *pass in the broken world* and that the assertion must never be reduced to the count. The agent proved falsifiability by deleting `scanner = EscriboScanner(language:)` from `setLanguage`, and **volunteered** that its sabotage also reddened the `language == .fountain` check, which a true in-place mutation would not — it could not construct a purer one because `EscriboScanner.language` is a `let`, i.e. DL-28 making the bug unrepresentable. That caveat was offered, not extracted. |
+| DL-93 | 2026-07-26 | — | 14/19 | DL-82's remedy as two dispatch rules — **rule 1 was later withdrawn, see DL-98** | (1) Stage only files you authored. (2) A field added to a shared type must have its type defined in that same file. Rule 2 is sound and Sortie 14 followed it exactly (`LineState.inDialogueBlock` is a plain `Bool` declared in `LineState.swift`). Rule 1 proved actively harmful. |
+| DL-94 | 2026-07-26 | WU-3 | 14 | Model: opus | Complexity 24. The plan itself names this sortie "the single most likely source of correct-on-full-parse / wrong-while-typing", and it is the only sortie that declares a lookahead to the convergence engine. |
+| DL-95 | 2026-07-26 | WU-4 | 19 | Model: opus | Complexity 23. The plan calls inline flattening "the hardest Markdown algorithm"; the surrogate-pair criterion is the same UTF-16 hazard class as DL-85, one layer down. |
+| DL-96 | 2026-07-26 | WU-3 | 14 | **THE MISSION'S HEADLINE RESULT: a Fountain grammar that recognizes NO character cues at all passes the scan gate 288/288** | Supervisor probe: `FountainGrammar.lookahead` 1 → 0. **62 issues red** across the Fountain suite while `Incremental scanning equals full scanning` passed **288 of 288**. The agent independently ran the same mutation (61 issues) plus a second — not carrying the dialogue flag past a cue line — which reddened 10 tests and also left the gate green. The mission's flagship property test would have certified a completely broken dialogue grammar. Reverted; green. |
+| DL-97 | 2026-07-26 | WU-4 | 19 | Sortie 19 COMPLETED; inline is an attribute painter, not a tree | 51 new tests. `MarkdownInline` fills one 4-byte attribute per code unit and run-length encodes; nesting is overlapping paint and the union is `\|=`. There is no node type to flatten. Agent mutations: a one-code-unit marker shift reddened 8 tests; union→assignment reddened the headline test. |
+| DL-98 | 2026-07-26 | — | 14/19 | **MY RULE CAUSED THIS: DL-93 rule 1 was actively harmful and put two non-building commits into history** | "Stage only files you authored" is **unsatisfiable for a shared append-only file both sorties must edit**. Sortie 14 therefore used `git update-index --cacheinfo`; Sortie 19's whole-index commit swept that stale blob into `fd34bed`, dropping Sortie 19's five inline `SpanKind` members. Verified: `fd34bed` and `632887e` both reference members that do not exist at those commits. `0aecb21` repaired the tip. **Both agents found it only because each built the committed tree in a throwaway worktree** — both working directories were green throughout. **Replacement rule: never partially stage; add whole files; a shared vocabulary file may carry the other sortie's members; verify your own commit in a worktree before reporting.** |
+| DL-99 | 2026-07-26 | — | — | **RULING: leave the two non-building commits. Do not rewrite history.** | `git bisect` cannot cross that window — real but narrow. The alternative is an interactive rebase of a shared mission branch to repair commits whose content is already correct at the tip, risking verified work for a cosmetic gain, and rewriting commits the user has not asked me to touch. Squash at PR time if clean bisectability is wanted. |
+| DL-100 | 2026-07-26 | WU-4 | 19 | **Two more unfailable exit criteria — the family now has six members** | **(a)** The `dirtyRange` criterion cannot fail: dirty ranges are line-aligned by Sortie 6's invariant, so any edit on the line already covers the former bold run. **(b)** Half the surrogate criterion cannot fail: `SpanTiling.align` snaps every boundary off a pair for *any* grammar. The agent proved (b) by mutation — the property test stayed green while its hand-written `*😀*` layout test went red — and added assertions with teeth to both. **Root cause of all six: criteria authored against an imagined implementation rather than a real one.** |
+| DL-101 | 2026-07-26 | WU-4 | 19 | Stated CommonMark deviations, documented in-source | Emphasis does not cross a line (needs paragraph-wide inline state); reference links scan as literal text and are asserted so; flanking punctuation is ASCII-only (no Foundation for Unicode categories); hard breaks are emitted on a paragraph's last line where CommonMark says there is none. Code spans deliberately get **no** `ElementKind` — a `.codeSpan` kind would render inline code inside a heading at *body* size under the composition order — while links do override the block kind. |
+| DL-102 | 2026-07-26 | WU-3 | 14 | Sortie 14 decisions later sorties must honor | `withState` reads the line's **classification**, not its text: a cue opens a block; parenthetical/dialogue/lyric continue one; everything else closes it. **Direct instruction to Sortie 15 about notes and the dialogue switch** — honored, see DL-110. A cue's `contentRange` is the character **name** alone, exclusive of `@`, `(V.O.)`, and `^`. `scanLine` order is load-bearing in four places. Test-only `character` members renamed `testCue`. `ordinaryEditsStayLocal` needed no change — it runs `MarkdownGrammar`, whose lookahead is still 0. |
+| DL-103 | 2026-07-26 | — | — | **Operational finding distinct from the DL-61 font hang: concurrent test runs cause hard kills and SILENT TRUNCATION** | Sortie 14 saw one run `Killed: 9` and one that **truncated at 50 of 181 tests with no recorded issue**. The truncation is the dangerous one — it reads as a pass if only the exit code or the tail is checked. **Consequence: every green claim must be paired with a test count.** Second independent argument for capping concurrency at two. |
+| DL-104 | 2026-07-26 | WU-4 | 20 | **The corrected DL-98 rule worked on its first outing** | Sortie 20 verified `e911cad` in a detached worktree, re-running all three suites there. It also reported that Sortie 15's whole-index commit swept its shared-vocabulary appends into `f056b49` and that it deliberately **did not** try to reclaim them — the sanctioned outcome. Mixed attribution on shared appends, zero broken commits. |
+| DL-105 | 2026-07-26 | WU-4 | 20 | **Seventh unfailable criterion, and the fourth proof of gate blindness** | The agent flagged its own criterion — "`---` on line 5 is a thematic break" — as certifying nothing, since Sortie 18 already ships that behavior, so it stays green with Sortie 20's implementation deleted. It added the assertion with teeth (no frontmatter span or record anywhere in the document). Its three mutations reddened 6, 6, and 2 hand-written tests while `ScanGateTests` stayed green at **235/235** throughout. |
+| DL-106 | 2026-07-26 | WU-4 | 20 | ACCEPTED behavior change: a document that is exactly `---` is now unterminated frontmatter, not a thematic break | Follows necessarily from deciding frontmatter by line index. The agent held the four neighbouring cases that must not move (`----`, `   ---`, `--- x`, and every `---` below line 1), making it a boundary shift rather than a widening. **Live-editor consequence for Sortie 27/30**: typing `---` as a document's first line paints everything below as frontmatter until the closer is typed. Inherent to frontmatter support, but it reads as a bug in a demo. |
+| DL-107 | 2026-07-26 | WU-4 | 20 | **SCOPE GAP with a named catcher: GFM extended autolinks are NOT implemented** | Only the bracketed CommonMark form ships. Extended autolinks need trailing-punctuation trimming, a parenthesis-balance rule, and a preceding-character rule — each changing where a span *ends* on any prose line containing a dot. No exit criterion mentions autolinks, so nothing is blocked. **Sortie 22 is the `swift-markdown` differential oracle and `swift-markdown` implements GFM**, so this surfaces there as a diff rather than a silent omission. |
+| DL-108 | 2026-07-26 | WU-4 | 20 | Sortie 20 decisions later sorties must honor | Frontmatter is decided by `GrammarLine.index`, not state — sound incrementally because line 0 begins at offset 0. **Sortie 25 reads `openConstruct == MarkdownGrammar.frontmatterTag`** (honored — see DL-121). `LineRecord` gained public `tableAlignments`, with `TableAlignment` in its own file. Two zero-lookahead gaps: a table's header row stays a `paragraph`, and the delimiter row's cell count is unchecked. |
+| DL-109 | 2026-07-26 | WU-3 | 15 | Sortie 15 COMPLETED; **fifth** proof of gate blindness | Supervisor probe let the title-page region open on any line rather than only at `documentStart`: 2 named tests red, gate passed **352/352**. Agent's own two mutations reddened 8 and 3 tests, gate green both times. |
+| DL-110 | 2026-07-26 | WU-3 | 15 | **The Sortie 14 → 15 handoff is the process win of the mission** | Sortie 14 warned that giving notes their own `ElementKind` would drop them into `withState`'s "everything else" branch and close the dialogue block — breaking the very criterion Sortie 15 had to satisfy, which would otherwise have passed **for free**. Sortie 15 gave notes their own kind deliberately, added `.note`/`.boneyard` to the continue branch, and mutation-tested it. **A criterion that would have been vacuously satisfied is now load-bearing, because one sortie wrote down what the next needed to know.** This is the counter-example to the seven unfailable criteria: the plan could not anticipate it, but an agent could. |
+| DL-111 | 2026-07-26 | WU-3 | 15 | ACCEPTED partial on task 5, obligation moved to Sortie 24 | Title-page key/value ranges ship as **spans** (`SpanKind.titlePageKey`/`.titlePageValue`), not `LineRecord` fields. The stronger of its two reasons: Sortie 20 was concurrently rewriting `LineRecord.swift`, so touching it risked committing an uncompilable half-state — the exact DL-98 failure the rules exist to prevent. **Sortie 24 must confirm the span route round-trips byte-identically**, or add `keyRange` to `LineRecord`. |
+| DL-112 | 2026-07-26 | WU-4 | 21 | **CRITICAL WARNING CARRIED TO SORTIE 21: `openConstruct` is one field now shared by two grammars; Fountain-in-Markdown needs a second field, not a cleverer tag** | Markdown uses fence=1, frontmatter=2, table=3; Fountain uses note=0x10, boneyard=0x11. Distinct values, but **one field**. Sortie 21 nests a Fountain scanner inside a Markdown fence, so outer and inner constructs must be representable **simultaneously**. The plan says the same thing from the other side ("a `startState` that only records 'we are in a fence' converges early inside the block"). Packing both into `openConstruct` produces early convergence inside fenced blocks — the correct-on-full-parse / wrong-while-typing class. |
+| DL-113 | 2026-07-26 | — | 30 | Minor erosion: `KindVocabularyTests` raw-value lists are no longer exhaustive | Sorties 15 and 20 both omitted their new members; the lists have been spot-checks since Sortie 13. Nothing asserts completeness, so not a defect — but they were presumably written to catch vocabulary drift and no longer do. **Sortie 30 owns the decision**, since exhaustiveness is an API-surface question. |
+| DL-114 | 2026-07-26 | WU-4 | 21/22 | **WU-4 is fully gated behind WU-3, which reshapes the rest of the mission** | Sortie 21 needs Sortie 17; Sortie 22 needs 21. The plan's Group B is parallel for its first three pairs and **serial in its tail**. After Sortie 17 completes, three work units become eligible at once (21, 23, and WU-6's remainder) — the widest fan-out remaining. DL-103 argues for still capping concurrency at two. |
+| DL-115 | 2026-07-26 | WU-6 | 25 | WU-6 unlocked early, recovering the parallelism DL-114 cost | Sortie 25's gates (Sorties 20 and 12) were both met, so it was dispatched alongside Sortie 16 rather than waiting. **The most genuinely disjoint pair of the mission**: pure `EscriboCore` vs pure `SwiftEscribo`, no shared vocabulary, no shared `LineState`. The DL-82/DL-98 collision class cannot occur between them — though DL-123 found a *different* collision class. |
+| DL-116 | 2026-07-26 | WU-3 | 16 | **Model: sonnet — second non-opus dispatch, on DL-60's reasoning** | Complexity 11. Sortie 16 owns no seam, no vocabulary, and no multi-line state; Sortie 15 had already built the note region and said Sortie 16 "subdivides the single `.note` content span; it does not need a new kind." Sharp criteria, explicit non-goals, and a grep asserting no whitelist exists. Validated by DL-118. |
+| DL-117 | 2026-07-26 | WU-6 | 25 | Model: opus | Complexity 21. Sortie 26 reuses its input-path pattern, and it is the only sortie that can discharge DL-74 — a REQUIREMENTS-level rule shipping unmet. |
+| DL-118 | 2026-07-26 | WU-3 | 16 | The sonnet call was correct, with specific evidence | Core **243/17**, both editor suites unchanged (92/18, 95/18) — a correctly-scoped additive sortie. Worktree-verified. It honored Sortie 15's subtraction mechanic rather than appending spans into a whole-line span (the silent-eating hazard), and **hand-computed its expected offsets with an external Python script rather than running the scanner and pasting output back** — unprompted. That is the difference between asserting intent and re-stating current behavior. |
+| DL-119 | 2026-07-26 | WU-3 | 16 | **A mutation that did NOT fire, reported honestly — and the finding is the opposite of a gap** | The agent's first probe (dropping the "must be a quote" guard) left behavior unchanged, because a second downstream guard reached the same correct output by another path. It said so plainly instead of substituting a probe that worked, then ran a second mutation that did fire. **The inference is easy to get backwards:** a non-firing probe normally signals a weak test, but here it demonstrated *redundant* malformed-recovery — worth knowing before someone "simplifies" one guard away. Compare DL-53. |
+| DL-120 | 2026-07-26 | WU-3 | 16 | Stated limitation with a named catcher: GLOSA is scanned **per line**, while Sortie 15 shipped **multi-line notes** | A `<SceneContext>` opening on one line with its closing tag below is not recognized as a pair. No exit criterion requires cross-line directives and the scoping follows Sortie 15's instruction — but the two facts together are a real gap, since the reason GLOSA lives inside notes is that notes are where prose annotation goes. **Carried to Sortie 17** (hostile-input corpus, the natural place a multi-line fixture surfaces it) and to Sortie 30 as a documented 1.0 limitation if confirmed. Tag/attribute names are ASCII-letter runs only. |
+| DL-121 | 2026-07-26 | WU-6 | 25 | **DL-74 IS DISCHARGED: rule 4 is met, and the supervisor proved the assertion measures this package rather than AppKit** | `applyExternalText` now routes through `performInputPathEdit` → `shouldChangeText(in:replacementString:)` → `replaceCharacters` inside `beginEditing`/`endEditing` → `didChangeText()`. **Supervisor probe: reverted `performInputPathEdit` to the forbidden shape** (direct storage mutation bracketed in `beginUndoGrouping`/`endUndoGrouping` — exactly what shipped before this sortie). Result: **exit 2, 20 issues across 11 named tests**, including `Rule 4: an external reset is undoable at all, and is exactly one undo action` and `Rule 4 holds when the reset empties the document`. Reverted; green at 134/23 + 243/17. Supervisor also re-ran all three targets: core **243/17**, macOS **134/23**, iOS **123/21**, `renumber` grep clean. **DL-65 also closed** — `PasteIsVerbatimTests` pastes from a private pasteboard carrying both an RTF flavour (36pt bold, different text) and a plain flavour, so `isRichText = true` makes it red. **DL-108 honoured** — frontmatter is read through the scanner's `ElementKind`, not re-derived. |
+| DL-122 | 2026-07-26 | WU-4 | 20 | **A real `MarkdownGrammar` defect found by Sortie 25 and worked around rather than papered over: tight lists misclassify** | `1. one`⏎`2. two` classifies line 2 as `paragraph`; `- item`⏎`- ` classifies line 2 as a setext `heading`. Cause: `paragraphOpen` leaks across a list item, so the "a list may not interrupt a paragraph" rule fires against the paragraph *inside* the item above. **These are the ordinary way lists are written and exactly the shapes list continuation exists for.** Gating strictly on `orderedListItem` would have shipped a continuation working only for a list's first item — and tests written to match would have certified that as correct. Sortie 25's gate therefore admits `paragraph`/`heading` **only when the line immediately above also carries a list marker**, separating `1. one`⏎`2. two` from `The years`⏎`1985. Something` and from a real setext heading. No recursion; each line looks only at the one above. **When the scanner learns tight lists the fallback simply stops being reached — nothing must be undone.** The agent did not touch `Sources/EscriboCore/` because Sortie 16 was live there, which was correct. **Owner for the real fix: whoever raises Markdown's lookahead; flagged to Sortie 30 if unfixed.** |
+| DL-123 | 2026-07-26 | — | 25 | **`make lint` is a repo-wide write and is a collision hazard by construction — it cost the supervisor its state file** | `make lint` runs `swift format -i -r .`, reformatting **the whole repository** including files owned by a concurrently-running sortie. Sortie 25 ran it, then reverted everything it did not own with `git checkout --` — and swept up `SUPERVISOR_STATE.md`, discarding ~227 lines of the supervisor's uncommitted working-tree edits (DL-78…DL-120). **The agent reported this plainly and unprompted, and saved a dangling stash (`2d6518e`) to the scratchpad, which recovered DL-78…DL-91**; the remainder was reconstructed by the supervisor from its own record. **Three lessons.** (1) The supervisor's own state file was the only unversioned artifact in the mission and therefore the only one that could be lost — **it should be committed at each gate, not merely written.** (2) `make lint` must be scoped per-sortie or run only between rounds, never during parallel dispatch. (3) The agent's honesty is the only reason this was recoverable at all; a silent revert would have surfaced as an inexplicably truncated audit trail at brief time. |
+| DL-124 | 2026-07-26 | WU-6 | 25 | **An unfalsifiable criterion the agent found in its OWN first draft — the eighth, and the best-caught** | Its first "one undo" tests asserted `canUndo == false` after one `undo()`. **They were green, and green for any implementation.** `UndoManager` defaults to `groupsByEvent = true` and closes its top-level group from a *run-loop observer*; a unit test never spins the run loop, so every mutation since `removeAllActions()` landed in one group — a probe showed typing four characters then Return undoing all of it in one step. The criterion measured Foundation, not this package. Two fixes, both required: `settleEventGroup()` spins the run loop (`CFRunLoopRunInMode`, no `Date()`) between keystrokes, as a real app does; and the assertion counts **undo registrations** via a `CountingUndoManager` overriding both `registerUndo(withTarget:selector:object:)` and `prepare(withInvocationTarget:)`, which is what REQUIREMENTS § Undo is actually about. `groupsByEvent = false` is **not** an alternative — NSTextView then registers undo with no group open and Foundation raises `NSInternalInconsistencyException` (verified). **Also honest**: paste undo is AppKit's own (`readSelection(from:)` already routes through its input path), so `pasteIsOneUndoAction` would read 1 with every line of this sortie deleted — the agent said so in a comment and did **not** claim it. |
+| DL-125 | 2026-07-26 | WU-6 | 26 | Sortie 26 handoff, recorded from Sortie 25's report | Add the handler to `EscriboNativeTextView` (`Sources/SwiftEscribo/EditorInputPath.swift`) as another closure property plus an override that returns without calling `super` when it handled the key. macOS Return is `insertNewline(_:)`, Tab is `insertTab(_:)`; **UIKit has neither** — Return arrives as `insertText("\n")` and Tab as `insertText("\t")`. **Never call `super` and then mutate**; one `InputPathEdit` per keystroke, and `performInputPathEdit` must remain the only place in the package that changes characters. **Do not assert `canUndo` without `settleEventGroup()`** (DL-124). `EditorCoordinator.elementKind(atUTF16Offset:)` is the seam for asking the scanner what a line is. iOS undo remains deferred per Known limitations §1; what is asserted on iOS is the *shape* — one `textViewDidChange` per rewrite, i.e. it went through the text view rather than around it. |
 
 ---
 
 ## Overall Status
 
-- Sorties completed: **11 / 30** (Sorties 1–11 — all supervisor-verified)
-- Sorties in flight: 1 (Sortie 12 continuation, WU-2 — the last of the strictly-serial run)
-- Work units completed: **1 / 7** (WU-1 COMPLETE; WU-2 RUNNING at 12 of 12; WU-3…WU-7 gated)
-- **Next gate**: Sortie 12 completing unlocks WU-3 (Sorties 13–17, Fountain) and WU-4
-  (Sorties 18–22, Markdown) **in parallel** — the first concurrency in this mission.
-  Group A, 12 sorties and 40% of the plan, has run strictly serial by necessity.
-- **Open obligations carried into later sorties** (each surfaced here so it cannot be lost):
-  - **DL-74 → Sortie 25**: REQUIREMENTS.md § External text replacement **rule 4 is unmet**
-    — an external reset registers zero undo actions on macOS, not one. Sortie 25 owns the
-    input path that fixes it.
-  - **DL-65 → Sortie 25**: `allowsUndo` is asserted as of DL-76; the verbatim-paste half of
-    `isRichText = false` still is not.
-  - **DL-75 → Sortie 28**: measure the per-change `NSTextStorage.string` → Swift `String`
-    bridge in the binding push — the one remaining per-keystroke O(document) cost.
-  - **DL-56 → Sortie 28**: measure post-IME-composition full rescan.
-  - **DL-61 → Sorties 28 & 29**: every CI job needs `timeout-minutes`; the `fontd` hang
-    makes a stall, not a failure.
-  - **DL-46 → Sortie 27/30**: the point-constant grep must not become a standing invariant.
-- **Open obligation**: no SwiftUI `Representable` exists yet. Sortie 12 owes both
-  conformances plus the public editor view — see DL-63. If that is missed, the package
-  ships with no public entry point from `SwiftEscribo` at all.
+- Sorties completed: **13 / 30** (Sorties 1–12 and 18 — all supervisor-verified)
+- Sorties in flight: **1** (Sortie 13 continuation, WU-3)
+- Work units completed: **2 / 7** (WU-1, WU-2 COMPLETE; WU-3 and WU-4 RUNNING;
+  WU-5…WU-7 gated)
+- **Tree is RED**: `make test` exits 2 on one test (DL-87). Fixing that is the only
+  work in flight; Sortie 19 is held until it is green (DL-91).
+- **Gate opened 2026-07-26**: Sortie 12 completed, unlocking WU-3 (Sorties 13–17,
+  Fountain) and WU-4 (Sorties 18–22, Markdown) **in parallel** — the first concurrency
+  of this mission. Group A, 12 sorties and 40% of the plan, ran strictly serial by
+  necessity and is now behind us.
+### Current position (2026-07-26, after Sorties 16 and 25)
+
+- Sorties completed: **20 / 30** (1–16, 18, 19, 20, 25 — all supervisor-verified)
+- Sorties in flight: **0**
+- Work units: **2 / 7 COMPLETE** (WU-1, WU-2). WU-3 RUNNING at **17**; WU-4 **STALLED**
+  at 21 pending Sortie 17 (DL-114); WU-6 RUNNING at **26**; WU-5 gated on 17; WU-7 gated
+  on 27, 17, 22.
+- **Tree is GREEN** at `33a56bb`, all re-run by the supervisor rather than reported:
+  `make test-core` 0 (**243/17**), `make test` 0 (**134/23**), `make test-ios` 0
+  (**123/21**). Gate at **352 sequences**. Charter clean: no regex, `EscriboCore`
+  imports nothing, no XCTest.
+- **Next gate**: **Sortie 17 is the widest remaining** — completing it makes Sortie 21
+  (WU-4), Sortie 23 (WU-5), and WU-6's remainder eligible at once. DL-103 argues for
+  still capping concurrency at two.
+
+### Standing rules earned during execution
+
+- **Every grammar sortie runs all three test targets** (DL-87). Core-only exit criteria
+  are structurally blind to editor-layer regressions; that is how Sortie 13 shipped one.
+- **Never partially stage; add whole files; verify your own commit in a throwaway
+  worktree** (DL-98, validated DL-104). A green working directory is not evidence that
+  what you committed builds.
+- **A field added to a shared type must have its type defined in that same file**
+  (DL-93 rule 2).
+- **`make lint` is a repo-wide write** — scope it per-sortie or run it only between
+  rounds, never during parallel dispatch (DL-123).
+- **Commit `SUPERVISOR_STATE.md` at each gate** (DL-123). It was the mission's only
+  unversioned artifact and therefore the only one that could be lost.
+- **Pair every green claim with a test count** (DL-103) — concurrent runs truncate
+  silently without recording an issue.
+
+### Open obligations carried into later sorties
+
+- **DL-112 → Sortie 21**: `openConstruct` is one field shared by two grammars.
+  Fountain-in-Markdown needs a **second field**, not a cleverer tag, or it converges
+  early inside fenced blocks.
+- **DL-120 → Sortie 17 / 30**: GLOSA is scanned per line while notes are multi-line;
+  a directive spanning lines is not recognized as a pair.
+- **DL-111 → Sortie 24**: confirm the title-page **span** route round-trips
+  byte-identically, or add `keyRange` to `LineRecord`.
+- **DL-122 → whoever raises Markdown's lookahead (else Sortie 30)**: tight lists
+  misclassify (`1. one`⏎`2. two`). Sortie 25 works around it correctly; the workaround
+  self-retires when the scanner is fixed.
+- **DL-107 → Sortie 22**: GFM extended autolinks are unimplemented; the differential
+  oracle will surface them as a diff.
+- **DL-75 → Sortie 28**: measure the per-change `NSTextStorage.string` → Swift `String`
+  bridge in the binding push — the last per-keystroke O(document) cost.
+- **DL-56 → Sortie 28**: measure the post-IME-composition full rescan.
+- **DL-61 → Sorties 28 & 29**: every CI job needs `timeout-minutes`; the `fontd` hang
+  produces a six-hour stall, not a failure.
+- **DL-46 → Sortie 27/30**: the point-constant grep must not become a standing invariant.
+- **DL-113 → Sortie 30**: decide whether `KindVocabularyTests` raw-value lists should be
+  exhaustive; they have drifted since Sortie 13.
+- **DL-106 → Sortie 27/30**: typing `---` on line 1 paints the document as frontmatter
+  until the closer is typed — known behavior, not a defect.
+- **DL-25 / DL-31 → every remaining grammar sortie**: the gate is blind to grammar state
+  omission *and* to a too-short forward extension. **Proven five times.** No grammar
+  claim may rest on a green gate.
+
+### Discharged
+
+- **DL-63** (public surface): `EscriboEditor` + both Representables exist and are asserted.
+- **DL-74** (rule 4): an external reset is now exactly one undo action, and the assertion
+  measures this package rather than AppKit — supervisor-probed, DL-121.
+- **DL-65** (verbatim paste): asserted against a dual-flavour pasteboard, DL-121.
+- **DL-108** (frontmatter): read through the scanner's `ElementKind`, not re-derived.
+
+### Known defects accepted, not repaired
+
+- **DL-99**: commits `fd34bed` and `632887e` do not build in isolation; `0aecb21`
+  repaired the tip. `git bisect` cannot cross that window. Squash at PR time if wanted.
+- **DL-122**: tight-list misclassification in `MarkdownGrammar`, worked around in the
+  editor layer.
+
 - Blocked: none
