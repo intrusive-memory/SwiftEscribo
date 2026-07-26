@@ -65,7 +65,7 @@ struct GateDocument: Sendable, CustomTestStringConvertible {
   var testDescription: String { name }
 }
 
-/// Nine documents. Every one of them contains at least one line of pure ASCII capitals,
+/// The corpus. Every one of these contains at least one line of pure ASCII capitals,
 /// because that is what `CueGrammar`'s lookahead rule keys on and the "edit the line
 /// after an ALL-CAPS line" shape needs a caps line to sit after.
 ///
@@ -86,6 +86,24 @@ struct GateDocument: Sendable, CustomTestStringConvertible {
 /// - `fountain forced markers` is the same in CRLF, with one of every forcing marker in
 ///   it, so the "any non-dialogue element closes the block" rule is crossed repeatedly by
 ///   edits that move lines in and out of a block.
+/// - `frontmatter and table` opens with a YAML region and carries a GFM table, task-list
+///   items, strikethrough, and an autolink — added by Sortie 20. It exists for the
+///   **offset-zero** shape above all: frontmatter is the one construct in this package
+///   decided by a line's position rather than by its state, so an edit at offset zero
+///   renumbers the line that decides it, and that is the only place the position rule can
+///   be got wrong incrementally. Note what this buys and what it does not, exactly as the
+///   Fountain documents' note says: it is a **convergence** check, and it cannot fail on a
+///   wrong frontmatter rule — both sides of the comparison run the same grammar.
+///   `MarkdownGFMTests` is where the rule itself is asserted by hand.
+/// - `fountain title page and regions` opens with a title page — including the
+///   non-standard `verbsCovered:` and `Abstract:` keys — and carries a note that spans two
+///   lines and a boneyard that spans three, added by Sortie 15 so the two region shapes
+///   below have something to close from the first step rather than only after they have
+///   opened one. It is also the only document whose **first line** decides a region for the
+///   whole document, which is what the offset-zero shape lands on. As with every other
+///   Fountain document here: this is a **convergence** check and it cannot fail on a wrong
+///   note, boneyard, or title-page rule. `FountainRegionTests` is where those are asserted
+///   by hand.
 let gateCorpus: [GateDocument] = [
   GateDocument(
     name: "lf markdown",
@@ -159,11 +177,48 @@ let gateCorpus: [GateDocument] = [
     name: "fountain forced markers",
     text: "@McAvoy\r\nSomething muttered.\r\n\r\n.SNIPER SCOPE POV\r\n!forced action\r\n"
       + "~a lyric line\r\n===\r\n> CUT TO:\r\nBOB"),
+  GateDocument(
+    name: "frontmatter and table",
+    text: """
+      ---
+      type: docs
+      title: A DOCUMENT
+      ---
+      # Heading
+
+      | name | count |
+      |:-----|------:|
+      | a    | 1     |
+
+      - [ ] todo ~~struck~~
+      - [x] done <https://example.com>
+      TAIL
+      """),
+  GateDocument(
+    name: "fountain title page and regions",
+    text: """
+      Title: THE THING
+      verbsCovered: run, jump
+      Abstract: A thing happens.
+
+      INT. HOUSE - DAY
+
+      Bob waits [[a note
+      that spans lines]] and leaves.
+
+      /* struck out
+      INT. NOWHERE - NIGHT
+      */
+
+      BOB
+      Hello there.
+      """),
 ]
 
 // MARK: - Adversarial edit shapes
 
-/// The seven edit shapes the plan requires, and the whole reason the generator is not a
+/// The nine edit shapes — the plan's seven, plus the two Fountain-region shapes Sortie 15
+/// added — and the whole reason the generator is not a
 /// uniform typing simulator.
 ///
 /// Uniform typing finds nothing: it lands one character in the middle of a paragraph,
@@ -181,6 +236,20 @@ enum EditShape: String, CaseIterable, Sendable {
   /// An edit that closes an open fence, by deleting the opener or inserting a matching
   /// closer. The inverse propagation.
   case closeFence
+
+  /// An edit that opens a Fountain **boneyard** or **note** — `/*` or `[[`. State
+  /// propagates to the end of the document, exactly as a fence's does, but through a
+  /// different field and a different grammar.
+  ///
+  /// A separate shape from ``openFence`` rather than another entry in `fenceOpeners`,
+  /// because the two travel different code: a fence is decided by `MarkdownGrammar` from an
+  /// indent and a delimiter run, and a boneyard by `FountainGrammar` from a two-character
+  /// pair that may open **anywhere on a line**, including in the middle of a word.
+  case openBoneyard
+
+  /// An edit that closes an open boneyard or note, by deleting the opening line or
+  /// inserting a matching `*/` or `]]` further down. The inverse propagation.
+  case closeBoneyard
 
   /// A multi-line paste. The index gains lines and the old-to-new line mapping moves.
   case pasteMultiLineBlock
@@ -241,7 +310,7 @@ struct GateStep: Sendable {
 
 /// Turns a seed and a document into a sequence of adversarial edits.
 ///
-/// Every sequence is a **permutation of all seven shapes**, drawn with the seeded
+/// Every sequence is a **permutation of all nine shapes**, drawn with the seeded
 /// generator. That is deliberate: drawing shapes independently would leave some
 /// sequences with no fence in them at all, and the shapes are the only reason this test
 /// finds anything. A permutation guarantees each sequence exercises every shape exactly
@@ -267,7 +336,17 @@ enum GateEditGenerator {
   /// Short insertions used by the offset-zero and end-of-file shapes.
   static let smallInsertions: [String] = ["#", "X", "# ", "\r\n", "😀", " word"]
 
-  /// Generates one sequence: seven edits, one per shape.
+  /// Boneyard and note openers. Both constructs, and both a line-initial and a mid-line
+  /// form, because a Fountain region may open anywhere on a line and a fence may not.
+  static let regionOpeners: [String] = ["/*\n", "[[\n", "/* struck ", "[[a note "]
+
+  /// The closer each opener in ``regionOpeners`` needs, keyed by the two code units that
+  /// opened the region.
+  static func regionCloser(for opener: String) -> String {
+    opener.hasPrefix("/*") ? "*/" : "]]"
+  }
+
+  /// Generates one sequence: one edit per shape.
   static func sequence(seed: UInt64, from document: String) -> [GateStep] {
     var generator = SeededGenerator(seed: seed)
     let order = EditShape.allCases.shuffled(using: &generator)
@@ -307,6 +386,8 @@ enum GateEditGenerator {
     case .afterAllCapsLine: afterAllCapsLine(units, &generator)
     case .openFence: openFence(units, &generator)
     case .closeFence: closeFence(units, &generator)
+    case .openBoneyard: openBoneyard(units, &generator)
+    case .closeBoneyard: closeBoneyard(units, &generator)
     case .pasteMultiLineBlock: pasteMultiLineBlock(units, &generator)
     case .deleteMultiLineBlock: deleteMultiLineBlock(units, &generator)
     }
@@ -417,6 +498,52 @@ enum GateEditGenerator {
     return (at..<at, picked.marker + "\n", true)
   }
 
+  /// Open a boneyard or a note at some line start.
+  ///
+  /// Always emittable: unlike closing one, opening one needs nothing to already be there.
+  private static func openBoneyard(
+    _ units: [UInt16], _ generator: inout SeededGenerator
+  ) -> (Range<Int>, String, Bool) {
+    let starts = lineStarts(units)
+    let at = starts[Int.random(in: 0..<starts.count, using: &generator)]
+    let opener = regionOpeners[Int.random(in: 0..<regionOpeners.count, using: &generator)]
+    return (at..<at, opener, true)
+  }
+
+  /// Close an open boneyard or note — by deleting the line that opened it, or by inserting
+  /// the matching `*/` or `]]` further down.
+  ///
+  /// The opener is found by scanning for the **first** `/*` or `[[` on each line rather
+  /// than only at its start, because that is where `FountainGrammar` finds one: a region
+  /// may open in the middle of a word, and a closer generator that only ever saw
+  /// line-initial openers would never produce the mid-line open-then-close sequence.
+  private static func closeBoneyard(
+    _ units: [UInt16], _ generator: inout SeededGenerator
+  ) -> (Range<Int>, String, Bool) {
+    let starts = lineStarts(units)
+    let openers = (0..<starts.count).compactMap { line -> (line: Int, closer: String)? in
+      guard let closer = regionOpener(units, starts, line) else { return nil }
+      return (line, closer)
+    }
+    guard !openers.isEmpty else {
+      // Nothing to close. Open one, and do not claim the shape was covered.
+      let at = starts[Int.random(in: 0..<starts.count, using: &generator)]
+      return (at..<at, "/*\n", false)
+    }
+
+    let picked = openers[Int.random(in: 0..<openers.count, using: &generator)]
+    if Bool.random(using: &generator) {
+      // Delete the opening line outright.
+      let start = starts[picked.line]
+      let end = picked.line + 1 < starts.count ? starts[picked.line + 1] : units.count
+      return (start..<end, "", true)
+    }
+    // Insert the matching closer at a later line start, or at EOF if there is none.
+    let later = starts.filter { $0 > starts[picked.line] }
+    let at = later.isEmpty ? units.count : later[Int.random(in: 0..<later.count, using: &generator)]
+    return (at..<at, picked.closer + "\n", true)
+  }
+
   /// Paste a multi-line block at a character boundary.
   private static func pasteMultiLineBlock(
     _ units: [UInt16], _ generator: inout SeededGenerator
@@ -497,6 +624,25 @@ enum GateEditGenerator {
     return String(repeating: character == 0x60 ? "`" : "~", count: run)
   }
 
+  /// The closer needed by the first `/*` or `[[` on line `line`, or `nil` if the line
+  /// opens neither.
+  ///
+  /// Hand-written and deliberately not asked of `FountainGrammar`: a generator that
+  /// consulted the grammar it is generating edits for would agree with it about every
+  /// mistake.
+  private static func regionOpener(_ units: [UInt16], _ starts: [Int], _ line: Int) -> String? {
+    let start = starts[line]
+    let end = contentEnd(
+      units, from: start, lineEnd: line + 1 < starts.count ? starts[line + 1] : units.count)
+    var cursor = start
+    while cursor + 1 < end {
+      if units[cursor] == 0x2F, units[cursor + 1] == 0x2A { return "*/" }
+      if units[cursor] == 0x5B, units[cursor + 1] == 0x5B { return "]]" }
+      cursor += 1
+    }
+    return nil
+  }
+
   /// A random offset that sits **between characters**.
   ///
   /// Splicing through a surrogate pair produces a string the test corrupted —
@@ -523,7 +669,7 @@ struct ScanGateTests {
   /// step.
   ///
   /// Comparing only after the last edit would find the divergence but not the edit that
-  /// caused it, and on a seven-edit sequence that is the difference between a bug report
+  /// caused it, and on a nine-edit sequence that is the difference between a bug report
   /// and a shrug. Every step therefore compares against a full scan of the same text.
   ///
   /// The comparison has two halves and **both** are necessary:
@@ -679,14 +825,14 @@ struct ScanGateTests {
 
   // MARK: Coverage of the adversarial shapes
 
-  /// Every one of the seven shapes is actually produced, on real documents, by real
+  /// Every one of the nine shapes is actually produced, on real documents, by real
   /// seeds.
   ///
   /// A generator that quietly degrades — finding no fence and inserting a plain line
   /// instead, say — still produces a green gate while testing nothing the plan asked
   /// for. This is the test that would notice. It runs the generator only; it scans
   /// nothing, so it costs the suite almost nothing.
-  @Test("The generator genuinely emits all seven adversarial shapes")
+  @Test("The generator genuinely emits every adversarial shape")
   func generatorEmitsEveryAdversarialShape() {
     var emitted: [EditShape: Int] = [:]
     var substituted = 0

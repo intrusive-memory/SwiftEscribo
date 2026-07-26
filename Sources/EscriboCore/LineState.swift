@@ -112,6 +112,22 @@ public struct LineState: Equatable, Sendable {
   /// a `Bool` and a `UInt64` of zeroes that compare equal to themselves forever.
   var markdownBlocks: MarkdownBlockState
 
+  /// Where this line sits with respect to a Fountain **title page**.
+  ///
+  /// Three values rather than a `Bool`, and the third one is the whole reason this field
+  /// exists: a title page may begin **only on the document's first line**, and "this is
+  /// the first line" is not otherwise derivable from a state. ``followsNonBlankLine`` is
+  /// `false` on line 0 *and* after every blank line, so a grammar keying the title page
+  /// off it would reopen one in the middle of a screenplay. ``TitlePageRegion/documentStart``
+  /// is the default, so the initial state is correct without an exception, and every line
+  /// a Fountain scan touches overwrites it with ``TitlePageRegion/open`` or
+  /// ``TitlePageRegion/closed`` — which is what makes it reachable exactly once.
+  ///
+  /// `FountainGrammar`'s alone. Every other grammar leaves it at
+  /// ``TitlePageRegion/documentStart``, where it compares equal to itself forever and
+  /// costs convergence nothing.
+  var titlePage: TitlePageRegion
+
   /// Creates the state a line begins in.
   ///
   /// `internal` on purpose — see the type's documentation. External code obtains a
@@ -122,7 +138,8 @@ public struct LineState: Equatable, Sendable {
     fenceLength: UInt16 = 0,
     followsNonBlankLine: Bool = false,
     inDialogueBlock: Bool = false,
-    markdownBlocks: MarkdownBlockState = MarkdownBlockState()
+    markdownBlocks: MarkdownBlockState = MarkdownBlockState(),
+    titlePage: TitlePageRegion = .documentStart
   ) {
     self.openConstruct = openConstruct
     self.fenceCharacter = fenceCharacter
@@ -130,6 +147,7 @@ public struct LineState: Equatable, Sendable {
     self.followsNonBlankLine = followsNonBlankLine
     self.inDialogueBlock = inDialogueBlock
     self.markdownBlocks = markdownBlocks
+    self.titlePage = titlePage
   }
 
   /// The state the first line of a document begins in: nothing open, nothing carried.
@@ -137,4 +155,34 @@ public struct LineState: Equatable, Sendable {
   /// Every full scan starts here, and a scan that converges has proved that some later
   /// line's state matches what a scan from here would have produced.
   static let documentStart = LineState()
+}
+
+/// Where a line sits with respect to a Fountain title page — the leading `Key: Value`
+/// region a screenplay may open with.
+///
+/// Declared **here**, in `LineState.swift`, rather than beside the grammar that reads it,
+/// for the reason ``LineState/inDialogueBlock`` is a `Bool` and not a grammar type: a
+/// stored property whose type lives in a grammar file makes this file uncompilable on its
+/// own. A `UInt8`-backed enum with no dependencies needs nothing at all.
+///
+/// Raw-value backed so the field costs one byte in a type that is stored once per line for
+/// the whole document, and `Equatable` because ``LineState``'s equality — the convergence
+/// key — is total and every field has to participate in it.
+enum TitlePageRegion: UInt8, Equatable, Sendable {
+
+  /// Nothing has been scanned yet: this is the document's first line, and it is the only
+  /// line on which a title page may begin.
+  ///
+  /// The default, so ``LineState/documentStart`` is right without a special case. It is
+  /// also unreachable after line 0 of a Fountain scan, because every line's end state is
+  /// assigned either ``open`` or ``closed``.
+  case documentStart = 0
+
+  /// The line begins **inside** an open title page. Every non-blank line here is a
+  /// title-page key or a continuation of the previous key's value, and no other Fountain
+  /// element is recognized.
+  case open = 1
+
+  /// The title page is over — or there never was one. Terminal: nothing reopens it.
+  case closed = 2
 }

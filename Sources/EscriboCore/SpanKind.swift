@@ -187,4 +187,105 @@ extension SpanKind {
   /// content to wrap. Emitting it as a span rather than dropping it is what keeps the
   /// tiling total over trailing whitespace a reader cannot otherwise see.
   public static let hardBreak = SpanKind(rawValue: "hardBreak")
+
+  // MARK: - YAML frontmatter
+
+  /// A frontmatter fence — the `---` opening or closing a document's leading YAML region.
+  ///
+  /// Marker only, and **not** ``thematicBreak``, which is the entire point of the kind
+  /// existing: the same three characters are a horizontal rule anywhere else in the
+  /// document and a region delimiter on its first line. A theme that painted both with one
+  /// kind could not draw a rule for one and a gutter for the other.
+  public static let frontmatterDelimiter = SpanKind(rawValue: "frontmatterDelimiter")
+
+  /// A frontmatter entry's **key** — the `type` of `type: docs` — and, as
+  /// `SpanRole/marker`, the `:` and the whitespace separating it from the value.
+  ///
+  /// Marker and content share the kind and differ only in role, exactly as everywhere else
+  /// in this vocabulary, so dimming the colon is the styler's one marker rule rather than a
+  /// case.
+  public static let frontmatterKey = SpanKind(rawValue: "frontmatterKey")
+
+  /// A frontmatter entry's **value** — the `docs` of `type: docs`.
+  ///
+  /// A *span*, never a parsed value. `EscriboCore` imports nothing, so there is no YAML
+  /// parser here and there is deliberately no number, date, or boolean anywhere in this
+  /// package's output: the scanner says where the value is and the source says what it is.
+  public static let frontmatterValue = SpanKind(rawValue: "frontmatterValue")
+
+  // MARK: - GitHub-flavored Markdown
+
+  /// A cell of a GFM table row — the text as content, and each `|` separating one cell
+  /// from the next as `SpanRole/marker`.
+  ///
+  /// One kind for every cell, header or body: which row a cell sits in is the line
+  /// record's business (``ElementKind/tableRow`` versus ``ElementKind/tableDelimiterRow``),
+  /// and a per-column kind would need a column axis on a span, which spans do not have.
+  public static let tableCell = SpanKind(rawValue: "tableCell")
+
+  /// A GFM table's delimiter row — `|:---|---:|`.
+  ///
+  /// Marker only, like ``thematicBreak``: the row is pure syntax and prints as a rule. The
+  /// alignments it declares are on the **line record**, not on this span — see
+  /// ``LineRecord/tableAlignments`` for why.
+  public static let tableDelimiter = SpanKind(rawValue: "tableDelimiter")
+
+  /// An **unchecked** GFM task-list checkbox — the `[ ]` of `- [ ] todo`, and the
+  /// whitespace after it.
+  ///
+  /// Marker role, and a kind distinct from ``taskListChecked`` rather than a
+  /// ``StyleSet`` flag or a role: a theme draws an empty box and a tick, which is a
+  /// difference in *what the run is*, and the style axis is a set of emphasis flags with no
+  /// room to say it.
+  public static let taskListUnchecked = SpanKind(rawValue: "taskListUnchecked")
+
+  /// A **checked** GFM task-list checkbox — the `[x]` or `[X]` of `- [x] done`, and the
+  /// whitespace after it.
+  public static let taskListChecked = SpanKind(rawValue: "taskListChecked")
+
+  // MARK: - Fountain notes, boneyard, and the title page
+
+  /// A Fountain note — `[[a note]]` — with its `[[` and `]]` as `SpanRole/marker` and the
+  /// text between them as content.
+  ///
+  /// A note may open on one line and close on another, so this kind appears on **every**
+  /// line a note crosses: the opening line carries the `[[` marker, the lines between
+  /// carry content only, and the closing line carries the `]]`. Which line a marker sits
+  /// on is the source's business, not the styler's.
+  ///
+  /// A note's content is one span here. GLOSA directives inside a note —
+  /// `[[<breath length="4s"/>]]` — are scanned structurally by a later sortie, which
+  /// subdivides this span rather than replacing this kind.
+  public static let note = SpanKind(rawValue: "note")
+
+  /// Fountain boneyard — `/* commented out */` — with its `/*` and `*/` as
+  /// `SpanRole/marker` and everything between them as content.
+  ///
+  /// Distinct from ``note``, and not a role or a style flag on it, because the two are
+  /// different constructs with different meanings: a note is authorial commentary a reader
+  /// is meant to see in the editor, and a boneyard is text struck out of the screenplay. A
+  /// theme will want to render one dimmed and the other struck through, and *what the run
+  /// is* is the only axis that can say so.
+  public static let boneyard = SpanKind(rawValue: "boneyard")
+
+  /// A title-page **key** — the `Title` of `Title: Big Fish`, and the `verbsCovered` of
+  /// `verbsCovered: run, jump`.
+  ///
+  /// The content span covers the key text **exactly**: not the colon, not the whitespace
+  /// after it, nothing trimmed off either end, and nothing normalized. That is
+  /// REQUIREMENTS.md § Fountain 2 — "non-standard title-page keys must be preserved
+  /// verbatim" — expressed as a range, and it is the range a writer reads a key's spelling
+  /// and casing back off the source with. The colon and the whitespace after it are a
+  /// `SpanRole/marker` span carrying this same kind, exactly as every other marker in this
+  /// vocabulary does.
+  public static let titlePageKey = SpanKind(rawValue: "titlePageKey")
+
+  /// A title-page **value** — the `Big Fish` of `Title: Big Fish`, and every indented
+  /// continuation line under a key.
+  ///
+  /// Distinct from ``titlePageKey`` for the reason ``codeInfoString`` is distinct from
+  /// ``codeBlock``: a theme will emphasize the two differently, and a consumer reading a
+  /// document's metadata has to be able to tell which run is which without re-scanning the
+  /// line.
+  public static let titlePageValue = SpanKind(rawValue: "titlePageValue")
 }

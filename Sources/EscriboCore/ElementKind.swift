@@ -151,4 +151,89 @@ extension ElementKind {
   /// Pure delimiter, like a closing code fence: the record's content range is empty, and
   /// the whole run is a `SpanRole/marker` span.
   public static let thematicBreak = ElementKind(rawValue: "thematicBreak")
+
+  // MARK: - YAML frontmatter
+
+  /// The `---` opening or closing a document's leading YAML frontmatter region.
+  ///
+  /// Distinct from ``thematicBreak`` and that distinction is the point: the same three
+  /// characters are a horizontal rule everywhere else in the document. Only the
+  /// document's **first line** may open a region, so `---` on line five is a
+  /// ``thematicBreak`` and `---` on line one is this.
+  ///
+  /// Pure delimiter — the record's content range is empty.
+  public static let frontmatterDelimiter = ElementKind(rawValue: "frontmatterDelimiter")
+
+  /// A line **inside** a YAML frontmatter region.
+  ///
+  /// One kind for every line in the region, whether it parsed as `key: value` or not,
+  /// because geometry is what an `ElementKind` drives and the whole region gets the same
+  /// geometry. What a line turned out to be is on the span axis: a recognized entry emits
+  /// ``SpanKind/frontmatterKey`` and ``SpanKind/frontmatterValue``, and an unrecognized one
+  /// degrades to ``SpanKind/text``.
+  public static let frontmatter = ElementKind(rawValue: "frontmatter")
+
+  // MARK: - GitHub-flavored Markdown
+
+  /// A GFM table's **delimiter row** — `|:---|---:|`.
+  ///
+  /// The row that makes a table a table, and the only line whose record carries
+  /// ``LineRecord/tableAlignments``. Pure delimiter: its content range is empty.
+  public static let tableDelimiterRow = ElementKind(rawValue: "tableDelimiterRow")
+
+  /// A GFM table **body row** — a line after a delimiter row, up to the blank line or the
+  /// pipe-less line that ends the table.
+  ///
+  /// The **header** row is not this. A header row is recognized in GFM only by the
+  /// delimiter row that follows it, which is one line of lookahead this grammar does not
+  /// have, so a header row stays a ``paragraph`` — the same deliberate gap a setext
+  /// heading's text line has. A consumer that wants the header reads the line above a
+  /// `tableDelimiterRow` record.
+  public static let tableRow = ElementKind(rawValue: "tableRow")
+
+  // MARK: - Fountain notes, boneyard, and the title page
+
+  /// A line that is **nothing but** one or more Fountain notes — `[[a note]]` on its own
+  /// line — or a line inside a note that spans several.
+  ///
+  /// A note *within* a line does not produce this: `Hello [[to Jane]] there.` inside a
+  /// dialogue block is one ``dialogue`` line carrying ``SpanKind/note`` spans, because a
+  /// line has one geometry and that line's geometry is dialogue's. This kind is for the
+  /// case where there is nothing else on the line for the geometry to belong to.
+  ///
+  /// **A note does not end a dialogue block.** A note is commentary layered over a
+  /// screenplay rather than an element of one, so a `[[note]]` between two lines of speech
+  /// leaves the speech contiguous — the same rule ``lyrics`` gets, and for the same reason.
+  public static let note = ElementKind(rawValue: "note")
+
+  /// A line inside a Fountain boneyard — the `/* … */` region whose contents are struck
+  /// out of the screenplay.
+  ///
+  /// Produced only when the boneyard was **already open** at the start of the line, or
+  /// when the line holds nothing but boneyard. A `/*` that opens mid-line leaves that
+  /// line's classification alone: `Bob waits. /* cut this */` is ``action`` carrying
+  /// ``SpanKind/boneyard`` spans, because the text that decides what the line is sits
+  /// outside the boneyard.
+  ///
+  /// **A boneyard does not end a dialogue block**, for the reason a ``note`` does not: the
+  /// region is removed from the screenplay, so the speech on either side of it is
+  /// contiguous in the document that gets printed.
+  public static let boneyard = ElementKind(rawValue: "boneyard")
+
+  /// A Fountain title-page **key line** — `Title: Big Fish`, `verbsCovered: run, jump`.
+  ///
+  /// The record's content range is the **value**; the key is the ``SpanKind/titlePageKey``
+  /// span on the line, which covers the key text exactly and is what a writer reads a
+  /// non-standard key's spelling and casing back off the source with (REQUIREMENTS.md
+  /// § Fountain 2, Architecture §9). Order is line order, which the record's `index`
+  /// already carries.
+  public static let titlePageKey = ElementKind(rawValue: "titlePageKey")
+
+  /// A Fountain title-page **value line** — an indented continuation under a key, or a
+  /// line inside the title page that carries no key of its own.
+  ///
+  /// Its own element rather than a second ``titlePageKey`` because the two lay out
+  /// differently: a key line begins at the margin and a continuation is indented under the
+  /// key it belongs to.
+  public static let titlePageValue = ElementKind(rawValue: "titlePageValue")
 }

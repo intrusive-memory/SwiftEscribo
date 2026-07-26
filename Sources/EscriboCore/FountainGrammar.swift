@@ -32,6 +32,14 @@ private let greaterThan: UInt16 = 0x3E
 /// `~`.
 private let tilde: UInt16 = 0x7E
 
+/// `[` and `]` — a note's delimiters, doubled: `[[` and `]]`.
+private let leftBracket: UInt16 = 0x5B
+private let rightBracket: UInt16 = 0x5D
+
+/// `/` and `*` — the boneyard's delimiters, paired: `/*` and `*/`.
+private let solidus: UInt16 = 0x2F
+private let asterisk: UInt16 = 0x2A
+
 /// A space.
 private let space: UInt16 = 0x20
 
@@ -163,12 +171,81 @@ private let scenePrefixes: [[UInt16]] = [
 ///    unit because action preserves its leading whitespace — but no whitespace-preserving
 ///    element can occur inside a dialogue block, where every non-blank line is dialogue,
 ///    so the reason does not apply and real screenplays indent parentheticals.
+/// 7. **Notes and boneyard do not nest, in themselves or in each other.** The first `]]`
+///    closes a note and the first `*/` closes a boneyard, whichever came first opens the
+///    region, and inside a region nothing is syntax — a `/*` inside a note is two
+///    characters of note text and a `[[` inside a boneyard is two characters of struck-out
+///    text. Fountain has no nesting rule for either construct, and a bracket-matching walk
+///    would make `[[ the array is a[[i]] ]]` behave differently from every other Fountain
+///    parser in the org.
+/// 8. **A region affects a line's classification only when it was open at the start of
+///    the line, or when it is all the line has on it.** `Bob waits. /* cut */` is action
+///    with boneyard spans on it; a line inside an open boneyard is
+///    ``ElementKind/boneyard``; and `[[a note]]` alone on a line is ``ElementKind/note``.
+///    A line grammar gives one line one classification, and splitting a line that closes a
+///    boneyard and then carries a slug line into two would need a second element axis on
+///    ``LineRecord``, which is public API and not a scanner detail. Nothing is lost either
+///    way: every code unit is spanned and the source stays authoritative.
+/// 9. **An unterminated note or boneyard runs to the end of the document**, and that is
+///    the specified behavior rather than a fallback — the scan path has no error path
+///    (REQUIREMENTS.md § Core API, totality). A blank line does **not** close either
+///    region: Fountain gives neither construct a blank-line rule, and inventing one would
+///    make `/*` mean something different from `*/` being absent.
+/// 10. **The title page is a leading region and may begin only on line 0.** It runs to the
+///    first blank line. Keys are **arbitrary** — `verbsCovered:` and `Abstract:` are real
+///    keys in this org's documents (REQUIREMENTS.md § Fountain 2) — and are preserved
+///    verbatim, as a ``SpanKind/titlePageKey`` span covering the key text exactly, with
+///    nothing trimmed, folded, or normalized.
+/// 11. **A line that could be a title-page key needs corroboration to open one.** `Key:`
+///    with nothing after it is a title page only if the line below it is an indented
+///    continuation or another key; otherwise a document opening on the transition `CUT TO:`
+///    would be a title page whose key is `CUT TO`. That corroboration is the *same* one
+///    line of lookahead the cue rule already declared (see above), not a second one.
 struct FountainGrammar: LineGrammar {
 
   var lookahead: Int { 1 }
 
+  /// The ``LineState/openConstruct`` tag meaning "a `[[` note is open".
+  ///
+  /// Its meaning belongs to this grammar; the scanner only ever compares it. The value is
+  /// deliberately **not** `1`, which is ``MarkdownGrammar/fenceTag`` — the two grammars own
+  /// disjoint documents today, but a `fountain` fence inside a Markdown document puts one
+  /// grammar's state inside the other's (REQUIREMENTS.md § Fountain-in-Markdown), and a
+  /// tag that means two things is exactly the ambiguity that would be discovered late.
+  static let noteTag: UInt16 = 0x10
+
+  /// The ``LineState/openConstruct`` tag meaning "a `/*` boneyard is open".
+  static let boneyardTag: UInt16 = 0x11
+
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan {
     let line = window.current
+
+    // The title page comes first and answers for the whole line, because inside it no
+    // other Fountain element exists: `INT. HOUSE` under `Title:` is a continuation of a
+    // title-page value, not a slug line. It can only be open — or opened — here, so this
+    // costs one comparison on every other line of every screenplay.
+    if state.titlePage == .open || (state.titlePage == .documentStart && opensTitlePage(window)) {
+      if isBlank(line.units) {
+        // The blank line ends the region and is not part of it.
+        return withState(blank(line), after: line, state: state, region: 0, titlePage: .closed)
+      }
+      return withState(titlePageLine(line), after: line, state: state, region: 0, titlePage: .open)
+    }
+
+    // Notes and boneyard next, and before any block rule, because they are the only
+    // constructs here that can be open *across* lines: what a line means depends on
+    // whether it began inside one. The walk is a single left-to-right pass that carries
+    // the region open at the start of the line and reports the one open at the end of it
+    // — the state a later line will be scanned against.
+    let regions = scanRegions(line, incoming: state.openConstruct)
+
+    // A line with nothing on it but region text is that region. Everything else keeps its
+    // ordinary classification, with the region spans laid over the top (deviation 8).
+    if regions.coversWholeLine {
+      return withState(
+        regionLine(line, regions), after: line, state: state, region: regions.endRegion,
+        titlePage: .closed)
+    }
 
     // Order matters in exactly four places, and all four are load-bearing:
     //
@@ -202,7 +279,9 @@ struct FountainGrammar: LineGrammar {
         ?? dialogue(line, state: state)
         ?? action(line)
 
-    return withState(scan, after: line, state: state)
+    return withState(
+      overlaid(scan, with: regions), after: line, state: state, region: regions.endRegion,
+      titlePage: .closed)
   }
 
   // MARK: - State
@@ -227,15 +306,38 @@ struct FountainGrammar: LineGrammar {
   /// - a lyric continues an open block without opening one — Fountain's own lyrics example
   ///   is a song sung inside a dialogue block, and `~Willy Wonka` at the top of a page must
   ///   not make the line under it dialogue;
+  /// - **a note and a boneyard line likewise continue** an open block without opening one.
+  ///   This is a deliberate addition rather than a consequence, and it is the one case in
+  ///   this `switch` that is easy to get wrong by omission: a whole-line `[[note]]` between
+  ///   two lines of speech would otherwise fall into the "everything else" branch, close
+  ///   the block, and turn the speech under it into action. Neither construct is an element
+  ///   of a screenplay — a note is commentary layered over one and a boneyard is text
+  ///   struck out of one — so the speech on either side of either is contiguous in the
+  ///   document that gets printed, and a scanner that says otherwise is describing a
+  ///   document nobody wrote;
   /// - everything else, blank lines included, **closes** it.
-  private func withState(_ scan: LineScan, after line: GrammarLine, state: LineState) -> LineScan {
+  ///
+  /// - Parameters:
+  ///   - region: The ``LineState/openConstruct`` tag open at the **end** of this line —
+  ///     ``noteTag``, ``boneyardTag``, or zero. Passed in and always assigned rather than
+  ///     inherited, because inheriting it is how a closed boneyard stays open forever.
+  ///   - titlePage: Where the **next** line sits with respect to the title page.
+  private func withState(
+    _ scan: LineScan,
+    after line: GrammarLine,
+    state: LineState,
+    region: UInt16,
+    titlePage: TitlePageRegion
+  ) -> LineScan {
     var scan = scan
     var next = state
     next.followsNonBlankLine = !isBlank(line.units)
+    next.openConstruct = region
+    next.titlePage = titlePage
     switch scan.element {
     case .character:
       next.inDialogueBlock = true
-    case .parenthetical, .dialogue, .lyrics:
+    case .parenthetical, .dialogue, .lyrics, .note, .boneyard:
       break
     default:
       next.inDialogueBlock = false
@@ -701,6 +803,281 @@ struct FountainGrammar: LineGrammar {
         ? [] : [EscriboSpan(range: line.contentRange, kind: .action)],
       element: .action,
       contentRange: line.contentRange,
+      endState: LineState()
+    )
+  }
+
+  // MARK: - Notes and boneyard
+
+  /// What one line's notes and boneyard came to.
+  ///
+  /// Offsets here are **document** offsets, not line-relative ones: unlike ``CueLayout``,
+  /// nothing recomputes this against a second coordinate system, so converting once inside
+  /// the walk is cheaper than converting at every use.
+  private struct RegionScan {
+
+    /// The note and boneyard spans, in document coordinates, in ascending order and
+    /// non-overlapping.
+    var spans: [EscriboSpan] = []
+
+    /// The extents those spans cover, one per region the line touched, ascending.
+    ///
+    /// Kept apart from ``spans`` because a region is *three* spans — opening marker,
+    /// content, closing marker — and what the overlay has to subtract is the whole region,
+    /// not each of its pieces.
+    var covered: [Range<Int>] = []
+
+    /// The tag of the region open at the **end** of the line: ``noteTag``,
+    /// ``boneyardTag``, or zero when the line ends outside one.
+    var endRegion: UInt16 = 0
+
+    /// The tag of the **first** region on the line, which is the one that names the line
+    /// when the line is nothing but region.
+    var firstRegion: UInt16 = 0
+
+    /// Whether every code unit on the line that is not a space or a tab sits inside a
+    /// region.
+    var contentIsAllRegion = true
+
+    /// Where the first region's text begins and the last region's text ends, markers
+    /// excluded — the content range of a line that is nothing but region.
+    var innerStart = 0
+    var innerEnd = 0
+
+    /// Whether the line has region on it and nothing else a classification could belong
+    /// to.
+    ///
+    /// Vacuously true for a whitespace-only line **inside** an open region, which is the
+    /// answer that keeps a blank line in the middle of a boneyard from ending the
+    /// boneyard's block.
+    var coversWholeLine: Bool { !covered.isEmpty && contentIsAllRegion }
+  }
+
+  /// Walks one line left to right, opening and closing notes and boneyards.
+  ///
+  /// One pass for both constructs rather than one pass each, because they are mutually
+  /// exclusive rather than independent: inside a note a `/*` is text, and inside a
+  /// boneyard a `[[` is text (deviation 7). Two passes would have to agree with each other
+  /// about which opened first, and agreeing is what one pass does for free.
+  ///
+  /// - Parameter incoming: The ``LineState/openConstruct`` tag this line begins with. A tag
+  ///   this grammar does not own — a Markdown fence tag arriving through a nested scan —
+  ///   is read as "nothing open", which is the only reading a grammar is entitled to make
+  ///   of another grammar's private encoding.
+  private func scanRegions(_ line: GrammarLine, incoming: UInt16) -> RegionScan {
+    let units = line.units
+    let base = line.contentRange.lowerBound
+    var out = RegionScan()
+
+    var region = (incoming == Self.noteTag || incoming == Self.boneyardTag) ? incoming : 0
+    // Where the open region's extent begins on *this* line, and where its text does. Equal
+    // when the region opened on an earlier line, which is exactly what "no opening marker
+    // on this line" means.
+    var regionStart = 0
+    var textStart = 0
+    var sawFirstText = false
+    if region != 0 { out.firstRegion = region }
+
+    /// Records the region running from `regionStart` as ending at `end`.
+    func closeRegion(at end: Int, withMarker hasCloser: Bool) {
+      let kind: SpanKind = region == Self.noteTag ? .note : .boneyard
+      let textEnd = hasCloser ? end - 2 : end
+      if textStart > regionStart {
+        out.spans.append(
+          EscriboSpan(range: (base + regionStart)..<(base + textStart), kind: kind, role: .marker))
+      }
+      if textEnd > textStart {
+        out.spans.append(EscriboSpan(range: (base + textStart)..<(base + textEnd), kind: kind))
+      }
+      if hasCloser {
+        out.spans.append(
+          EscriboSpan(range: (base + textEnd)..<(base + end), kind: kind, role: .marker))
+      }
+      out.covered.append((base + regionStart)..<(base + end))
+      if !sawFirstText {
+        out.innerStart = base + textStart
+        sawFirstText = true
+      }
+      out.innerEnd = base + max(textStart, textEnd)
+    }
+
+    var offset = 0
+    while offset < units.count {
+      if region == 0 {
+        let opensNote =
+          units[offset] == leftBracket && offset + 1 < units.count
+          && units[offset + 1] == leftBracket
+        let opensBoneyard =
+          units[offset] == solidus && offset + 1 < units.count && units[offset + 1] == asterisk
+        if opensNote || opensBoneyard {
+          region = opensNote ? Self.noteTag : Self.boneyardTag
+          if out.firstRegion == 0 { out.firstRegion = region }
+          regionStart = offset
+          textStart = offset + 2
+          offset += 2
+          continue
+        }
+        // The one place a line earns its own classification: a visible code unit that no
+        // region covers.
+        if !isSpaceOrTab(units[offset]) { out.contentIsAllRegion = false }
+        offset += 1
+        continue
+      }
+
+      let first: UInt16 = region == Self.noteTag ? rightBracket : asterisk
+      let second: UInt16 = region == Self.noteTag ? rightBracket : solidus
+      if units[offset] == first, offset + 1 < units.count, units[offset + 1] == second {
+        closeRegion(at: offset + 2, withMarker: true)
+        region = 0
+        offset += 2
+        continue
+      }
+      offset += 1
+    }
+
+    if region != 0 {
+      // Unterminated on this line. It runs to the end of the line and, through the state,
+      // to the end of the document unless a later line closes it (deviation 9).
+      closeRegion(at: units.count, withMarker: false)
+      out.endRegion = region
+    }
+    return out
+  }
+
+  /// A line that is nothing but note or boneyard.
+  ///
+  /// The content range is the region text with the markers taken off, which is the same
+  /// bargain every marked element here makes: `[[a note]]` reports `a note`, and the
+  /// brackets stay recoverable against the source as the difference between `range` and
+  /// `contentRange`.
+  private func regionLine(_ line: GrammarLine, _ regions: RegionScan) -> LineScan {
+    LineScan(
+      spans: regions.spans,
+      element: regions.firstRegion == Self.noteTag ? .note : .boneyard,
+      contentRange: regions.innerStart..<max(regions.innerStart, regions.innerEnd),
+      endState: LineState()
+    )
+  }
+
+  /// Lays `regions`' spans over `scan`'s, cutting the block element's spans around them.
+  ///
+  /// Cutting rather than appending, and this is not a detail: ``SpanTiling`` resolves an
+  /// overlap in favour of whichever span **starts earlier**, so a `.dialogue` span covering
+  /// a whole line would swallow a note in the middle of it and the note would never be
+  /// seen. Subtracting first means nothing overlaps by the time the tiler runs, and the
+  /// tiler's repairs stay repairs rather than the mechanism.
+  ///
+  /// The content range is deliberately left alone: a note inside a line of dialogue is
+  /// inside that line's content, and a writer round-tripping the line writes the source
+  /// back out unchanged either way.
+  private func overlaid(_ scan: LineScan, with regions: RegionScan) -> LineScan {
+    guard !regions.covered.isEmpty else { return scan }
+    var scan = scan
+    var spans = regions.spans
+    for span in scan.spans {
+      var pieces = [span.range]
+      for cut in regions.covered {
+        pieces = pieces.flatMap { Self.subtracting(cut, from: $0) }
+      }
+      for piece in pieces where !piece.isEmpty {
+        spans.append(
+          EscriboSpan(range: piece, kind: span.kind, style: span.style, role: span.role))
+      }
+    }
+    scan.spans = spans
+    return scan
+  }
+
+  /// `range` with `cut` removed: itself, one piece, two pieces, or none.
+  private static func subtracting(_ cut: Range<Int>, from range: Range<Int>) -> [Range<Int>] {
+    guard cut.lowerBound < range.upperBound, cut.upperBound > range.lowerBound else {
+      return [range]
+    }
+    var pieces: [Range<Int>] = []
+    if range.lowerBound < cut.lowerBound { pieces.append(range.lowerBound..<cut.lowerBound) }
+    if cut.upperBound < range.upperBound { pieces.append(cut.upperBound..<range.upperBound) }
+    return pieces
+  }
+
+  // MARK: - The title page
+
+  /// Whether the document's first line opens a title page.
+  ///
+  /// Asked **only** on line 0 — ``TitlePageRegion/documentStart`` is reachable nowhere else
+  /// in a Fountain scan — which is what keeps a `Draft date:` in the middle of a line of
+  /// action from reopening a title page two hundred lines down.
+  ///
+  /// Two ways to qualify, and the second one is deviation 11's whole point. A key with a
+  /// value on the same line settles it by itself. A key with nothing after the colon needs
+  /// the line below it to corroborate: Fountain's canonical form puts a long value on
+  /// indented continuation lines under a bare `Title:`, and without corroboration the
+  /// transition `CUT TO:` — an entirely ordinary first line — would be a title page whose
+  /// key is `CUT TO`.
+  private func opensTitlePage(_ window: LineWindow) -> Bool {
+    let units = window.current.units
+    guard let colonAt = titlePageKeyEnd(units) else { return false }
+    for offset in (colonAt + 1)..<units.count where !isSpaceOrTab(units[offset]) { return true }
+    guard let ahead = window.line(ahead: 1), !isBlank(ahead.units) else { return false }
+    // An indented continuation, or a second key. Anything else is a document that merely
+    // begins with a colon.
+    return isSpaceOrTab(ahead.units[0]) || titlePageKeyEnd(ahead.units) != nil
+  }
+
+  /// The offset of the colon ending a title-page key, or `nil` if the line carries none.
+  ///
+  /// A key starts at the first code unit — an indented line is a continuation value, not a
+  /// key, even when it contains a colon — and must be non-empty, so `: value` is not a key
+  /// of nothing. The **first** colon ends it: a key may contain spaces (`Draft date`) but
+  /// not a colon, so no scanning past the first one is meaningful.
+  private func titlePageKeyEnd(_ units: [UInt16]) -> Int? {
+    guard let first = units.first, !isSpaceOrTab(first) else { return nil }
+    var offset = 0
+    while offset < units.count, units[offset] != colon {
+      offset += 1
+    }
+    guard offset >= 1, offset < units.count else { return nil }
+    return offset
+  }
+
+  /// One non-blank line inside the title page: a key with its value, or a continuation.
+  private func titlePageLine(_ line: GrammarLine) -> LineScan {
+    guard let colonAt = titlePageKeyEnd(line.units) else {
+      // Indented, or carrying no colon at all: a continuation of whatever key is above it.
+      // The leading indent becomes the line's one marker span, exactly as a parenthetical's
+      // does, and the value is what is left.
+      return markedLine(line, markerEnd: 0, kind: .titlePageValue, element: .titlePageValue)
+    }
+
+    let units = line.units
+    let base = line.contentRange.lowerBound
+    var valueStart = colonAt + 1
+    while valueStart < units.count, isSpaceOrTab(units[valueStart]) {
+      valueStart += 1
+    }
+    var valueEnd = units.count
+    while valueEnd > valueStart, isSpaceOrTab(units[valueEnd - 1]) {
+      valueEnd -= 1
+    }
+
+    // The key span covers the key text and **nothing else** — this is REQUIREMENTS.md
+    // § Fountain 2 as a range. Nothing is trimmed off either end, nothing is case-folded,
+    // and no key is checked against a list, because there is no list: `verbsCovered` and
+    // `Abstract` are as much keys here as `Title` is.
+    var spans = [
+      EscriboSpan(range: base..<(base + colonAt), kind: .titlePageKey),
+      EscriboSpan(
+        range: (base + colonAt)..<(base + valueStart), kind: .titlePageKey, role: .marker),
+    ]
+    if valueEnd > valueStart {
+      spans.append(
+        EscriboSpan(range: (base + valueStart)..<(base + valueEnd), kind: .titlePageValue))
+    }
+
+    return LineScan(
+      spans: spans,
+      element: .titlePageKey,
+      // The **value**. The key is the first span, where a writer reads it back verbatim.
+      contentRange: (base + valueStart)..<(base + valueEnd),
       endState: LineState()
     )
   }
