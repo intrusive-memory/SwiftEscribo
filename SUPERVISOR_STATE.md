@@ -89,7 +89,9 @@ updated: 2026-07-26
 ### WU-2 Editor Substrate
 - Work unit state: **RUNNING** (unlocked 2026-07-26 — WU-1 COMPLETED)
 - Current sortie: 12 of 30 (last of 7–12 — completes WU-2 and forks the plan)
-- Sortie state: DISPATCHED
+- Sortie state: **PARTIAL** — the DL-63 obligation is discharged and the public surface
+  now exists, but one exit criterion is met by a test that **cannot fail** (DL-72).
+  Continuation dispatched to the same agent; **attempt counter NOT incremented**.
 - Sortie type: code
 - Model: opus
 - Complexity score: 22
@@ -185,7 +187,7 @@ updated: 2026-07-26
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-2 | 12 | DISPATCHED | 1/3 | opus | 22 | (session `fa1c4c1d`) | — | 2026-07-26 10:25 PDT |
+| WU-2 | 12 | PARTIAL → DISPATCHED (continuation) | 1/3 | opus | 22 | (session `fa1c4c1d`) | — | 2026-07-26 10:55 PDT |
 
 ---
 
@@ -263,6 +265,12 @@ updated: 2026-07-26
 | DL-69 | 2026-07-26 | WU-2 | 11 | Correction to the sortie report, recorded so the brief does not inherit it | The report attributes the absence of an undo seam to "DL-58". DL-58 is about the coordinator's non-genericity. The undo decision is REQUIREMENTS.md **Known limitations §1** — UIKit's native undo granularity is accepted. No action needed; the behavior is correct and only the citation was wrong. |
 | DL-70 | 2026-07-26 | WU-2 | 11 | DL-68 continuation verified and probed; Sortie 11 COMPLETED | `spellCheckingType = .yes` is set at `IOSTextView.swift:143` and asserted in three places. Supervisor probe: reverting the single line to `.default` — the state the sortie originally shipped — reddens both `Spell checking stays on, decoupled from the autocorrect-off default` and the extended `The autocorrect host opt-in toggles autocorrectionType, and nothing else`. The second is the one worth having: it asserts that flipping the host opt-in leaves `spellCheckingType`, `smartQuotesType`, and `smartDashesType` alone in **both** directions, which is what stops UIKit's trait coupling from reappearing through the opt-in later. `make test` 0 (71/14), `make test-ios` 0 (74/14). |
 | DL-71 | 2026-07-26 | WU-2 | 12 | Model: opus | Complexity 22 (5 turns-band + 2 file-count + 10 foundation/dependents + 3 risk + 2 ambiguity). Three things stack here. Sortie 12 completes WU-2 and is the fork point for 18 downstream sorties. Its binding rule 1 is *correctness, not optimization* — REQUIREMENTS.md states plainly that without the equality check SwiftUI's update cycle feeds the editor its own output and the view fights the user's typing, which is a defect that only appears under a live run loop and would not be caught by any single-shot test. And it carries the DL-63 obligation: the entire public surface of `SwiftEscribo` does not exist until this sortie ships it. |
+| DL-72 | 2026-07-26 | WU-2 | 12 | **PARTIAL: the rule-3 selection-clamping criterion is discharged by a test that cannot fail. AppKit is doing the work the test credits to the code.** | Supervisor probe: deleting the clamp outright — `let anchor = previousAnchor; let extent = previousExtent`, no `min` on either — and the **entire suite stays green at 90/17**, `shorterReplacementClampsSelectionToNewLength` included. The reason is that `NSTextView.selectedRange`'s setter clamps an out-of-range selection itself, so the assertion measures AppKit's behaviour, not this package's. The clamp in `ExternalTextReplacement.swift:157–158` is **correct and worth keeping** — it is the only thing that makes the *extent* arithmetic (`newLength - anchor`) well-defined, and iOS is not obliged to be as forgiving as AppKit — but the exit criterion currently certifies nothing. This is the third member of a family now: DL-46 (a grep broader than its intent), DL-59 (a grep that punishes documenting what it forbids), and now a behavioural assertion absorbed by the framework under test. **Remedy required:** extract the arithmetic into a pure function and assert it directly, where no framework can stand in for it, keeping the integration assertion as a second leg. |
+| DL-73 | 2026-07-26 | WU-2 | 12 | Rules 1 and the configuration guard verified by probe and are genuinely load-bearing | Removing the rule-1 equality check reddens five tests, including `Rule 1 compares content, not identity`, `Rule 1 holds for the empty document`, and `An update pass in which nothing changed mutates nothing — the SwiftUI feedback loop`. Removing the configuration-equality guard reddens `Re-applying an unchanged configuration does no work`. The mutation counter is sound: it observes `NSTextStorage.didProcessEditingNotification` per storage instance, which fires for character *and* attribute-only transactions, and every zero-assertion is paired with a positive control on the same counter and the same object — so the three ways it could falsely read zero are one failure, and the control excludes all three. |
+| DL-74 | 2026-07-26 | WU-2 | 12 | **ACCEPTED deferral, with a hard obligation on Sortie 25: REQUIREMENTS.md § External text replacement rule 4 is currently UNMET — an external reset is not undoable on macOS.** | Rule 4 says "Register as a single undo action." The sortie brackets the reset in `beginUndoGrouping()`/`endUndoGrouping()`, which guarantees *at most* one — but on macOS a direct text-storage mutation registers **none**, so the actual count is zero. The agent flagged this rather than claiming the rule. **Deferral accepted, because doing it now would be worse engineering:** the only correct mechanism is routing through `shouldChangeText(in:replacementString:)`/`didChangeText()`, and REQUIREMENTS.md § Undo says in as many words that mutating storage after the fact registers a second group no `NSUndoManager` grouping reliably merges — "a design constraint, not an implementation detail". Sortie 25 builds that input path once, for the affordances and paste. Building an external-reset-only second copy now is exactly the duplicate AppKit-shaped seam the requirement warns against. **Sortie 25 must route `applyExternalText` through the input path it builds, and assert an external reset is one Cmd-Z**, or rule 4 ships unmet. Surfaced in Overall Status so it cannot be lost, same as DL-63 was. |
+| DL-75 | 2026-07-26 | WU-2 | 12 | ACCEPTED with a measurement obligation for Sortie 28: the binding push bridges `NSTextStorage.string` to a Swift `String` on every change notification | Unavoidable — REQUIREMENTS.md mandates `@Binding var text: String`, and a `String` is a `String`. But note what it costs against this package's own architecture: `UTF16TextSource` and the `NSTextStorage` conformance exist **specifically so the scanner never bridges the document to a Swift `String` per edit**, and the SwiftUI binding now reintroduces that bridge one layer up, per keystroke, on a document that may be 120 KB. The agent documented it as the binding boundary and refuses to push an equal value back (`pushToBinding`, asserted by a setter-counting `BindingBox`), which bounds the damage to one bridge per *actual* change. **Sortie 28 must measure it** — it is the one remaining per-keystroke O(document) cost in the editor path, and it sits outside everything the scan-time budgets cover. |
+| DL-76 | 2026-07-26 | WU-2 | 12 | ACCEPTED: all Representable logic lives on `EscriboEditorBridge`; `make*View` is one expression | The DL-63 dispatch said "construct it in `makeNSView`"; the agent put the body on a testable bridge object and made `makeNSView` a single call into it. **This is the same reasoning that justified DL-63's deferral in the first place** — a `Context` cannot be constructed in a test, so anything written inline in `makeNSView` is unassertable — and it is right to have applied it one level further. Six tests now cover what those methods do, including `bridgePreservesTheShippedTextViewConfiguration`, which asserts TextKit 2, the hygiene flags, spell checking, and **DL-65's `allowsUndo == true` / `isRichText == false`** on the object the Representable actually returns. That last one closes half of DL-65 ahead of schedule. |
+| DL-77 | 2026-07-26 | WU-2 | 12 | NOTED, accepted: an external reset scans the document twice | Once incrementally from inside `endEditing()` — the coordinator sees `replaceCharacters` as an ordinary edit and cannot distinguish it from a large paste — and once in full from the `restyleEverything()` the rules require. Correct but paid on every reset. The agent proposed a coordinator flag to avoid it and then argued against its own proposal, on the grounds that every other edit path would have to reason about the flag. Agreed: an external reset is a host-initiated document swap, not a hot path, and a flag on the coordinator would put a mode into the one type this mission has worked hardest to keep unconditional. |
 | DL-32 | 2026-07-26 | WU-2 | 7 | Model: opus | Complexity 25 (8 turns-band + 4 file-count + 10 foundation/dependents + 3 risk + 0 ambiguity). Override also applies: foundation_score 1 with 23 dependents. The theme lookup table and the styler cache are the second half of the scanner→editor seam and are consumed by all three Representables; the composition order and the single invalidation path are exactly the shape that does not retrofit. |
 
 ---
@@ -270,11 +278,23 @@ updated: 2026-07-26
 ## Overall Status
 
 - Sorties completed: **11 / 30** (Sorties 1–11 — all supervisor-verified)
-- Sorties in flight: 1 (Sortie 12, WU-2 — the last of the strictly-serial run)
+- Sorties in flight: 1 (Sortie 12 continuation, WU-2 — the last of the strictly-serial run)
 - Work units completed: **1 / 7** (WU-1 COMPLETE; WU-2 RUNNING at 12 of 12; WU-3…WU-7 gated)
 - **Next gate**: Sortie 12 completing unlocks WU-3 (Sorties 13–17, Fountain) and WU-4
   (Sorties 18–22, Markdown) **in parallel** — the first concurrency in this mission.
   Group A, 12 sorties and 40% of the plan, has run strictly serial by necessity.
+- **Open obligations carried into later sorties** (each surfaced here so it cannot be lost):
+  - **DL-74 → Sortie 25**: REQUIREMENTS.md § External text replacement **rule 4 is unmet**
+    — an external reset registers zero undo actions on macOS, not one. Sortie 25 owns the
+    input path that fixes it.
+  - **DL-65 → Sortie 25**: `allowsUndo` is asserted as of DL-76; the verbatim-paste half of
+    `isRichText = false` still is not.
+  - **DL-75 → Sortie 28**: measure the per-change `NSTextStorage.string` → Swift `String`
+    bridge in the binding push — the one remaining per-keystroke O(document) cost.
+  - **DL-56 → Sortie 28**: measure post-IME-composition full rescan.
+  - **DL-61 → Sorties 28 & 29**: every CI job needs `timeout-minutes`; the `fontd` hang
+    makes a stall, not a failure.
+  - **DL-46 → Sortie 27/30**: the point-constant grep must not become a standing invariant.
 - **Open obligation**: no SwiftUI `Representable` exists yet. Sortie 12 owes both
   conformances plus the public editor view — see DL-63. If that is missed, the package
   ships with no public entry point from `SwiftEscribo` at all.
