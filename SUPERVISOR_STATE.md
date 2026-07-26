@@ -164,12 +164,16 @@ updated: 2026-07-26
 
 ### WU-3 Fountain Depth
 - Work unit state: **RUNNING**
-- Current sortie: **17** of 30 — PENDING (the widest remaining gate; see DL-114)
-- Sortie 16 (previous): agent returned, commit `70e2ca1`, worktree-verified by the
-  agent — core **243/17**, `make test` 0, `make test-ios` 0, editor layer untouched
-  at 92/18 and 95/18. Dispatched to **sonnet** (complexity 11) and the call held —
-  DL-118. Honest non-firing mutation reported (DL-119); cross-line GLOSA gap carried
-  to Sortie 17 (DL-120).
+- Current sortie: **17** of 30 — **DISPATCHED** 2026-07-26 15:2x PDT, opus, complexity 24
+  (the widest remaining gate; see DL-114)
+- Sortie 16 (previous): **COMPLETED — supervisor-verified 2026-07-26**, commit `70e2ca1`.
+  The supervisor re-ran all three targets rather than accepting the report: `make test-core`
+  0 (**243/17**, gate **352** cases), `make test` 0 (**134/23**), `make test-ios` 0
+  (**123/21**) — every count matches the agent's claim exactly. Charter re-checked: no
+  regex under `Sources/`, `EscriboCore` imports **nothing at all**, no XCTest under
+  `Tests/`, no tag/attribute whitelist. **Supervisor falsification probe fired** (DL-126).
+  Dispatched to **sonnet** (complexity 11) and the call held — DL-118. Honest non-firing
+  mutation reported (DL-119); cross-line GLOSA gap carried to Sortie 17 (DL-120).
 - Sortie 15: COMPLETED, `f056b49`. Title-page probe fired while the gate passed
   352/352 (DL-109). Task 5 accepted as a partial, obligation moved to Sortie 24
   (DL-111). **DL-112 is a hard warning for Sortie 21.**
@@ -211,10 +215,12 @@ updated: 2026-07-26
 
 ### WU-6 Editor Behavior
 - Work unit state: **RUNNING** (unlocked 2026-07-26 — Sorties 20 and 12 both COMPLETED)
-- Current sortie: **26** of 30 — PENDING
-- Sortie 25 (previous): agent returned, commit `33a56bb`, worktree-verified by the
-  agent — `make test` 0 (**134/23** macOS), `make test-ios` 0 (**123/21**),
-  `make test-core` 0 (243/17). **Rule 4 is reported MET** — see DL-121.
+- Current sortie: **26** of 30 — **DISPATCHED** 2026-07-26 15:2x PDT, opus, complexity 16
+- Sortie 25 (previous): **COMPLETED — supervisor-verified 2026-07-26**, commit `33a56bb`.
+  All three targets re-run by the supervisor: `make test` 0 (**134/23**), `make test-ios`
+  0 (**123/21**), `make test-core` 0 (**243/17**) — counts match the report exactly.
+  `grep -rniE 'renumber' Sources/SwiftEscribo/` clean. **Supervisor falsification probe
+  fired hard** (DL-127). **Rule 4 is reported MET** — see DL-121.
   Also closed DL-65 and honoured DL-108. Found a real `MarkdownGrammar` defect it had
   to work around (DL-122) and **discarded the supervisor's state file** (DL-123).
 
@@ -234,8 +240,14 @@ updated: 2026-07-26
 ## Active Agents
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
-|-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-3 | 13 | PARTIAL → DISPATCHED (continuation, same agent) | 1/3 | opus | 20 | (session `bb71403b`) | — | 2026-07-26 12:40 PDT |
+|-----------|--------|-------------|---------|-------------|-----------------|---------|-------------|---------------|
+| WU-3 | 17 | DISPATCHED | 1/3 | opus | 24 | (session `fa1c4c1d`, agent A) | — | 2026-07-26 15:2x PDT |
+| WU-6 | 26 | DISPATCHED | 1/3 | opus | 16 | (session `fa1c4c1d`, agent B) | — | 2026-07-26 15:2x PDT |
+
+Concurrency **2**, per DL-103. File ownership is disjoint and was stated in both dispatch
+orders: Sortie 17 owns `Tests/EscriboCoreTests/**` + `Package.swift`; Sortie 26 owns
+`Sources/SwiftEscribo/**` + `Tests/SwiftEscriboTests/**`. Both were forbidden `make lint`
+(DL-123) and both were forbidden from reading or writing `SUPERVISOR_STATE.md`.
 
 ---
 
@@ -379,6 +391,9 @@ updated: 2026-07-26
 | DL-124 | 2026-07-26 | WU-6 | 25 | **An unfalsifiable criterion the agent found in its OWN first draft — the eighth, and the best-caught** | Its first "one undo" tests asserted `canUndo == false` after one `undo()`. **They were green, and green for any implementation.** `UndoManager` defaults to `groupsByEvent = true` and closes its top-level group from a *run-loop observer*; a unit test never spins the run loop, so every mutation since `removeAllActions()` landed in one group — a probe showed typing four characters then Return undoing all of it in one step. The criterion measured Foundation, not this package. Two fixes, both required: `settleEventGroup()` spins the run loop (`CFRunLoopRunInMode`, no `Date()`) between keystrokes, as a real app does; and the assertion counts **undo registrations** via a `CountingUndoManager` overriding both `registerUndo(withTarget:selector:object:)` and `prepare(withInvocationTarget:)`, which is what REQUIREMENTS § Undo is actually about. `groupsByEvent = false` is **not** an alternative — NSTextView then registers undo with no group open and Foundation raises `NSInternalInconsistencyException` (verified). **Also honest**: paste undo is AppKit's own (`readSelection(from:)` already routes through its input path), so `pasteIsOneUndoAction` would read 1 with every line of this sortie deleted — the agent said so in a comment and did **not** claim it. |
 | DL-125 | 2026-07-26 | WU-6 | 26 | Sortie 26 handoff, recorded from Sortie 25's report | Add the handler to `EscriboNativeTextView` (`Sources/SwiftEscribo/EditorInputPath.swift`) as another closure property plus an override that returns without calling `super` when it handled the key. macOS Return is `insertNewline(_:)`, Tab is `insertTab(_:)`; **UIKit has neither** — Return arrives as `insertText("\n")` and Tab as `insertText("\t")`. **Never call `super` and then mutate**; one `InputPathEdit` per keystroke, and `performInputPathEdit` must remain the only place in the package that changes characters. **Do not assert `canUndo` without `settleEventGroup()`** (DL-124). `EditorCoordinator.elementKind(atUTF16Offset:)` is the seam for asking the scanner what a line is. iOS undo remains deferred per Known limitations §1; what is asserted on iOS is the *shape* — one `textViewDidChange` per rewrite, i.e. it went through the text view rather than around it. |
 
+| DL-126 | 2026-07-26 | WU-3 | 16 | **Supervisor probe on Sortie 16 fired — the GLOSA assertions are real** | Sortie 16 was carried as COMPLETED *pending supervisor re-verify*, and DL-119 had recorded a non-firing mutation, which is exactly the shape that warrants an independent probe. The supervisor mutated `GlosaScanner.swift:255`, emitting attribute **values** under `.glosaAttributeName` instead of `.glosaAttributeValue`. Result: **4 issues across 2 tests** — the distinct-spans test failed on both its attribute-name and attribute-value expectations, and the incremental-scan test failed on both as well. Reverted; tree clean. The gate stayed green at 352/352 throughout, which is the sixth demonstration that the gate is blind to grammar-level error (DL-25 / DL-31). |
+| DL-127 | 2026-07-26 | WU-6 | 25 | **Supervisor probe on Sortie 25 fired hard — list continuation is genuinely asserted** | Disabled the marker-only deletion branch in `MarkdownListContinuation.swift:177` (`if false && marker.isEmptyItem`). Six distinct parameterized rows went red **by name** — bare `-`, `- `, `-   `, `1. `, `- [ ] ` — across the table-driven test and the document-coordinates test. The `@Test(arguments:)` idiom D-1 mandated paid off exactly as intended: every failing row identified itself without a debugger. Reverted; tree clean at `b5aafeb`. |
+
 ---
 
 ## Overall Status
@@ -393,10 +408,15 @@ updated: 2026-07-26
   Fountain) and WU-4 (Sorties 18–22, Markdown) **in parallel** — the first concurrency
   of this mission. Group A, 12 sorties and 40% of the plan, ran strictly serial by
   necessity and is now behind us.
-### Current position (2026-07-26, after Sorties 16 and 25)
+### Current position (2026-07-26, resume — Sorties 17 and 26 in flight)
 
-- Sorties completed: **20 / 30** (1–16, 18, 19, 20, 25 — all supervisor-verified)
-- Sorties in flight: **0**
+- Sorties completed: **20 / 30** (1–16, 18, 19, 20, 25 — all supervisor-verified; 16 and 25
+  cleared their *pending re-verify* status this round, DL-126 and DL-127)
+- Sorties in flight: **2** — Sortie 17 (WU-3, opus) and Sortie 26 (WU-6, opus), dispatched
+  in parallel at concurrency 2
+- Tree re-verified green at `b5aafeb` before dispatch: core **243/17** (gate **352**),
+  macOS **134/23**, iOS **123/21**. Two supervisor falsification probes fired and were
+  reverted; working tree clean at dispatch time.
 - Work units: **2 / 7 COMPLETE** (WU-1, WU-2). WU-3 RUNNING at **17**; WU-4 **STALLED**
   at 21 pending Sortie 17 (DL-114); WU-6 RUNNING at **26**; WU-5 gated on 17; WU-7 gated
   on 27, 17, 22.
