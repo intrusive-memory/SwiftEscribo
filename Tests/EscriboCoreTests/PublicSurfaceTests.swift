@@ -213,9 +213,9 @@ struct PublicScannerTests {
     // a test that names the type cannot tell whether `EscriboScanner(language: .fountain)`
     // ever reaches it. Naming the resulting `ElementKind`s can.
     //
-    // `BOB` is action here, not a character cue: cues are Sortie 14's, and a cue is the
-    // one Fountain construct that needs lookahead. That is a gap in richness, never in
-    // totality.
+    // `BOB` is a character cue and `Hello.` is dialogue, which also proves the facade
+    // reaches a grammar that declares a **lookahead**: `BOB` is ALL-CAPS either way, and
+    // only the line under it makes it a cue.
     var scanner = EscriboScanner(language: .fountain)
     let text = "INT. HOUSE - DAY\n\nBOB\nHello.\n"
     let result = scanner.fullScan(text)
@@ -224,7 +224,7 @@ struct PublicScannerTests {
     #expect(result.dirtyRange == 0..<text.utf16.count)
     #expect(result.spans.reduce(0) { $0 + $1.range.count } == text.utf16.count)
     #expect(
-      result.lineRecords.map(\.element) == [.sceneHeading, .blank, .action, .action, .blank])
+      result.lineRecords.map(\.element) == [.sceneHeading, .blank, .character, .dialogue, .blank])
     #expect(result.spans.first?.kind == .sceneHeading)
     #expect(result.spans.first?.range == 0..<16)
 

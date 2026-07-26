@@ -4,6 +4,16 @@ private let exclamationMark: UInt16 = 0x21
 /// `#`.
 private let numberSign: UInt16 = 0x23
 
+/// `(` and `)` — a cue extension's and a parenthetical's delimiters.
+private let leftParenthesis: UInt16 = 0x28
+private let rightParenthesis: UInt16 = 0x29
+
+/// `@` — the character-cue forcing marker.
+private let atSign: UInt16 = 0x40
+
+/// `^` — the dual-dialogue marker.
+private let caret: UInt16 = 0x5E
+
 /// `.`.
 private let period: UInt16 = 0x2E
 
@@ -71,16 +81,9 @@ private let scenePrefixes: [[UInt16]] = [
   Array("EST".utf16),
 ]
 
-/// The Fountain grammar's **block** elements: scene headings, action, transitions,
-/// centered text, sections, synopses, page breaks, and lyrics.
-///
-/// Dialogue — character cues, extensions, parentheticals, and the dual-dialogue caret —
-/// is deliberately absent. A cue is the one Fountain construct recognized by the line
-/// *after* it, so it is the only one that needs lookahead, and lookahead is the single
-/// most likely source of "correct on full parse, wrong while typing" (REQUIREMENTS.md
-/// § Fountain 4). It is built and tested on its own rather than smuggled in beside eight
-/// constructs that do not need it. Until then an ALL-CAPS line is ``ElementKind/action``,
-/// which is what it is in Fountain anyway when nothing follows it.
+/// The Fountain grammar: scene headings, action, transitions, centered text, sections,
+/// synopses, page breaks, lyrics, and the whole dialogue block — character cues with
+/// extensions, parentheticals, dialogue, and dual dialogue.
 ///
 /// ## Hand-written, per the charter
 ///
@@ -89,15 +92,25 @@ private let scenePrefixes: [[UInt16]] = [
 /// parser is regex-based, emits no source ranges, and replacing it is the reason this
 /// package exists (AGENTS.md).
 ///
-/// ## Lookahead: zero
+/// ## Lookahead: one, and exactly one
 ///
-/// Every construct here is decided by the line's own text plus the state it begins in.
-/// The state carries exactly one bit — ``LineState/followsNonBlankLine`` — because the
-/// two *natural* (unforced) constructs, scene headings and transitions, are recognized
-/// only at the start of a block. That bit arrives from above, not below, so it costs no
-/// lookahead. Sortie 14 raises `lookahead` to one when it adds cues; nothing in this
-/// file may quietly start reading `window.line(ahead:)` in the meantime, and the
-/// ``LineWindow`` it is handed physically prevents it.
+/// One construct in Fountain is recognized by the line *after* it: a natural character
+/// cue is an ALL-CAPS line at a block boundary **whose following line is non-blank**
+/// (REQUIREMENTS.md § Fountain 4). Nothing else here reads ``LineWindow/line(ahead:)``,
+/// and nothing else may: the declared number sizes the window the engine hands over, so a
+/// grammar that wanted two lines of lookahead would silently get `nil` for the second
+/// rather than a wrong answer, and would have to raise the declaration to get it.
+///
+/// The declaration is load-bearing in both directions and the backward one is the one
+/// that gets forgotten. ``LineGrammar/backwardExtent`` defaults to `max(1, lookahead)`, so
+/// raising `lookahead` to one is also what makes an edit rescan from the line *above* it —
+/// which is the only reason typing a word under `BOB` can promote `BOB` from action to a
+/// cue. Nothing about that edit points at the line above it.
+///
+/// The rest of the multi-line story is state, not lookahead:
+/// ``LineState/followsNonBlankLine`` says a block boundary is above this line, and
+/// ``LineState/inDialogueBlock`` says a cue is. Both arrive from above, where they cost
+/// nothing.
 ///
 /// ## Losslessness (REQUIREMENTS.md Architecture §9)
 ///
@@ -122,22 +135,52 @@ private let scenePrefixes: [[UInt16]] = [
 ///    should not silently demote the scene heading below it to action.
 /// 3. **A natural scene heading requires only a preceding blank line, not a following
 ///    one**, and a natural transition likewise. The spec's "…and has a blank line
-///    following it" is a one-line lookahead this sortie does not own. The consequence is
-///    permissive, never restrictive: a line the spec calls action can be classified as a
-///    scene heading, and no line the spec calls a scene heading is missed.
+///    following it" is a one-line lookahead, and this grammar now has one — so this is a
+///    *retained* deviation rather than an unavailable feature, and the reason it is
+///    retained is stated so the next reader does not "fix" it by accident:
+///
+///    - It would make a one-line document `INT. HOUSE` action, because a line with no
+///      following line has no following *blank* line either. Sixteen slug-line spellings
+///      are asserted in the suite as one-line documents, and a rule that reclassifies all
+///      of them buys nothing a screenwriter can see.
+///    - It collides with the cue rule at exactly the wrong place. `INT. HOUSE` followed by
+///      a non-blank line would stop being a scene heading and become a *cue candidate*,
+///      since it is ALL-CAPS at a block boundary with a non-blank line under it. Trading a
+///      slug line for a character named `INT. HOUSE` is a worse answer than the one the
+///      deviation gives.
+///
+///    The consequence stays what it was: permissive, never restrictive. A line the spec
+///    calls action can be classified as a scene heading, and no line the spec calls a
+///    scene heading is missed.
 /// 4. **Scene numbers (`#1#` at the end of a scene heading) are not extracted.** They
 ///    remain inside the content range, losslessly, for a later sortie to split out.
+/// 5. **A natural character cue must be uppercase over its whole line**, extension
+///    included — `BOB (V.O.)` is a cue and `BOB (cont'd)` is action. That is the spec's
+///    rule ("a line entirely in uppercase") rather than the looser one some parsers use,
+///    and it is kept strict because the loose form promotes `THE MAN (who is not a man)`
+///    to a cue. `@` forces anything the strict rule declines.
+/// 6. **A parenthetical may be indented.** Deviation 1 keeps markers at the first code
+///    unit because action preserves its leading whitespace — but no whitespace-preserving
+///    element can occur inside a dialogue block, where every non-blank line is dialogue,
+///    so the reason does not apply and real screenplays indent parentheticals.
 struct FountainGrammar: LineGrammar {
 
-  var lookahead: Int { 0 }
+  var lookahead: Int { 1 }
 
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan {
     let line = window.current
 
-    // Order matters in exactly two places, and both are load-bearing:
+    // Order matters in exactly four places, and all four are load-bearing:
     //
     //   * page break before synopsis — `===` also begins with `=`;
-    //   * centered before transition — `>CENTERED<` also begins with `>`.
+    //   * centered before transition — `>CENTERED<` also begins with `>`;
+    //   * scene headings and transitions before cues — `INT. HOUSE` and `CUT TO:` with a
+    //     line of action under them are ALL-CAPS at a block boundary, which is a cue's
+    //     shape too, and the more specific rule has to be asked first;
+    //   * everything before `dialogue` — a dialogue block is ended by any element that is
+    //     not dialogue-shaped, so a `~lyric`, a `!forced action`, or a `# section` inside
+    //     one is that element and not a line of speech. Fountain's own lyrics example sits
+    //     inside a dialogue block, so this is the spec's order, not a convenience.
     //
     // Everything else is decided by a distinct first code unit and could be reordered
     // without changing a single classification.
@@ -152,28 +195,51 @@ struct FountainGrammar: LineGrammar {
         ?? forcedSceneHeading(line)
         ?? centered(line)
         ?? forcedTransition(line)
+        ?? forcedCharacter(line)
         ?? naturalSceneHeading(line, state: state)
         ?? naturalTransition(line, state: state)
+        ?? naturalCharacter(window, state: state)
+        ?? dialogue(line, state: state)
         ?? action(line)
 
     return withState(scan, after: line, state: state)
   }
 
-  // MARK: - The one bit of state
+  // MARK: - State
 
-  /// Rewrites `scan`'s end state so the next line knows whether this one was blank.
+  /// Rewrites `scan`'s end state: whether this line was blank, and whether a dialogue
+  /// block is open below it.
   ///
   /// This is the **only** place in the file that decides an end state, which is why the
-  /// per-element methods all return a placeholder: a construct that forgot to carry the
-  /// bit would converge one line early, and centralizing it means no construct can
-  /// forget. The bit is carried by mutating the incoming state rather than by building a
-  /// fresh one, so a field a later sortie adds — the boneyard flag, the in-dialogue-block
-  /// flag — survives a line this grammar already knows how to scan. Dropping such a field
-  /// is the one defect class the incremental design exists to prevent.
+  /// per-element methods all return a placeholder: a construct that forgot to carry a bit
+  /// would converge one line early, and centralizing it means no construct can forget. The
+  /// bits are carried by mutating the incoming state rather than by building a fresh one,
+  /// so a field a later sortie adds — the boneyard flag, the title-page flag — survives a
+  /// line this grammar already knows how to scan. Dropping such a field is the one defect
+  /// class the incremental design exists to prevent.
+  ///
+  /// The dialogue rule reads the *classification* rather than the text, because that is
+  /// what the block boundary actually is:
+  ///
+  /// - a cue **opens** a block, whichever way it was spelled;
+  /// - a parenthetical or a line of dialogue **continues** the one that is open, which it
+  ///   could only have been produced inside of;
+  /// - a lyric continues an open block without opening one — Fountain's own lyrics example
+  ///   is a song sung inside a dialogue block, and `~Willy Wonka` at the top of a page must
+  ///   not make the line under it dialogue;
+  /// - everything else, blank lines included, **closes** it.
   private func withState(_ scan: LineScan, after line: GrammarLine, state: LineState) -> LineScan {
     var scan = scan
     var next = state
     next.followsNonBlankLine = !isBlank(line.units)
+    switch scan.element {
+    case .character:
+      next.inDialogueBlock = true
+    case .parenthetical, .dialogue, .lyrics:
+      break
+    default:
+      next.inDialogueBlock = false
+    }
     scan.endState = next
     return scan
   }
@@ -423,6 +489,203 @@ struct FountainGrammar: LineGrammar {
       if isASCIIUpper(units[offset]) { sawUpper = true }
     }
     return sawUpper
+  }
+
+  // MARK: - The dialogue block
+
+  /// Where the pieces of a character-cue line sit, as offsets into the line's content
+  /// units.
+  ///
+  /// Four numbers rather than four ranges because the layout is computed against
+  /// `line.units`, whose offsets are line-relative, and turned into document offsets
+  /// exactly once — at the single call site that builds the spans. A layout carrying
+  /// document ranges would have to be recomputed to be reused, and the natural-cue rule
+  /// needs it twice: once to find where the name ends, and once to ask whether everything
+  /// up to `textEnd` is uppercase.
+  private struct CueLayout {
+    /// One past the forcing `@` and any whitespace it swallowed. Zero for a natural cue,
+    /// which has no marker at all.
+    let markerEnd: Int
+
+    /// One past the last code unit of the character *name* — before any extension, before
+    /// the dual-dialogue caret, and with trailing whitespace trimmed.
+    let nameEnd: Int
+
+    /// One past the last code unit of the cue's text: the end of the extension when there
+    /// is one, and equal to ``nameEnd`` when there is not. Everything from here to the end
+    /// of the line is the caret and the whitespace around it.
+    let textEnd: Int
+
+    /// Whether the line carries a `(V.O.)`-style extension.
+    var hasExtension: Bool { textEnd > nameEnd }
+  }
+
+  /// Decomposes a cue line into marker, name, extension, and trailing caret — or returns
+  /// `nil` if it cannot be one at all.
+  ///
+  /// The only structural requirement is a **non-empty name**: `@` alone is not a cue, and
+  /// neither is a line that is nothing but `(V.O.)`, which is a parenthetical's shape and
+  /// belongs to whatever rule claims it next.
+  ///
+  /// Extension detection is "the first `(` on the line, when the line ends with `)`".
+  /// That is deliberately not a bracket-matching walk: a Fountain character name cannot
+  /// contain a parenthesis, so the first one opens the extension region by construction,
+  /// and taking the whole region as one span makes `BOB (V.O.) (CONT'D)` fall out with no
+  /// loop. Malformed input degrades rather than fails — `BOB (V.O.` has no closing
+  /// parenthesis, so there is no extension and `(V.O.` is part of the name, which the
+  /// uppercase rule then judges on its own merits.
+  private func cueLayout(_ units: [UInt16], forced: Bool) -> CueLayout? {
+    var markerEnd = 0
+    if forced {
+      guard units.first == atSign else { return nil }
+      markerEnd = 1
+      while markerEnd < units.count, isSpaceOrTab(units[markerEnd]) {
+        markerEnd += 1
+      }
+    }
+
+    // Right-trim, then peel one dual-dialogue caret and the whitespace on either side of
+    // it. One caret: `^^` is not a Fountain construct, and the second one is text.
+    var textEnd = units.count
+    while textEnd > markerEnd, isSpaceOrTab(units[textEnd - 1]) {
+      textEnd -= 1
+    }
+    if textEnd > markerEnd, units[textEnd - 1] == caret {
+      textEnd -= 1
+      while textEnd > markerEnd, isSpaceOrTab(units[textEnd - 1]) {
+        textEnd -= 1
+      }
+    }
+    guard textEnd > markerEnd else { return nil }
+
+    var nameEnd = textEnd
+    if units[textEnd - 1] == rightParenthesis {
+      var open = markerEnd
+      while open < textEnd, units[open] != leftParenthesis {
+        open += 1
+      }
+      if open < textEnd {
+        var trimmed = open
+        while trimmed > markerEnd, isSpaceOrTab(units[trimmed - 1]) {
+          trimmed -= 1
+        }
+        guard trimmed > markerEnd else { return nil }
+        nameEnd = trimmed
+      }
+    }
+
+    return CueLayout(markerEnd: markerEnd, nameEnd: nameEnd, textEnd: textEnd)
+  }
+
+  /// `@McAvoy`, `@BOB (V.O.) ^` — a character cue forced by a leading `@`.
+  ///
+  /// Forcing overrides **every** context rule, exactly as it does for a scene heading or a
+  /// transition: no preceding blank line is required, no following line is required, and
+  /// no uppercase rule is applied. `@McAvoy` on the last line of a document is a cue, and
+  /// that is the entire point of the marker — it is how a writer names a character the
+  /// automatic rule would not recognize, and a marker that only worked when the automatic
+  /// rule would have fired anyway would be decoration.
+  ///
+  /// The `@` swallows the whitespace after it, so `@ McAvoy` names `McAvoy`. There is no
+  /// ambiguity to protect against here the way a forced scene heading's `.` has to protect
+  /// against an ellipsis: no other Fountain construct begins with `@`.
+  private func forcedCharacter(_ line: GrammarLine) -> LineScan? {
+    guard let layout = cueLayout(line.units, forced: true) else { return nil }
+    return character(line, layout: layout)
+  }
+
+  /// `BOB`, `BOB (V.O.)`, `JANE ^` — a cue recognized by its shape and its neighbours.
+  ///
+  /// **This is the one rule in the package that reads the line below it**, and all three
+  /// of its conditions are necessary:
+  ///
+  /// 1. A block boundary above — otherwise every shouted line of action becomes a cue.
+  /// 2. A non-blank line below. This is the lookahead, and it is why an ALL-CAPS line at
+  ///    the end of a document is action: nobody is speaking. `line(ahead:)` answers `nil`
+  ///    both for "past the end of the document" and for "past the declared lookahead", and
+  ///    those two cases are deliberately indistinguishable — at a lookahead of one they
+  ///    can only mean the first.
+  /// 3. Uppercase, over the whole line minus the caret (deviation 5), with at least one
+  ///    ASCII capital in it. The capital is the spec's "character names must include at
+  ///    least one alphabetical character", which is what keeps `23` from being a speaker.
+  private func naturalCharacter(_ window: LineWindow, state: LineState) -> LineScan? {
+    guard !state.followsNonBlankLine else { return nil }
+    guard let ahead = window.line(ahead: 1), !isBlank(ahead.units) else { return nil }
+    let line = window.current
+    guard let layout = cueLayout(line.units, forced: false) else { return nil }
+    guard isUppercase(line.units, upTo: layout.textEnd) else { return nil }
+    return character(line, layout: layout)
+  }
+
+  /// Lays out a cue: `@` marker, name, extension, trailing caret marker.
+  ///
+  /// The spans tile the line with no `.text` filler anywhere in it, which is why the
+  /// extension span begins at `nameEnd` rather than at the `(` — the space between a name
+  /// and its extension belongs to the extension, not to a gap. The trailing marker runs
+  /// from the end of the text to the end of the line's content for the same reason the
+  /// centered element's closing marker does: the caret and the whitespace around it stay
+  /// cue-coloured instead of falling through to plain text.
+  private func character(_ line: GrammarLine, layout: CueLayout) -> LineScan {
+    let base = line.contentRange.lowerBound
+    var spans: [EscriboSpan] = []
+    if layout.markerEnd > 0 {
+      spans.append(
+        EscriboSpan(range: base..<(base + layout.markerEnd), kind: .character, role: .marker))
+    }
+    spans.append(
+      EscriboSpan(range: (base + layout.markerEnd)..<(base + layout.nameEnd), kind: .character))
+    if layout.hasExtension {
+      spans.append(
+        EscriboSpan(
+          range: (base + layout.nameEnd)..<(base + layout.textEnd), kind: .characterExtension))
+    }
+    if base + layout.textEnd < line.contentRange.upperBound {
+      spans.append(
+        EscriboSpan(
+          range: (base + layout.textEnd)..<line.contentRange.upperBound, kind: .character,
+          role: .marker))
+    }
+
+    return LineScan(
+      spans: spans,
+      element: .character,
+      // The name alone — see ``ElementKind/character``. The `@`, the extension, and the
+      // `^` are all still on the line and all still recoverable against the source.
+      contentRange: (base + layout.markerEnd)..<(base + layout.nameEnd),
+      endState: LineState()
+    )
+  }
+
+  /// A line inside an open dialogue block: a parenthetical, or speech.
+  ///
+  /// `nil` outside a block, which is the whole reason `(beat)` at the top of a page is
+  /// action. Both forms trim their whitespace into the record's content range, unlike
+  /// action: indentation inside a dialogue block is screenplay formatting rather than
+  /// something the writer meant, and the source still has it.
+  private func dialogue(_ line: GrammarLine, state: LineState) -> LineScan? {
+    guard state.inDialogueBlock else { return nil }
+    return parenthetical(line)
+      ?? markedLine(line, markerEnd: 0, kind: .dialogue, element: .dialogue)
+  }
+
+  /// `(beat)` — a parenthetical, possibly indented (deviation 6).
+  ///
+  /// Only ever reached from inside a dialogue block. The parentheses stay inside the
+  /// content range because they print; the indent, which does not, becomes the line's one
+  /// marker-role span.
+  private func parenthetical(_ line: GrammarLine) -> LineScan? {
+    let units = line.units
+    var start = 0
+    while start < units.count, isSpaceOrTab(units[start]) {
+      start += 1
+    }
+    var end = units.count
+    while end > start, isSpaceOrTab(units[end - 1]) {
+      end -= 1
+    }
+    guard end - start >= 2 else { return nil }
+    guard units[start] == leftParenthesis, units[end - 1] == rightParenthesis else { return nil }
+    return markedLine(line, markerEnd: 0, kind: .parenthetical, element: .parenthetical)
   }
 
   // MARK: - Action

@@ -176,11 +176,26 @@ struct MarkdownBlockState: Equatable, Sendable {
 /// The Markdown grammar: CommonMark **block** structure.
 ///
 /// ATX headings and fenced code arrived in Sortie 5, and indented code, lists,
-/// blockquotes, thematic breaks, and setext heading underlines in Sortie 18. Inline
-/// structure — emphasis, links, code spans — is Sortie 19's and is deliberately absent:
-/// everything this grammar does not recognize degrades to ``ElementKind/paragraph`` and a
+/// blockquotes, thematic breaks, and setext heading underlines in Sortie 18. Everything
+/// this grammar does not recognize degrades to ``ElementKind/paragraph`` and a
 /// ``SpanKind/text`` span, which is what "malformed constructs degrade to text" means in
 /// practice — the absence of a case, not a case.
+///
+/// ## Inline structure lives in ``MarkdownInline``
+///
+/// Sortie 19 added emphasis, code spans, links, images, and hard breaks, and it added them
+/// in their own file rather than here. The split is along a real seam: this file decides
+/// **which block a line is and where its content begins**, and that decision needs the
+/// state arriving from above; ``MarkdownInline`` paints **inside one content range** and
+/// needs no state at all. Four methods below hand it a range — ``scanHeading(_:indent:blocks:)``,
+/// ``scanListItem(_:indent:blocks:paragraphOpen:)``, ``scanBlockquote(_:indent:blocks:)``,
+/// and ``scanParagraph(_:blocks:)`` — and the code paths that must *not* be inline-scanned
+/// are exactly the ones that do not: fenced and indented code, closing fences, setext
+/// underlines, thematic breaks, and blank lines.
+///
+/// The block kind is passed in and inherited by every inline span that is not a link,
+/// image, or hard break, which is what keeps `# **Bold** heading` one heading rather than
+/// a heading with a hole in it.
 ///
 /// ## Hand-written, per the charter
 ///
@@ -384,10 +399,14 @@ struct MarkdownGrammar: LineGrammar {
       EscriboSpan(
         range: (base + indent.units)..<(base + contentStart), kind: .heading, role: .marker)
     ]
-    if contentEnd > contentStart {
-      spans.append(
-        EscriboSpan(range: (base + contentStart)..<(base + contentEnd), kind: .heading))
-    }
+    // The heading's text is inline-scanned, so `# **Bold** heading` is a heading whose
+    // first word is also strong. `allowsHardBreak` is false because CommonMark has no hard
+    // break inside an ATX heading, and emitting one would paint the trailing spaces a
+    // closing-sequence scan has already accounted for.
+    spans.append(
+      contentsOf: MarkdownInline.spans(
+        in: units, range: contentStart..<contentEnd, base: base, kind: .heading,
+        allowsHardBreak: false))
     if hasClosingSequence {
       // The closing run, plus the whitespace on either side of it, so the tail of the
       // line stays heading-colored instead of falling through to `.text`.
@@ -556,10 +575,10 @@ struct MarkdownGrammar: LineGrammar {
       EscriboSpan(
         range: (base + indent.units)..<(base + cursor), kind: .blockquote, role: .marker)
     ]
-    if cursor < units.count {
-      spans.append(
-        EscriboSpan(range: (base + cursor)..<line.contentRange.upperBound, kind: .blockquote))
-    }
+    spans.append(
+      contentsOf: MarkdownInline.spans(
+        in: units, range: cursor..<units.count, base: base, kind: .blockquote,
+        allowsHardBreak: true))
 
     return LineScan(
       spans: spans,
@@ -660,10 +679,10 @@ struct MarkdownGrammar: LineGrammar {
       EscriboSpan(
         range: (base + indent.units)..<(base + contentUnits), kind: .listItem, role: .marker)
     ]
-    if contentUnits < units.count {
-      spans.append(
-        EscriboSpan(range: (base + contentUnits)..<line.contentRange.upperBound, kind: .listItem))
-    }
+    spans.append(
+      contentsOf: MarkdownInline.spans(
+        in: units, range: contentUnits..<units.count, base: base, kind: .listItem,
+        allowsHardBreak: true))
 
     return LineScan(
       spans: spans,
@@ -858,8 +877,9 @@ struct MarkdownGrammar: LineGrammar {
     var next = blocks
     next.paragraphOpen = true
     return LineScan(
-      spans: line.contentRange.isEmpty
-        ? [] : [EscriboSpan(range: line.contentRange, kind: .text)],
+      spans: MarkdownInline.spans(
+        in: line.units, range: 0..<line.units.count, base: line.contentRange.lowerBound,
+        kind: .text, allowsHardBreak: true),
       element: .paragraph,
       contentRange: nil,
       depth: max(0, blocks.listDepth - 1),

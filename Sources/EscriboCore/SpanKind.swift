@@ -93,6 +93,37 @@ extension SpanKind {
   /// content.
   public static let lyrics = SpanKind(rawValue: "lyrics")
 
+  // MARK: - Fountain dialogue
+
+  /// A Fountain character cue — the name as content, and **both** of a cue's markers as
+  /// `SpanRole/marker`: the leading `@` that forces it and the trailing `^` that makes the
+  /// block dual dialogue.
+  ///
+  /// Both markers carry this kind rather than a kind of their own, which is the rule
+  /// everywhere else in this vocabulary and is what lets the styler dim them without
+  /// knowing they exist. They are told apart by position — a leading marker span is the
+  /// `@`, a trailing one is the `^` and the whitespace around it — which is enough for a
+  /// writer, and the source is authoritative either way.
+  public static let character = SpanKind(rawValue: "character")
+
+  /// A character cue's extension — the `(V.O.)` in `BOB (V.O.)`, including any further
+  /// `(CONT'D)` after it and the whitespace separating them from the name.
+  ///
+  /// Distinct from ``character`` for the reason ``codeInfoString`` is distinct from
+  /// ``codeBlock``: it is *about* the cue rather than part of the name, a theme will want
+  /// to mute it, and a consumer reading a cast list has to be able to drop it. It is
+  /// `SpanRole/content`, not a marker — an extension prints.
+  public static let characterExtension = SpanKind(rawValue: "characterExtension")
+
+  /// A Fountain parenthetical — `(beat)` on its own line inside a dialogue block.
+  ///
+  /// The parentheses are part of the content span, not markers, because they print. Any
+  /// leading indent is the one marker-role span such a line has.
+  public static let parenthetical = SpanKind(rawValue: "parenthetical")
+
+  /// Spoken Fountain dialogue.
+  public static let dialogue = SpanKind(rawValue: "dialogue")
+
   // MARK: - CommonMark block structure
 
   /// A Markdown list item — the bullet or number **and the whitespace after it** as
@@ -116,4 +147,44 @@ extension SpanKind {
   /// Marker only. There is no content span because a thematic break has no content, which
   /// is also why a theme styles it by drawing rather than by coloring text.
   public static let thematicBreak = SpanKind(rawValue: "thematicBreak")
+
+  // MARK: - CommonMark inline structure
+
+  /// The **text** of a link — `[text]` — and its enclosing brackets as
+  /// `SpanRole/marker`.
+  ///
+  /// Distinct from ``linkURL`` so a theme can paint the words a reader clicks differently
+  /// from the destination they point at, which is the whole reason the two are separate
+  /// kinds rather than one `.link` with a role.
+  ///
+  /// A link **overrides** the enclosing block's kind: `[x](y)` inside a heading is a link,
+  /// not heading-sized text. That is a deliberate trade. There is no ``StyleSet`` flag
+  /// meaning "this is a destination", so the only axis that can express it is `kind`, and
+  /// `kind` is one value. Emphasis and code spans do *not* make this trade — they live on
+  /// the style axis and leave the block's kind alone.
+  public static let link = SpanKind(rawValue: "link")
+
+  /// A link or image **destination** — the `(url)` of `[text](url)`, with the parentheses,
+  /// any `<`…`>`, and the whitespace inside them as `SpanRole/marker`.
+  ///
+  /// The kind the sortie brief names by hand, and the reason it does: a URL is the one run
+  /// in a Markdown document a reader most wants de-emphasized, and nothing on the style
+  /// axis can say so.
+  public static let linkURL = SpanKind(rawValue: "linkURL")
+
+  /// The optional **title** of a link or image — the `"…"`, `'…'`, or `(…)` after the
+  /// destination — with its quotes as `SpanRole/marker`.
+  public static let linkTitle = SpanKind(rawValue: "linkTitle")
+
+  /// The **alt text** of an image — `![alt]` — and its `![` and `]` as
+  /// `SpanRole/marker`. The destination that follows is ``linkURL``, the same as a link's:
+  /// what a theme wants to do to one URL it wants to do to both.
+  public static let image = SpanKind(rawValue: "image")
+
+  /// A hard line break — two or more trailing spaces, or a trailing backslash.
+  ///
+  /// Marker only, like ``thematicBreak``: the break *is* the syntax, and there is no
+  /// content to wrap. Emitting it as a span rather than dropping it is what keeps the
+  /// tiling total over trailing whitespace a reader cannot otherwise see.
+  public static let hardBreak = SpanKind(rawValue: "hardBreak")
 }

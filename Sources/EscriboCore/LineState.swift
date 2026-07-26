@@ -80,6 +80,25 @@ public struct LineState: Equatable, Sendable {
   /// throughout a Markdown document changes nothing there.
   var followsNonBlankLine: Bool
 
+  /// Whether this line begins **inside an open Fountain dialogue block**.
+  ///
+  /// A dialogue block opens on a character cue and runs until a blank line or until a line
+  /// that is neither dialogue, a parenthetical, nor a lyric. Everything non-blank inside
+  /// one is dialogue, which is why this has to be state: `Hello there.` is action at the
+  /// top of a page and dialogue three lines under `BOB`, and its own text says nothing
+  /// about which.
+  ///
+  /// A plain `Bool`, and deliberately not a tag folded into ``openConstruct``: the two are
+  /// independent — a document can be inside a `fountain` fence *and* inside a dialogue
+  /// block — and packing them together would make one grammar's private encoding the
+  /// shared type's business. It is declared here, in this file, rather than beside the
+  /// grammar that reads it, because a field on `LineState` whose type lives in a grammar
+  /// file makes this file uncompilable on its own; a `Bool` needs nothing at all.
+  ///
+  /// `FountainGrammar`'s alone. Every other grammar leaves it `false`, where it compares
+  /// equal to itself forever and costs convergence nothing.
+  var inDialogueBlock: Bool
+
   /// The Markdown block-container context this line begins in: whether a paragraph is
   /// open above it, and which list items enclose it.
   ///
@@ -102,12 +121,14 @@ public struct LineState: Equatable, Sendable {
     fenceCharacter: UInt16 = 0,
     fenceLength: UInt16 = 0,
     followsNonBlankLine: Bool = false,
+    inDialogueBlock: Bool = false,
     markdownBlocks: MarkdownBlockState = MarkdownBlockState()
   ) {
     self.openConstruct = openConstruct
     self.fenceCharacter = fenceCharacter
     self.fenceLength = fenceLength
     self.followsNonBlankLine = followsNonBlankLine
+    self.inDialogueBlock = inDialogueBlock
     self.markdownBlocks = markdownBlocks
   }
 

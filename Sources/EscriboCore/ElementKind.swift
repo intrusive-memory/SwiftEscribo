@@ -81,6 +81,41 @@ extension ElementKind {
   /// A Fountain lyric line — `~Willy Wonka`.
   public static let lyrics = ElementKind(rawValue: "lyrics")
 
+  // MARK: - Fountain dialogue
+
+  /// A Fountain character cue — `BOB`, `@McAvoy`, `BOB (V.O.)`, `JANE ^`.
+  ///
+  /// One kind for every spelling, for the reason ``sceneHeading`` is one kind for two: a
+  /// cue lays out as a cue however it was written. What distinguishes the spellings is
+  /// kept lexically instead — the forcing `@` and the dual-dialogue `^` are excluded from
+  /// the record's content range and emitted as marker spans, so both are recoverable from
+  /// the source against `range` and `contentRange`.
+  ///
+  /// **The content range of a cue is the character *name* alone**, exclusive of the `@`,
+  /// of any `(V.O.)` extension, and of the `^`. That is a deliberate choice and it is the
+  /// one place in this vocabulary where "content" is narrower than "everything that is not
+  /// a marker": a consumer building a cast list — the reason this parser exists in an org
+  /// that maps cues to synthesized voices — wants the name and nothing else, and the
+  /// extension is still on the line, still spanned, and still recoverable.
+  public static let character = ElementKind(rawValue: "character")
+
+  /// A Fountain parenthetical — `(beat)`, `(to Jane)` — on its own line inside a dialogue
+  /// block.
+  ///
+  /// Only inside a dialogue block. `(beat)` at the top of a page is ``action``, because
+  /// outside a block there is no speaker for it to modify and Fountain does not invent
+  /// one. Its parentheses are **content, not markers**: they print, where a forcing `.`
+  /// or a centering `>` does not.
+  public static let parenthetical = ElementKind(rawValue: "parenthetical")
+
+  /// A line of spoken Fountain dialogue.
+  ///
+  /// Every non-blank line inside a dialogue block that is not a cue, a parenthetical, or a
+  /// forced element of some other kind. Its own element rather than ``action`` because
+  /// dialogue has its own screenplay margins, which is exactly what an `ElementKind` is
+  /// for.
+  public static let dialogue = ElementKind(rawValue: "dialogue")
+
   // MARK: - CommonMark block structure
 
   /// A bullet-list item line — `- item`, `* item`, `+ item`.

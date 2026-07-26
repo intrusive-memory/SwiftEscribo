@@ -302,7 +302,7 @@ struct IncrementalScannerTests {
     let result = scanner.incrementalScan(TextEdit(range: 4..<4, replacementLength: 2), in: typed)
     Self.expectInvariants(result, text: typed, editedRange: 4..<6, "cue typed")
     #expect(result.lines.contains(0))
-    #expect(result.lineRecords.first(where: { $0.index == 0 })?.element == .character)
+    #expect(result.lineRecords.first(where: { $0.index == 0 })?.element == .testCue)
 
     // Deleting it again retroactively un-makes it.
     let undone = Self.splice(typed, 4..<6, "")

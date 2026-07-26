@@ -18,13 +18,19 @@
 
 // MARK: - Kinds these grammars need
 
+// `testCue`, not `character`: `EscriboCore` ships a real `SpanKind.character` and
+// `ElementKind.character` for Fountain's cues as of Sortie 14, and two static members of
+// the same name on the same type — one from the module under test, one from this target —
+// make every unqualified `.character` in the suite ambiguous. The test vocabulary is
+// renamed rather than the shipped one: `character` is the name Fountain gives the element,
+// and a public raw value is API forever where a test symbol is not.
 extension SpanKind {
-  static let character = SpanKind(rawValue: "test.character")
+  static let testCue = SpanKind(rawValue: "test.cue")
   static let fenceMarker = SpanKind(rawValue: "test.fenceMarker")
 }
 
 extension ElementKind {
-  static let character = ElementKind(rawValue: "test.character")
+  static let testCue = ElementKind(rawValue: "test.cue")
 }
 
 // MARK: - Shared scanning helpers
@@ -159,8 +165,8 @@ struct CueGrammar: LineGrammar {
     }
 
     return LineScan(
-      spans: [EscriboSpan(range: line.contentRange, kind: isCue ? .character : .text)],
-      element: isCue ? .character : (line.isEmpty ? .blank : .paragraph),
+      spans: [EscriboSpan(range: line.contentRange, kind: isCue ? .testCue : .text)],
+      element: isCue ? .testCue : (line.isEmpty ? .blank : .paragraph),
       endState: state
     )
   }
@@ -210,7 +216,7 @@ struct HostileGrammar: LineGrammar {
         EscriboSpan(range: (end + 50)..<(end + 90), kind: .heading),  // past the line
         EscriboSpan(range: (start + 1)..<(end + 40), kind: .codeBlock),  // overruns the line
         EscriboSpan(range: start..<start, kind: .heading),  // empty
-        EscriboSpan(range: start..<(start + 2), kind: .character),  // out of order, overlapping
+        EscriboSpan(range: start..<(start + 2), kind: .testCue),  // out of order, overlapping
         EscriboSpan(range: (start - 30)..<(start - 10), kind: .text),  // before the line
       ],
       element: .paragraph,

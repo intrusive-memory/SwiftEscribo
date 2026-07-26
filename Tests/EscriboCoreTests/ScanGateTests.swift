@@ -65,7 +65,7 @@ struct GateDocument: Sendable, CustomTestStringConvertible {
   var testDescription: String { name }
 }
 
-/// Seven documents. Every one of them contains at least one line of pure ASCII capitals,
+/// Nine documents. Every one of them contains at least one line of pure ASCII capitals,
 /// because that is what `CueGrammar`'s lookahead rule keys on and the "edit the line
 /// after an ALL-CAPS line" shape needs a caps line to sit after.
 ///
@@ -78,6 +78,14 @@ struct GateDocument: Sendable, CustomTestStringConvertible {
 ///   something to look ahead at.
 /// - `unterminated fence` opens a fence that never closes.
 /// - `one line` is a single line with no terminator at all.
+/// - `fountain dialogue` is a real dialogue block — cue, extension, parenthetical,
+///   speech, and a dual-dialogue caret — added by Sortie 14 so `FountainGrammar`'s own
+///   multi-line state has something to converge across. Note what this buys and what it
+///   does not: it is a **convergence** check, and the property below cannot fail on a
+///   wrong cue rule no matter how many Fountain documents are in this array.
+/// - `fountain forced markers` is the same in CRLF, with one of every forcing marker in
+///   it, so the "any non-dialogue element closes the block" rule is crossed repeatedly by
+///   edits that move lines in and out of a block.
 let gateCorpus: [GateDocument] = [
   GateDocument(
     name: "lf markdown",
@@ -133,6 +141,24 @@ let gateCorpus: [GateDocument] = [
       closed
       """),
   GateDocument(name: "one line", text: "ONELINE"),
+  GateDocument(
+    name: "fountain dialogue",
+    text: """
+      INT. HOUSE - DAY
+
+      BOB
+      (beat)
+      Hello there.
+
+      JANE ^
+      And hello to you.
+
+      CUT TO:
+      """),
+  GateDocument(
+    name: "fountain forced markers",
+    text: "@McAvoy\r\nSomething muttered.\r\n\r\n.SNIPER SCOPE POV\r\n!forced action\r\n"
+      + "~a lyric line\r\n===\r\n> CUT TO:\r\nBOB"),
 ]
 
 // MARK: - Adversarial edit shapes
@@ -628,10 +654,11 @@ struct ScanGateTests {
     let steps = GateEditGenerator.sequence(seed: seed, from: document.text)
     #expect(steps.count == EditShape.allCases.count, "the sequence must cover every shape")
 
-    // Three grammars over the same generated sequence: stateless, stateful, and one that
-    // looks ahead. The sequence is grammar-independent by construction — it is a function
-    // of the text alone — so a divergence can be attributed to the grammar's shape rather
-    // than to a different set of edits.
+    // Four grammars over the same generated sequence: stateless, stateful, one that looks
+    // ahead, and — since Sortie 14 — one shipping grammar that does both at once. The
+    // sequence is grammar-independent by construction — it is a function of the text
+    // alone — so a divergence can be attributed to the grammar's shape rather than to a
+    // different set of edits.
     Self.replay(
       MarkdownGrammar(), steps: steps, from: document.text, seed: seed,
       documentName: document.name)
@@ -639,6 +666,14 @@ struct ScanGateTests {
       FenceGrammar(), steps: steps, from: document.text, seed: seed, documentName: document.name)
     Self.replay(
       CueGrammar(lookahead: 1), steps: steps, from: document.text, seed: seed,
+      documentName: document.name)
+    // `FountainGrammar` is the first *shipping* grammar with a non-zero lookahead, so it
+    // is the first one whose rescan window is widened backward as well as forward on every
+    // edit. What that proves is convergence and nothing else: read the warning above
+    // before citing a green run of this as evidence the cue rule is right. The
+    // hand-written expectations in `FountainGrammarTests` are what hold that.
+    Self.replay(
+      FountainGrammar(), steps: steps, from: document.text, seed: seed,
       documentName: document.name)
   }
 
@@ -743,9 +778,9 @@ struct ScanGateTests {
 
     #expect(
       result.lineRecords.map(\.element) == [
-        .character, .paragraph, .blank, .paragraph, .blank, .paragraph,
+        .testCue, .paragraph, .blank, .paragraph, .blank, .paragraph,
       ])
-    #expect(result.spans.first?.kind == .character)
+    #expect(result.spans.first?.kind == .testCue)
     #expect(result.spans.first?.range == 0..<3)
 
     // The same grammar with its lookahead switched off classifies nothing as a cue —
@@ -753,6 +788,6 @@ struct ScanGateTests {
     var blind = IncrementalScanner(grammar: CueGrammar(lookahead: 0))
     let blindResult = blind.fullScan(text)
     ScanInvariants.check(blindResult, text: text, editedRange: nil, "cue shapes, no lookahead")
-    #expect(blindResult.lineRecords.allSatisfy { $0.element != .character })
+    #expect(blindResult.lineRecords.allSatisfy { $0.element != .testCue })
   }
 }

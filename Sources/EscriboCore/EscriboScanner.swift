@@ -116,9 +116,10 @@ enum ResolvedGrammar: LineGrammar {
     case .markdown:
       self = .markdown(MarkdownGrammar())
     case .fountain:
-      // Block elements only until Sortie 14 adds dialogue: an ALL-CAPS line is action,
-      // not a character cue. That is a gap in richness, never in totality — every line
-      // still classifies, and every scan still tiles.
+      // Block elements and the dialogue block. Notes, boneyard, and the title page are
+      // still to come, and until they arrive their lines classify as whatever they look
+      // like — a gap in richness, never in totality. Every line classifies and every scan
+      // tiles.
       self = .fountain(FountainGrammar())
     default:
       self = .text(TextGrammar())
