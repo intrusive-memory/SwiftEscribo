@@ -150,40 +150,6 @@ struct LineIndex: Equatable, Sendable {
     index + 1 < slots.count ? slots[index + 1].start : utf16Count
   }
 
-  // MARK: - Provisional records
-
-  /// The line at `index` as a ``LineRecord`` carrying **only what a line index knows**.
-  ///
-  /// "Provisional" is the operative word, and it is not hedging:
-  ///
-  /// - ``LineRecord/range`` and ``LineRecord/contentRange`` are final. The content range
-  ///   here excludes the terminator only; a grammar later narrows it past indent and
-  ///   syntax markers.
-  /// - ``LineRecord/element`` is ``ElementKind/blank`` or ``ElementKind/paragraph`` and
-  ///   nothing else. That distinction is a property of the line's *shape* — "empty apart
-  ///   from its terminator" — not of any grammar, and both grammars agree on it.
-  /// - ``LineRecord/startState`` is ``LineState/documentStart`` for every line, which is
-  ///   true only of line zero. Multi-line state is the convergence engine's output
-  ///   (Sortie 4) and cannot be known here.
-  /// - ``LineRecord/depth`` is zero.
-  ///
-  /// Nothing but tests should consume these until a scanner exists to fill them in.
-  func provisionalRecord(at index: Int) -> LineRecord {
-    let line = line(at: index)
-    return LineRecord(
-      index: line.index,
-      range: line.range,
-      contentRange: line.contentRange,
-      element: line.contentRange.isEmpty ? .blank : .paragraph,
-      startState: .documentStart,
-      depth: 0
-    )
-  }
-
-  /// Every line as a provisional record. See ``provisionalRecord(at:)`` for what
-  /// "provisional" excludes.
-  var provisionalRecords: [LineRecord] { (0..<slots.count).map(provisionalRecord(at:)) }
-
   // MARK: - Incremental adjustment
 
   /// Adjusts the index for `edit` without re-indexing the whole document.

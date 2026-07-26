@@ -248,9 +248,9 @@ struct LineIndexTests {
     #expect(index.lineIndex(containing: 999) == 2)
   }
 
-  // MARK: - Provisional records
+  // MARK: - Degenerate geometry
 
-  @Test("A 1 MB single line is exactly one line record covering every code unit")
+  @Test("A 1 MB single line is exactly one line covering every code unit")
   func megabyteSingleLine() {
     // REQUIREMENTS.md § Degenerate input: no algorithm may be worse than linear in line
     // length, and a minified megabyte-long line is how a scanner that benchmarks well
@@ -263,27 +263,25 @@ struct LineIndexTests {
     let index = LineIndex(text)
 
     #expect(index.lineCount == 1)
-    let records = index.provisionalRecords
-    #expect(records.count == 1)
-    #expect(records[0].range == 0..<length)
-    #expect(records[0].contentRange == 0..<length)
-    #expect(records[0].index == 0)
+    let lines = index.lines
+    #expect(lines.count == 1)
+    #expect(lines[0].range == 0..<length)
+    #expect(lines[0].contentRange == 0..<length)
+    #expect(lines[0].index == 0)
     #expect(index.utf16Count == length)
   }
 
-  @Test("Provisional records carry the ranges and the blank/paragraph shape, nothing more")
-  func provisionalRecords() {
+  @Test("Line geometry carries ranges and emptiness, and no grammar whatsoever")
+  func lineGeometryCarriesNoGrammar() {
     // The index knows where lines are; it knows no grammar. "Empty apart from its
-    // terminator" is the one classification that is a property of the line's shape
-    // rather than of Markdown or Fountain, and both grammars agree on it — everything
-    // else waits for Sortie 4.
+    // terminator" is the one property of a line's *shape* rather than of Markdown or
+    // Fountain, and it is expressed here as an empty `contentRange` — not as an
+    // `ElementKind`, which is a grammar's output and belongs to the scanner.
     let index = LineIndex("alpha\n\nbravo")
-    let records = index.provisionalRecords
-    #expect(records.map(\.index) == [0, 1, 2])
-    #expect(records.map(\.range) == [0..<6, 6..<7, 7..<12])
-    #expect(records.map(\.contentRange) == [0..<5, 6..<6, 7..<12])
-    #expect(records.map(\.element) == [.paragraph, .blank, .paragraph])
-    #expect(records.allSatisfy { $0.depth == 0 })
-    #expect(records.allSatisfy { $0.startState == .documentStart })
+    let lines = index.lines
+    #expect(lines.map(\.index) == [0, 1, 2])
+    #expect(lines.map(\.range) == [0..<6, 6..<7, 7..<12])
+    #expect(lines.map(\.contentRange) == [0..<5, 6..<6, 7..<12])
+    #expect(lines.map(\.contentRange.isEmpty) == [false, true, false])
   }
 }
