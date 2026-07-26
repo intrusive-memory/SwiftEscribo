@@ -57,7 +57,7 @@ updated: 2026-07-25
 
 ### WU-1 Core Substrate
 - Work unit state: RUNNING
-- Current sortie: 5 of 6
+- Current sortie: 6 of 6
 - Sortie state: RUNNING — dispatched 23:12 by supervisor session `d1a5e802` as agent
   `a064d745fdbce6c8a`, confirmed live and growing at 23:14:30. **Not** dispatched by
   session `8380d2fe`, which stood down instead — see DL-22.
@@ -135,7 +135,7 @@ updated: 2026-07-25
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-1 | 5 | RUNNING | 1/3 | opus | 20 | (dispatched this session) | — | 2026-07-25 |
+| WU-1 | 6 | RUNNING | 1/3 | opus | 20 | (dispatched this session) | — | 2026-07-25 |
 
 
 ---
@@ -175,9 +175,15 @@ updated: 2026-07-25
 | DL-23 | 2026-07-25 | WU-1 | 4 | RECORDED: convergence condition 3 is weaker than conditions 1 and 2 | The agent reported honestly that it could not construct a case where dropping the lookahead extension produces *wrong output* — only a wrong dirty-range extent — because output at lines ≥ k₀ is a function of `(state(k₀), text from k₀ on)`, both proved unchanged. It implemented the rule as REQUIREMENTS.md §5 and Fountain §4 mandate it anyway, as insurance against a grammar whose lookahead is not fully reflected in its state. Fountain's cue rule (Sortie 14) is the plausible candidate. If Sortie 14 finds a genuine output counterexample, the test to strengthen is `forwardConvergenceHonoursTheDeclaredLookahead`. |
 | DL-24 | 2026-07-25 | WU-1 | 5 | Model: opus | Complexity 20; override applies (foundation_score 1, 25 dependents). First grammar through the seam — the marker/content role split and the fence-flag-in-`LineState` pattern set the template every later grammar copies. |
 
+| DL-25 | 2026-07-25 | WU-1 | 5 | **CRITICAL carry-forward to Sortie 6**: the gate property has a structural blind spot | The Sortie 5 agent discovered and reported this against its own interest. When it deliberately broke the fence flag, six direct classification tests went red — but its `incrementalScan == fullScan` comparison stayed **green**, because both sides ran the same broken grammar. Self-consistency is invariant to a grammar losing state. **Sortie 6's gate property therefore catches convergence bugs in the *engine* and can never catch state-omission bugs in a *grammar*.** A mission that trusted the gate alone would ship false confidence. Sortie 6 must pair the gate with direct classification assertions, and must say so in its own doc comments so Sorties 13–21 do not assume the gate covers them. |
+| DL-26 | 2026-07-25 | WU-1 | 5 | ACCEPTED with a carry-forward to Sortie 7: leading indent is engine `.text` filler | A heading's or fence's leading indent is emitted as `.text`-kind filler rather than as part of the `.marker` span, while a *closing* hash run does swallow surrounding whitespace. The agent flagged the asymmetry itself. Accepted, but it has a consequence: REQUIREMENTS.md Architecture §3 says point size varies **per line, never within a line**, and Sortie 27 asserts a heading's marker and content resolve to the same point size. **Sortie 7's styler must take point size from the line's `ElementKind`, not from the span's `SpanKind`** — otherwise a `.text`-kind indent span on a scaled heading line breaks within-line size uniformity. Carried into Sortie 7's prompt. |
+| DL-27 | 2026-07-25 | WU-1 | 5 | ACCEPTED: `contentRange` of a line inside a fence keeps all leading indentation | Deviates from CommonMark, which strips up to the opening fence's indent. Chosen so Sortie 23/24's writer stays lossless. Cost: an indented fence renders its code one to three columns wide of spec. Correct trade for a package whose writer must round-trip. |
+| DL-28 | 2026-07-25 | WU-1 | 5 | ACCEPTED: `EscriboScanner` is deliberately not `Sendable`, and `language` is `let` | It carries mutable scan state and the requirements make scanning synchronous and single-threaded; conforming it would invite misuse. **Sortie 9 should hold one scanner per document beside the text storage.** Switching language means a new scanner and a full scan, since every line's state is meaningless under another grammar. |
+| DL-29 | 2026-07-25 | WU-1 | 6 | Model: opus | Complexity 20; override applies. The invariant helper and gate property are reused by every subsequent scanner sortie, and DL-25 means this sortie has to be designed around a known blind spot rather than trusting its own headline assertion. |
+
 ## Overall Status
 
-- Sorties completed: 4 / 30 (Sorties 1–4 — all supervisor-verified)
+- Sorties completed: 5 / 30 (Sorties 1–4 — all supervisor-verified)
 - Sorties in flight: 0 (Sortie 5 PENDING, held per DL-21)
 - Work units completed: 0 / 7 (WU-1 RUNNING at 5 of 6; WU-2…WU-7 gated)
 - Blocked: none
