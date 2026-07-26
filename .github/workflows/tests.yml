@@ -1,0 +1,62 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [main, development]
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-macos:
+    name: Test on macOS
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Show Swift version
+        run: swift --version
+
+      # arm64 is pinned explicitly on every invocation. Apple Silicon is the
+      # only supported arch; an unpinned destination can pick up x86_64 and
+      # build something nobody ships.
+      - name: Build
+        run: |
+          xcodebuild build \
+            -scheme SwiftEscribo \
+            -destination 'platform=macOS,arch=arm64' \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES
+
+      # Performance tests assert wall-clock budgets and are too machine
+      # dependent to block a merge; they run in their own workflow.
+      - name: Test
+        run: |
+          xcodebuild test \
+            -scheme SwiftEscribo \
+            -destination 'platform=macOS,arch=arm64' \
+            -skip-testing:EscriboPerformanceTests \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES
+
+  test-ios:
+    name: Test on iOS Simulator
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Test
+        run: |
+          xcodebuild test \
+            -scheme SwiftEscribo \
+            -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.1' \
+            -skip-testing:EscriboPerformanceTests \
+            -skipPackagePluginValidation \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO
