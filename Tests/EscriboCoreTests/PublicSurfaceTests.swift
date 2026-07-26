@@ -175,6 +175,11 @@ struct PublicScannerTests {
 
     let text = "# Title\nprose\n```swift\nlet x = 1\n```\n"
     let full = scanner.fullScan(text)
+    // The always-on harness reaches here too. `ScanInvariants` is written against the
+    // public surface for exactly this reason: the facade's output has to satisfy the same
+    // contract as the engine's, and asserting that must not cost this file its
+    // `@testable`-free status.
+    ScanInvariants.check(full, text: text, editedRange: nil, "facade full scan")
     #expect(full.dirtyRange == 0..<text.utf16.count)
     #expect(full.spans.reduce(0) { $0 + $1.range.count } == text.utf16.count)
     #expect(full.lineRecords.first?.element == .heading)
@@ -186,6 +191,7 @@ struct PublicScannerTests {
     // And the incremental half, in old-text coordinates.
     let edited = "## Title\nprose\n```swift\nlet x = 1\n```\n"
     let result = scanner.incrementalScan(TextEdit(range: 0..<1, replacementLength: 2), in: edited)
+    ScanInvariants.check(result, text: edited, editedRange: 0..<2, "facade incremental scan")
     #expect(result.dirtyRange.lowerBound == 0)
     #expect(result.lineRecords.first?.depth == 2)
     #expect(result.spans.first?.range == 0..<3)
@@ -208,6 +214,7 @@ struct PublicScannerTests {
     var scanner = EscriboScanner(language: .fountain)
     let text = "INT. HOUSE - DAY\n\nBOB\nHello.\n"
     let result = scanner.fullScan(text)
+    ScanInvariants.check(result, text: text, editedRange: nil, "fountain fallback full scan")
 
     #expect(result.dirtyRange == 0..<text.utf16.count)
     #expect(result.spans.reduce(0) { $0 + $1.range.count } == text.utf16.count)
@@ -218,6 +225,7 @@ struct PublicScannerTests {
     // Editing it is total too.
     let edited = "INT. HOUSE - NIGHT\n\nBOB\nHello.\n"
     let after = scanner.incrementalScan(TextEdit(range: 13..<16, replacementLength: 5), in: edited)
+    ScanInvariants.check(after, text: edited, editedRange: 13..<18, "fountain fallback edit")
     #expect(after.dirtyRange.upperBound <= edited.utf16.count)
   }
 
@@ -227,7 +235,9 @@ struct PublicScannerTests {
     // the linked core does not implement. Dispatch has to stay total for that to be a
     // feature rather than a crash.
     var scanner = EscriboScanner(language: Language(rawValue: "org.example.notALanguage"))
-    let result = scanner.fullScan("# not a heading here\n")
+    let text = "# not a heading here\n"
+    let result = scanner.fullScan(text)
+    ScanInvariants.check(result, text: text, editedRange: nil, "unknown language")
     #expect(result.spans.allSatisfy { $0.kind == .text })
     #expect(result.lineRecords.first?.element == .paragraph)
   }
@@ -235,9 +245,12 @@ struct PublicScannerTests {
   @Test("An out-of-range edit through the facade is clamped, not trapped")
   func facadeIsTotalOnBadInput() {
     var scanner = EscriboScanner(language: .markdown)
-    scanner.fullScan("hello")
+    ScanInvariants.check(scanner.fullScan("hello"), text: "hello", editedRange: nil, "clamp base")
     let result = scanner.incrementalScan(
       TextEdit(range: 900..<9000, replacementLength: 3), in: "hello world")
+    // No `editedRange`: the edit was deliberately nonsense and has no meaningful extent
+    // in the new text, which is the one case the harness's containment check must skip.
+    ScanInvariants.check(result, text: "hello world", editedRange: nil, "clamped facade edit")
     #expect(result.dirtyRange.upperBound <= "hello world".utf16.count)
     #expect(result.lineRecords.count == 1)
   }
@@ -266,6 +279,8 @@ struct PublicScannerTests {
     // crosses an isolation boundary.
     #expect(String(describing: EscriboScanner.self) == "EscriboScanner")
     var scanner = EscriboScanner(language: .markdown)
-    #expect(scanner.fullScan("").lineRecords.count == 1)
+    let result = scanner.fullScan("")
+    ScanInvariants.check(result, text: "", editedRange: nil, "empty document through the facade")
+    #expect(result.lineRecords.count == 1)
   }
 }

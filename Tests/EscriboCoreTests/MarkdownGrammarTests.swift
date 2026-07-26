@@ -10,18 +10,35 @@ import Testing
 /// classification passes on a scanner that puts the marker boundary one code unit wrong,
 /// and that is the bug that shows up as a flickering `#` while typing.
 ///
-/// Direct assertions throughout, with no shared invariant helper beyond the one
-/// `IncrementalScannerTests` already wrote longhand. Sortie 6 owns the always-on harness
-/// and the seeded gate property; retrofitting these onto it is cheaper than agreeing on
-/// it now.
+/// Direct assertions throughout. They are also the **only** thing in this package that
+/// can catch a state-omission bug in this grammar: `ScanGateTests`'s
+/// `incrementalScan == fullScan` property runs the same grammar on both sides and stays
+/// green when a grammar loses state — see the blind-spot note on
+/// ``ScanGateTests/incrementalScanEqualsFullScan(seed:document:)``. Do not delete an
+/// exact expectation here on the grounds that the gate covers it. It does not.
+///
+/// Every scan in this suite goes through ``fullScan(_:)`` or is checked explicitly, and
+/// both route through `ScanInvariants` — Sortie 6's always-on harness.
 @Suite("Markdown grammar — ATX headings and fenced code")
 struct MarkdownGrammarTests {
 
   // MARK: - Helpers
 
-  static func fullScan(_ text: String) -> ScanResult {
+  /// Full-scans `text` **and asserts every `ScanResult` invariant on the way out**.
+  ///
+  /// The harness lives here rather than at each call site so that adding a test to this
+  /// suite cannot accidentally omit it: every full scan in the file goes through this
+  /// one function.
+  static func fullScan(
+    _ text: String,
+    sourceLocation: SourceLocation = #_sourceLocation
+  ) -> ScanResult {
     var scanner = IncrementalScanner(grammar: MarkdownGrammar())
-    return scanner.fullScan(text)
+    let result = scanner.fullScan(text)
+    ScanInvariants.check(
+      result, text: text, editedRange: nil, "markdown full scan of \(text.debugDescription)",
+      sourceLocation: sourceLocation)
+    return result
   }
 
   /// The UTF-16 offsets of `needle` in `haystack`, hand-computed. No regex, and no
@@ -319,7 +336,7 @@ struct MarkdownGrammarTests {
     let body = (0..<500).map { "line \($0)" }.joined(separator: "\n")
     let text = "intro\n" + body
     var scanner = IncrementalScanner(grammar: MarkdownGrammar())
-    scanner.fullScan(text)
+    ScanInvariants.check(scanner.fullScan(text), text: text, editedRange: nil, "fence base")
 
     var units = Array(text.utf16)
     units.replaceSubrange(6..<6, with: Array("```\n".utf16))
@@ -335,8 +352,10 @@ struct MarkdownGrammarTests {
     // And it agrees with a full scan of the same text, which is what makes the claim
     // "dirtied to the end" mean "correctly dirtied to the end".
     var fresh = IncrementalScanner(grammar: MarkdownGrammar())
-    fresh.fullScan(edited)
-    #expect(scanner.startStates == fresh.startStates)
+    ScanInvariants.check(
+      fresh.fullScan(edited), text: edited, editedRange: nil, "fence opened, full scan")
+    ScanInvariants.expectSameElements(
+      scanner.startStates, fresh.startStates, "startStates", "fence opened at line 1")
 
     IncrementalScannerTests.expectInvariants(
       result, text: edited, editedRange: 6..<10, "fence opened at line 1")
@@ -348,7 +367,7 @@ struct MarkdownGrammarTests {
     // above would pass for the wrong reason.
     let text = (0..<500).map { "line \($0)" }.joined(separator: "\n")
     var scanner = IncrementalScanner(grammar: MarkdownGrammar())
-    scanner.fullScan(text)
+    ScanInvariants.check(scanner.fullScan(text), text: text, editedRange: nil, "local base")
 
     let offset = text.utf16.count / 2
     var units = Array(text.utf16)
@@ -356,6 +375,8 @@ struct MarkdownGrammarTests {
     let edited = String(decoding: units, as: UTF16.self)
     let result = scanner.incrementalScan(
       TextEdit(range: offset..<offset, replacementLength: 1), in: edited)
+    ScanInvariants.check(
+      result, text: edited, editedRange: offset..<(offset + 1), "one-character edit")
 
     #expect(result.lines.count <= 3, "rescanned \(result.lines.count) lines for one character")
     #expect(result.lines.upperBound < 500)
@@ -365,13 +386,14 @@ struct MarkdownGrammarTests {
   func editingTheInfoStringConverges() {
     let text = "```\ncode\n```\nafter"
     var scanner = IncrementalScanner(grammar: MarkdownGrammar())
-    scanner.fullScan(text)
+    ScanInvariants.check(scanner.fullScan(text), text: text, editedRange: nil, "info base")
 
     // Type `swift` after the opening fence.
     var units = Array(text.utf16)
     units.replaceSubrange(3..<3, with: Array("swift".utf16))
     let edited = String(decoding: units, as: UTF16.self)
     let result = scanner.incrementalScan(TextEdit(range: 3..<3, replacementLength: 5), in: edited)
+    ScanInvariants.check(result, text: edited, editedRange: 3..<8, "info string typed")
 
     let infoStart = Self.offset(of: "swift", in: edited)
     #expect(infoStart == 3)
@@ -379,9 +401,12 @@ struct MarkdownGrammarTests {
 
     var fresh = IncrementalScanner(grammar: MarkdownGrammar())
     let full = fresh.fullScan(edited)
-    #expect(scanner.startStates == fresh.startStates)
-    #expect(
-      result.lineRecords == full.lineRecords.filter { result.lines.contains($0.index) })
+    ScanInvariants.check(full, text: edited, editedRange: nil, "info string, full scan")
+    ScanInvariants.expectSameElements(
+      scanner.startStates, fresh.startStates, "startStates", "info string typed")
+    ScanInvariants.expectSameElements(
+      result.lineRecords, full.lineRecords.filter { result.lines.contains($0.index) },
+      "lineRecords", "info string typed")
   }
 
   @Test("A sequence of edits over headings and fences tracks a full scan throughout")
@@ -402,7 +427,7 @@ struct MarkdownGrammarTests {
 
     var text = ""
     var scanner = IncrementalScanner(grammar: MarkdownGrammar())
-    scanner.fullScan(text)
+    ScanInvariants.check(scanner.fullScan(text), text: text, editedRange: nil, "sequence base")
 
     for (range, replacement) in script {
       var units = Array(text.utf16)
@@ -418,10 +443,16 @@ struct MarkdownGrammarTests {
 
       var fresh = IncrementalScanner(grammar: MarkdownGrammar())
       let full = fresh.fullScan(next)
-      #expect(scanner.startStates == fresh.startStates, "diverged at \(next.debugDescription)")
-      #expect(
-        result.lineRecords == full.lineRecords.filter { result.lines.contains($0.index) },
-        "records diverged at \(next.debugDescription)")
+      ScanInvariants.check(
+        full, text: next, editedRange: nil,
+        "markdown sequence full scan at \(next.debugDescription)"
+      )
+      ScanInvariants.expectSameElements(
+        scanner.startStates, fresh.startStates, "startStates",
+        "markdown sequence at \(next.debugDescription)")
+      ScanInvariants.expectSameElements(
+        result.lineRecords, full.lineRecords.filter { result.lines.contains($0.index) },
+        "lineRecords", "markdown sequence at \(next.debugDescription)")
       text = next
     }
   }

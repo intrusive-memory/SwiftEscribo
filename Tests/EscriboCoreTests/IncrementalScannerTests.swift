@@ -33,103 +33,34 @@ let scanReplacements: [String] = ["", "x", "\n", "\r\n", "~~~", "BOB\n", "\n\r"]
 @Suite("Incremental scanner — convergence engine")
 struct IncrementalScannerTests {
 
-  // MARK: - Independent oracles
+  // MARK: - Forwarders onto the shared harness
   //
-  // Deliberately not built on `LineIndex`. An invariant checked with the same code that
-  // produced the value under test is not checked at all, and line alignment is exactly
-  // the invariant where that mistake would be invisible.
+  // The invariant block was written out longhand here by Sortie 4, when no shared harness
+  // existed to agree on. Sortie 6 built one — `ScanInvariants` — and these two names now
+  // forward to it so that there is exactly ONE executable statement of the contract in
+  // the target. Two copies of an invariant list is one copy that will be edited and one
+  // that will not.
 
-  /// Every offset a line may start or end at: `0`, one past each terminator, and the end
-  /// of the document. Hand-written, no regex, and no `LineIndex`.
+  /// Every offset a line may start or end at. See ``ScanInvariants/lineBoundaries(of:)``.
   static func lineBoundaries(of text: String) -> Set<Int> {
-    let units = Array(text.utf16)
-    var boundaries: Set<Int> = [0, units.count]
-    var offset = 0
-    while offset < units.count {
-      if units[offset] == 0x0A {
-        boundaries.insert(offset + 1)
-        offset += 1
-      } else if units[offset] == 0x0D {
-        let pair = offset + 1 < units.count && units[offset + 1] == 0x0A
-        boundaries.insert(offset + (pair ? 2 : 1))
-        offset += pair ? 2 : 1
-      } else {
-        offset += 1
-      }
-    }
-    return boundaries
+    ScanInvariants.lineBoundaries(of: text)
   }
 
   /// Splices `replacement` over `range` (UTF-16 code units) of `text`.
   static func splice(_ text: String, _ range: Range<Int>, _ replacement: String) -> String {
-    var units = Array(text.utf16)
-    units.replaceSubrange(range, with: Array(replacement.utf16))
-    return String(decoding: units, as: UTF16.self)
+    ScanInvariants.splice(text, range, replacement)
   }
-
-  // MARK: - The invariant block
-  //
-  // Written out longhand, once, here. Sortie 6 owns the shared harness; until it exists,
-  // direct assertions beat a helper nobody has agreed on yet.
 
   /// Asserts every ``ScanResult`` invariant against `text`.
   static func expectInvariants(
     _ result: ScanResult,
     text: String,
     editedRange: Range<Int>?,
-    _ context: @autoclosure () -> String
+    _ context: @autoclosure () -> String,
+    sourceLocation: SourceLocation = #_sourceLocation
   ) {
-    let boundaries = lineBoundaries(of: text)
-    let note = context()
-
-    // 2. `dirtyRange` is line-aligned at BOTH ends.
-    #expect(boundaries.contains(result.dirtyRange.lowerBound), "lower not line-aligned — \(note)")
-    #expect(boundaries.contains(result.dirtyRange.upperBound), "upper not line-aligned — \(note)")
-    #expect(result.dirtyRange.lowerBound <= result.dirtyRange.upperBound, "inverted — \(note)")
-    #expect(result.dirtyRange.upperBound <= text.utf16.count, "past EOF — \(note)")
-
-    // 2, continued. `dirtyRange` CONTAINS the edited range, in new-text coordinates.
-    if let editedRange {
-      #expect(result.dirtyRange.lowerBound <= editedRange.lowerBound, "starts after edit — \(note)")
-      #expect(result.dirtyRange.upperBound >= editedRange.upperBound, "ends before edit — \(note)")
-    }
-
-    // 1. Spans are ordered, non-overlapping, contiguous, and exactly tile `dirtyRange`.
-    if result.dirtyRange.isEmpty {
-      #expect(result.spans.isEmpty, "spans over an empty dirty range — \(note)")
-    } else {
-      #expect(
-        result.spans.first?.range.lowerBound == result.dirtyRange.lowerBound, "first span — \(note)"
-      )
-      #expect(
-        result.spans.last?.range.upperBound == result.dirtyRange.upperBound, "last span — \(note)")
-      var cursor = result.dirtyRange.lowerBound
-      for span in result.spans {
-        #expect(span.range.lowerBound == cursor, "gap or overlap at \(cursor) — \(note)")
-        #expect(!span.range.isEmpty, "empty span at \(cursor) — \(note)")
-        cursor = span.range.upperBound
-      }
-      #expect(cursor == result.dirtyRange.upperBound, "short tiling — \(note)")
-    }
-
-    // 4. `lineRecords` covers `lines` completely, in order, with no gaps.
-    #expect(result.lineRecords.count == result.lines.count, "record count — \(note)")
-    for (offset, record) in result.lineRecords.enumerated() {
-      #expect(record.index == result.lines.lowerBound + offset, "index gap — \(note)")
-      #expect(record.contentRange.lowerBound >= record.range.lowerBound, "content below — \(note)")
-      #expect(record.contentRange.upperBound <= record.range.upperBound, "content above — \(note)")
-    }
-    // Records tile the dirty range too — they are the paragraph-attribute half of the
-    // same output and must agree with the span half about where the region is.
-    if let first = result.lineRecords.first, let last = result.lineRecords.last {
-      #expect(first.range.lowerBound == result.dirtyRange.lowerBound, "record start — \(note)")
-      #expect(last.range.upperBound == result.dirtyRange.upperBound, "record end — \(note)")
-      var cursor = first.range.lowerBound
-      for record in result.lineRecords {
-        #expect(record.range.lowerBound == cursor, "record gap — \(note)")
-        cursor = record.range.upperBound
-      }
-    }
+    ScanInvariants.check(
+      result, text: text, editedRange: editedRange, context(), sourceLocation: sourceLocation)
   }
 
   /// Runs one edit through an incremental scanner and a full scan of the same new text,
@@ -148,7 +79,7 @@ struct IncrementalScannerTests {
       "grammar=\(G.self) old=\(old.debugDescription) new=\(new.debugDescription) edit=\(range)"
 
     var incremental = IncrementalScanner(grammar: grammar)
-    incremental.fullScan(old)
+    let baseline = incremental.fullScan(old)
     let result = incremental.incrementalScan(edit, in: new)
 
     var fresh = IncrementalScanner(grammar: grammar)
@@ -158,15 +89,30 @@ struct IncrementalScannerTests {
     expectInvariants(full, text: new, editedRange: nil, note)
 
     // The gate, one layer above `LineIndex`'s: an incremental scan must be
-    // indistinguishable from a full scan wherever it claims to have scanned.
-    #expect(incremental.startStates == fresh.startStates, "line states diverged — \(note)")
-    let expectedRecords = full.lineRecords.filter { result.lines.contains($0.index) }
-    #expect(result.lineRecords == expectedRecords, "records diverged — \(note)")
-    let expectedSpans = full.spans.filter {
-      $0.range.lowerBound >= result.dirtyRange.lowerBound
-        && $0.range.upperBound <= result.dirtyRange.upperBound
-    }
-    #expect(result.spans == expectedSpans, "spans diverged — \(note)")
+    // indistinguishable from a full scan wherever it claims to have scanned. Reported
+    // through `expectSameElements` so a mismatch names the first divergent index instead
+    // of printing two span arrays at each other.
+    ScanInvariants.expectSameElements(
+      incremental.startStates, fresh.startStates, "startStates", note)
+    ScanInvariants.expectSameElements(
+      result.lineRecords, full.lineRecords.filter { result.lines.contains($0.index) },
+      "lineRecords", note)
+    ScanInvariants.expectSameElements(
+      result.spans,
+      full.spans.filter {
+        $0.range.lowerBound >= result.dirtyRange.lowerBound
+          && $0.range.upperBound <= result.dirtyRange.upperBound
+      },
+      "spans", note)
+
+    // And the other half of the gate: not "is what you repainted right" but "did you
+    // repaint everything that changed". A window-slice comparison cannot fail when the
+    // window is too SMALL, because the lines wrongly left alone are outside it. See
+    // `ScanInvariants.PaintedDocument`.
+    var painted = ScanInvariants.PaintedDocument(baseline)
+    painted.apply(result, newLineCount: ScanInvariants.lineCount(of: new))
+    ScanInvariants.expectSameElements(
+      painted.lines, ScanInvariants.paintedLines(of: full), "painted document", note)
 
     return result
   }
@@ -192,6 +138,7 @@ struct IncrementalScannerTests {
   func emptyDocument() {
     var scanner = IncrementalScanner(grammar: PlainTextGrammar())
     let result = scanner.fullScan("")
+    Self.expectInvariants(result, text: "", editedRange: nil, "empty document")
     #expect(result.dirtyRange == 0..<0)
     #expect(result.spans.isEmpty)
     #expect(result.lines == 0..<1)
@@ -252,7 +199,7 @@ struct IncrementalScannerTests {
 
     var text = ""
     var incremental = IncrementalScanner(grammar: FenceGrammar())
-    incremental.fullScan(text)
+    Self.expectInvariants(incremental.fullScan(text), text: text, editedRange: nil, "sequence base")
 
     for (range, replacement) in script {
       let next = Self.splice(text, range, replacement)
@@ -264,8 +211,12 @@ struct IncrementalScannerTests {
         "sequence at \(next.debugDescription)")
 
       var fresh = IncrementalScanner(grammar: FenceGrammar())
-      fresh.fullScan(next)
-      #expect(incremental.startStates == fresh.startStates, "diverged at \(next.debugDescription)")
+      Self.expectInvariants(
+        fresh.fullScan(next), text: next, editedRange: nil,
+        "sequence full scan at \(next.debugDescription)")
+      ScanInvariants.expectSameElements(
+        incremental.startStates, fresh.startStates, "startStates",
+        "sequence at \(next.debugDescription)")
       text = next
     }
   }
@@ -279,9 +230,10 @@ struct IncrementalScannerTests {
     // NOT `LineIndex`'s CRLF rule, which is a code-unit argument about terminators.
     let text = "aaa\nbbb\nCCC\nddd\neee"
     var scanner = IncrementalScanner(grammar: CueGrammar(lookahead: 1))
-    scanner.fullScan(text)
-    let result = scanner.incrementalScan(
-      TextEdit(range: 12..<15, replacementLength: 0), in: "aaa\nbbb\nCCC\n\neee")
+    Self.expectInvariants(scanner.fullScan(text), text: text, editedRange: nil, "widening base")
+    let edited = "aaa\nbbb\nCCC\n\neee"
+    let result = scanner.incrementalScan(TextEdit(range: 12..<15, replacementLength: 0), in: edited)
+    Self.expectInvariants(result, text: edited, editedRange: 12..<12, "widening")
 
     #expect(result.lines.lowerBound == 2, "did not widen back to the line above the edit")
     // And the point of widening: `CCC` was a cue while `ddd` followed it, and stops
@@ -296,9 +248,12 @@ struct IncrementalScannerTests {
     let text = "aaa\nbbb\nCCC\nddd\neee\nfff"
     for lookahead in 0...2 {
       var scanner = IncrementalScanner(grammar: CueGrammar(lookahead: lookahead))
-      scanner.fullScan(text)
+      Self.expectInvariants(
+        scanner.fullScan(text), text: text, editedRange: nil, "extent base \(lookahead)")
+      let edited = Self.splice(text, 12..<12, "X")
       let result = scanner.incrementalScan(
-        TextEdit(range: 12..<12, replacementLength: 1), in: Self.splice(text, 12..<12, "X"))
+        TextEdit(range: 12..<12, replacementLength: 1), in: edited)
+      Self.expectInvariants(result, text: edited, editedRange: 12..<13, "extent \(lookahead)")
       // Edit lands on line 3; the extent is `max(1, lookahead)`.
       #expect(result.lines.lowerBound == 3 - max(1, lookahead), "lookahead \(lookahead)")
     }
@@ -321,9 +276,12 @@ struct IncrementalScannerTests {
 
     for lookahead in 0...2 {
       var scanner = IncrementalScanner(grammar: CueGrammar(lookahead: lookahead))
-      scanner.fullScan(text)
+      Self.expectInvariants(
+        scanner.fullScan(text), text: text, editedRange: nil, "convergence base \(lookahead)")
+      let edited = Self.splice(text, 13..<13, "X")
       let result = scanner.incrementalScan(
-        TextEdit(range: 13..<13, replacementLength: 1), in: Self.splice(text, 13..<13, "X"))
+        TextEdit(range: 13..<13, replacementLength: 1), in: edited)
+      Self.expectInvariants(result, text: edited, editedRange: 13..<14, "convergence \(lookahead)")
       #expect(
         result.lines == expected[lookahead], "lookahead \(lookahead) rescanned \(result.lines)")
     }
@@ -336,18 +294,20 @@ struct IncrementalScannerTests {
     // only ever widens on insertion passes the first half.
     let before = "BOB\n\nrest"
     var scanner = IncrementalScanner(grammar: CueGrammar(lookahead: 1))
-    scanner.fullScan(before)
+    Self.expectInvariants(scanner.fullScan(before), text: before, editedRange: nil, "cue base")
     #expect(scanner.startStates.count == 3)
 
     // Typing on the blank line retroactively makes `BOB` a cue.
     let typed = Self.splice(before, 4..<4, "Hi")
     let result = scanner.incrementalScan(TextEdit(range: 4..<4, replacementLength: 2), in: typed)
+    Self.expectInvariants(result, text: typed, editedRange: 4..<6, "cue typed")
     #expect(result.lines.contains(0))
     #expect(result.lineRecords.first(where: { $0.index == 0 })?.element == .character)
 
     // Deleting it again retroactively un-makes it.
     let undone = Self.splice(typed, 4..<6, "")
     let back = scanner.incrementalScan(TextEdit(range: 4..<6, replacementLength: 0), in: undone)
+    Self.expectInvariants(back, text: undone, editedRange: 4..<4, "cue undone")
     #expect(back.lineRecords.first(where: { $0.index == 0 })?.element == .paragraph)
   }
 
@@ -359,11 +319,12 @@ struct IncrementalScannerTests {
     // is the whole reason the engine exists.
     let text = (0..<500).map { "line \($0)" }.joined(separator: "\n")
     var scanner = IncrementalScanner(grammar: FenceGrammar())
-    scanner.fullScan(text)
+    Self.expectInvariants(scanner.fullScan(text), text: text, editedRange: nil, "long base")
     let offset = text.utf16.count / 2
+    let edited = Self.splice(text, offset..<offset, "z")
     let result = scanner.incrementalScan(
-      TextEdit(range: offset..<offset, replacementLength: 1),
-      in: Self.splice(text, offset..<offset, "z"))
+      TextEdit(range: offset..<offset, replacementLength: 1), in: edited)
+    Self.expectInvariants(result, text: edited, editedRange: offset..<(offset + 1), "long edit")
 
     #expect(
       result.lines.count <= 3, "rescanned \(result.lines.count) lines for a one-character edit")
@@ -379,10 +340,11 @@ struct IncrementalScannerTests {
     let body = (0..<200).map { "line \($0)" }.joined(separator: "\n")
     let text = "intro\n" + body
     var scanner = IncrementalScanner(grammar: FenceGrammar())
-    scanner.fullScan(text)
+    Self.expectInvariants(scanner.fullScan(text), text: text, editedRange: nil, "fence base")
 
     let edited = Self.splice(text, 6..<6, "~~~\n")
     let result = scanner.incrementalScan(TextEdit(range: 6..<6, replacementLength: 4), in: edited)
+    Self.expectInvariants(result, text: edited, editedRange: 6..<10, "fence opened")
 
     #expect(result.dirtyRange.upperBound == edited.utf16.count, "did not reach end of document")
     #expect(result.lines.upperBound == 202)
@@ -394,6 +356,7 @@ struct IncrementalScannerTests {
     let text = "~~~\n" + (0..<50).map { "line \($0)" }.joined(separator: "\n")
     var scanner = IncrementalScanner(grammar: FenceGrammar())
     let result = scanner.fullScan(text)
+    Self.expectInvariants(result, text: text, editedRange: nil, "unterminated fence")
 
     #expect(result.dirtyRange == 0..<text.utf16.count)
     #expect(result.lineRecords.count == 51)
@@ -405,10 +368,11 @@ struct IncrementalScannerTests {
   func closingAFenceReclassifiesTheBlock() {
     let text = "~~~\na\nb\nc\nd"
     var scanner = IncrementalScanner(grammar: FenceGrammar())
-    scanner.fullScan(text)
+    Self.expectInvariants(scanner.fullScan(text), text: text, editedRange: nil, "closing base")
     // Delete the opening fence: every line below stops being code.
     let edited = Self.splice(text, 0..<4, "")
     let result = scanner.incrementalScan(TextEdit(range: 0..<4, replacementLength: 0), in: edited)
+    Self.expectInvariants(result, text: edited, editedRange: 0..<0, "fence closed by deletion")
 
     #expect(result.lines == 0..<4)
     #expect(result.lineRecords.allSatisfy { $0.element == .paragraph })
@@ -458,7 +422,7 @@ struct IncrementalScannerTests {
     // edit gets a well-formed result for the text it actually passed, not a crash inside
     // a text-view delegate callback.
     var scanner = IncrementalScanner(grammar: FenceGrammar())
-    scanner.fullScan("hello")
+    Self.expectInvariants(scanner.fullScan("hello"), text: "hello", editedRange: nil, "clamp base")
     let result = scanner.incrementalScan(
       TextEdit(range: 900..<9000, replacementLength: 3), in: "hello world")
     Self.expectInvariants(result, text: "hello world", editedRange: nil, "clamped")
@@ -486,20 +450,30 @@ enum AnyTestGrammar: CustomStringConvertible {
     }
   }
 
-  func fullScan(_ text: String) -> ScanResult {
+  /// Full-scans `text` **and runs the invariant harness on the way out**, so that no
+  /// caller of this convenience can produce an unchecked `ScanResult`.
+  func fullScan(
+    _ text: String,
+    sourceLocation: SourceLocation = #_sourceLocation
+  ) -> ScanResult {
+    let result: ScanResult
     switch self {
     case .plain:
       var scanner = IncrementalScanner(grammar: PlainTextGrammar())
-      return scanner.fullScan(text)
+      result = scanner.fullScan(text)
     case .fence:
       var scanner = IncrementalScanner(grammar: FenceGrammar())
-      return scanner.fullScan(text)
+      result = scanner.fullScan(text)
     case .cue(let lookahead):
       var scanner = IncrementalScanner(grammar: CueGrammar(lookahead: lookahead))
-      return scanner.fullScan(text)
+      result = scanner.fullScan(text)
     case .hostile:
       var scanner = IncrementalScanner(grammar: HostileGrammar())
-      return scanner.fullScan(text)
+      result = scanner.fullScan(text)
     }
+    ScanInvariants.check(
+      result, text: text, editedRange: nil, "\(self) full scan of \(text.debugDescription)",
+      sourceLocation: sourceLocation)
+    return result
   }
 }
