@@ -163,9 +163,17 @@ updated: 2026-07-26
 | 12 | COMPLETED | opus | 1 (PARTIAL→continuation, no increment) | `4a57d3c` + `c41b7a1` | test 0 (92/18) and test-ios 0 (95/18), DL-63 public surface shipped, DL-72 clamp made falsifiable and re-probed by supervisor (DL-78) |
 
 ### WU-3 Fountain Depth
-- Work unit state: **RUNNING**
-- Current sortie: **17** of 30 — **DISPATCHED** 2026-07-26 15:2x PDT, opus, complexity 24
-  (the widest remaining gate; see DL-114)
+- Work unit state: **COMPLETED** (2026-07-26 — all 5 sorties, 13–17, verified)
+- Current sortie: 17 of 17 — all complete
+- Sortie 17: **COMPLETED — supervisor-verified**, commit `6f4b1ba`. All three targets
+  re-run by the supervisor at the tip: `make test-core` 0 (**260/19**), `make test` 0
+  (**167/27**), `make test-ios` 0 (**148/24**) — every count matches the agent's report.
+  10 fixtures (≥8 required); `grep -rE '/Users/|~/Projects|#filePath' Tests/` exit 1;
+  `Package.swift:52` declares `resources: [.copy("Fixtures")]` — `.copy`, not `.process`,
+  so CRLF reaches the bundle unlaundered, and the supervisor confirmed the committed bytes
+  carry it (`crlf.fountain` CR=9/LF=9, `mixed_terminators.fountain` CR=4/LF=7).
+  **Supervisor boneyard-state probe fired: 8 issues, gate green** (DL-129).
+  Found **DL-130**, the most consequential defect of the mission.
 - Sortie 16 (previous): **COMPLETED — supervisor-verified 2026-07-26**, commit `70e2ca1`.
   The supervisor re-ran all three targets rather than accepting the report: `make test-core`
   0 (**243/17**, gate **352** cases), `make test` 0 (**134/23**), `make test-ios` 0
@@ -188,13 +196,13 @@ updated: 2026-07-26
 | 13 | COMPLETED | opus | 1 (PARTIAL→cont., no increment) | `d78fc21` + `a0d1eb6` | all three 0 (143/13 + 92/18 + 95/18); state-omission probe fired 4 tests, gate green 224/224 (DL-84); invariant strengthened not weakened (DL-92) |
 | 14 | COMPLETED | opus | 1 | `632887e` | all three 0 (181/14 + 92/18 + 95/18); gate raised to 288 over 4 grammars; **lookahead probe: 62 red, gate green 288/288 (DL-96)** |
 | 15 | COMPLETED | opus | 1 | `f056b49` | all three 0 (235/16 + 92/18 + 95/18), worktree-verified; gate raised to 352; title-page probe fired, gate green 352/352 (DL-109) |
-| 16 | COMPLETED (pending supervisor re-verify) | **sonnet** | 1 | `70e2ca1` | agent: all three 0 (243/17 + 92/18 + 95/18), worktree-verified; sonnet call validated (DL-118) |
+| 16 | COMPLETED | **sonnet** | 1 | `70e2ca1` | supervisor re-ran all three (243/17 + 134/23 + 123/21); GLOSA attr-value probe fired 4 issues, gate green (DL-126); sonnet call validated (DL-118) |
+| 17 | COMPLETED | opus | 1 | `6f4b1ba` | supervisor re-ran all three at tip (260/19 + 167/27 + 148/24); 10 fixtures; boneyard-state probe fired 8 issues, gate green (DL-129); **found DL-130 and refined DL-120 → DL-131** |
 
 ### WU-4 Markdown Breadth
-- Work unit state: **RUNNING but STALLED BY DEPENDENCY** — Sortie 21 requires Sortie 17
-  (Fountain scanner complete), and Sortie 22 requires Sortie 21. WU-4 can make no
-  progress until WU-3 finishes. See DL-114.
-- Current sortie: **21** of 30 — PENDING (gated on Sortie 17)
+- Work unit state: **RUNNING — UNSTALLED 2026-07-26** by Sortie 17's completion.
+- Current sortie: **21** of 30 — **DISPATCHED** 2026-07-26, opus, complexity 16.
+  Carries **DL-112**, the mission's standing critical warning.
 - Sortie 20 (previous): COMPLETED, commit `e911cad`, **worktree-verified — the first
   sortie under the corrected DL-98 rule, which worked** (DL-104). Core **235/16**.
   Three mutations fired while the gate stayed green at 235/235 (DL-105).
@@ -207,15 +215,25 @@ updated: 2026-07-26
 | 20 | COMPLETED | opus | 1 | `e911cad` | all three 0 (235/16), **worktree-verified** (DL-104); 3 mutations fired, gate green 235/235 (DL-105); 7th unfailable criterion flagged; autolinks deferred to Sortie 22 (DL-107) |
 
 ### WU-5 Writer
-- Work unit state: NOT_STARTED
+- Work unit state: **RUNNING** (unlocked 2026-07-26 by Sortie 17) — **eligible, not
+  dispatched this round.** Concurrency held at 2, not the plan's theoretical 3, on the
+  evidence in DL-132.
 - Current sortie: 23 of 30
-- Sortie state: PENDING
-- Notes: Gated on Sortie 17. Carries **DL-111** — Sortie 24 must confirm the title-page
-  span route round-trips byte-identically, or add `keyRange` to `LineRecord`.
+- Sortie state: PENDING — first in the queue for the next round
+- Notes: Gated on Sortie 17 (now met). Carries **DL-111** — Sortie 24 must confirm the
+  title-page span route round-trips byte-identically, or add `keyRange` to `LineRecord`.
+  **Now also carries DL-130**, which lands squarely on the writer: two of nine title-page
+  keys in the real Highland fixture are currently parsed as a title page at all.
 
 ### WU-6 Editor Behavior
 - Work unit state: **RUNNING** (unlocked 2026-07-26 — Sorties 20 and 12 both COMPLETED)
-- Current sortie: **26** of 30 — **DISPATCHED** 2026-07-26 15:2x PDT, opus, complexity 16
+- Current sortie: **27** of 30 — **DISPATCHED** 2026-07-26, sonnet, complexity 11
+- Sortie 26: **COMPLETED — supervisor-verified**, commit `6478d8e`. Verified in an
+  **isolated worktree** at that SHA (the shared tree was dirty with Sortie 17's work):
+  `make test` 0 (**167/27**), `make test-ios` 0 (**148/24**), core 243/17 — counts match.
+  Six files, all under `Sources/SwiftEscribo/` and `Tests/SwiftEscriboTests/`; file
+  ownership respected exactly. **Supervisor probe fired: 8 issues across 4 tests**
+  (DL-128). Ninth unfalsifiable criterion found — **by the agent, in its own work**.
 - Sortie 25 (previous): **COMPLETED — supervisor-verified 2026-07-26**, commit `33a56bb`.
   All three targets re-run by the supervisor: `make test` 0 (**134/23**), `make test-ios`
   0 (**123/21**), `make test-core` 0 (**243/17**) — counts match the report exactly.
@@ -227,7 +245,8 @@ updated: 2026-07-26
 #### Sortie history — WU-6
 | Sortie | State | Model | Attempts | Commit | Verified by supervisor |
 |--------|-------|-------|----------|--------|------------------------|
-| 25 | COMPLETED (pending supervisor re-verify) | opus | 1 | `33a56bb` | agent: all three 0 (134/23 + 123/21 + 243/17), worktree-verified; 3 mutations fired; **DL-74 rule 4 discharged** |
+| 25 | COMPLETED | opus | 1 | `33a56bb` | supervisor re-ran all three (134/23 + 123/21 + 243/17); marker-deletion probe fired 6 named rows (DL-127); **DL-74 rule 4 discharged** |
+| 26 | COMPLETED | opus | 1 | `6478d8e` | supervisor worktree-verified (167/27 + 148/24 + 243/17); cue-Return probe fired 8 issues across 4 tests (DL-128); Return column declared a documented decline, not a silent one |
 
 ### WU-7 Verification & Hardening
 - Work unit state: NOT_STARTED
@@ -241,13 +260,16 @@ updated: 2026-07-26
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------------|-----------------|---------|-------------|---------------|
-| WU-3 | 17 | DISPATCHED | 1/3 | opus | 24 | (session `fa1c4c1d`, agent A) | — | 2026-07-26 15:2x PDT |
-| WU-6 | 26 | DISPATCHED | 1/3 | opus | 16 | (session `fa1c4c1d`, agent B) | — | 2026-07-26 15:2x PDT |
+| WU-4 | 21 | DISPATCHED | 1/3 | **opus** | 16 | (session `fa1c4c1d`, agent C) | — | 2026-07-26 round 3 |
+| WU-6 | 27 | DISPATCHED | 1/3 | **sonnet** | 11 | (session `fa1c4c1d`, agent D) | — | 2026-07-26 round 3 |
 
-Concurrency **2**, per DL-103. File ownership is disjoint and was stated in both dispatch
-orders: Sortie 17 owns `Tests/EscriboCoreTests/**` + `Package.swift`; Sortie 26 owns
-`Sources/SwiftEscribo/**` + `Tests/SwiftEscriboTests/**`. Both were forbidden `make lint`
-(DL-123) and both were forbidden from reading or writing `SUPERVISOR_STATE.md`.
+Concurrency **2**, per DL-103 and now DL-132. File ownership is disjoint and was stated in
+both dispatch orders: Sortie 21 owns `Sources/EscriboCore/**` + `Tests/EscriboCoreTests/**`;
+Sortie 27 owns `Sources/SwiftEscribo/**` + `Tests/SwiftEscriboTests/**`. Both were forbidden
+`make lint` (DL-123), both were forbidden from reading or writing `SUPERVISOR_STATE.md`, and
+both were ordered to verify from a throwaway worktree at their own commit (DL-98, DL-132).
+
+Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COMPLETED.
 
 ---
 
@@ -394,6 +416,13 @@ orders: Sortie 17 owns `Tests/EscriboCoreTests/**` + `Package.swift`; Sortie 26 
 | DL-126 | 2026-07-26 | WU-3 | 16 | **Supervisor probe on Sortie 16 fired — the GLOSA assertions are real** | Sortie 16 was carried as COMPLETED *pending supervisor re-verify*, and DL-119 had recorded a non-firing mutation, which is exactly the shape that warrants an independent probe. The supervisor mutated `GlosaScanner.swift:255`, emitting attribute **values** under `.glosaAttributeName` instead of `.glosaAttributeValue`. Result: **4 issues across 2 tests** — the distinct-spans test failed on both its attribute-name and attribute-value expectations, and the incremental-scan test failed on both as well. Reverted; tree clean. The gate stayed green at 352/352 throughout, which is the sixth demonstration that the gate is blind to grammar-level error (DL-25 / DL-31). |
 | DL-127 | 2026-07-26 | WU-6 | 25 | **Supervisor probe on Sortie 25 fired hard — list continuation is genuinely asserted** | Disabled the marker-only deletion branch in `MarkdownListContinuation.swift:177` (`if false && marker.isEmptyItem`). Six distinct parameterized rows went red **by name** — bare `-`, `- `, `-   `, `1. `, `- [ ] ` — across the table-driven test and the document-coordinates test. The `@Test(arguments:)` idiom D-1 mandated paid off exactly as intended: every failing row identified itself without a debugger. Reverted; tree clean at `b5aafeb`. |
 
+| DL-128 | 2026-07-26 | WU-6 | 26 | **Ninth unfalsifiable criterion — and the agent found it in its own work, again** | The plan's criterion "a test asserts Return on a character cue produces a dialogue line with no intervening blank line" is **green against zero implementation**: a cue opens a dialogue block, a newline does not close it, so a plain `insertNewline` already satisfies every row of the Fountain Return column. `returnOutcome(element:)` returns `.literal` in **every** branch. The agent said so plainly rather than claiming a feature. Its mitigation is right: the function is written as an explicit switch per row, so a later change that makes Return clever must edit a case. **Supervisor probe confirms the mitigation works** — making Return on a cue insert `"\n\n"` (the realistic regression, which would close the block and turn the next line into action) fired **8 issues across 4 tests**. So: unfalsifiable against a *no-op*, genuinely falsifiable against a *wrong* implementation. That distinction is the whole finding, and it is the right shape for a documented decline. |
+| DL-129 | 2026-07-26 | WU-3 | 17 | **Supervisor probe on Sortie 17: the fixture corpus catches what the gate cannot — 7th confirmation of DL-25** | Deleted the boneyard from the cross-line state carry (`FountainGrammar.swift:872`, dropping `boneyardTag` from the region carry) — the exact "grammar state omission" class DL-25 named. **8 issues.** Red: the `unterminated_boneyard` **golden snapshot**, the new hand-written hostile-fixture expectation, and four pre-existing region tests. **The scan gate stayed green.** The corpus is therefore doing detection work the gate structurally cannot, which is precisely the argument for having built it. Reverted; tree clean at `6f4b1ba`. |
+| DL-130 | 2026-07-26 | WU-3 | 17 | **HIGHEST-IMPACT DEFECT OF THE MISSION — a whitespace-only title-page value silently ends the title page, and it fires on this org's own real files. NEEDS AN OWNER.** | Highland 2 writes an empty title-page value as a line containing **a lone tab**. `FountainGrammar` reads a whitespace-only line as blank, a blank ends the title page — so in `episode_01.fountain`, a genuine Highland export, **only 2 of 9 title-page keys are recognized as title page at all**. `CREDIT:` then scans as a **character cue**, and author, source, contact info, draft date and notes become its **dialogue**. The supervisor confirmed this in the committed bytes directly rather than taking the report: lines 4, 12, and 16 are each exactly `'\t'`. **This is not a fixture curiosity.** Produciesta is the first embed and its inputs are Highland exports in exactly this shape, so the canonical parser currently misreads the org's own screenplays. Sortie 17 asserted it descriptively and correctly declined to fix it (out of scope). **No sortie in the plan owns this.** It lands hardest on Sorties 23–24 (the writer round-trips the title page) and on Sortie 30. **Escalated to the user — a plan amendment, not a supervisor decision.** |
+| DL-131 | 2026-07-26 | WU-3 | 17 | **DL-120 was understated: a wrapped GLOSA directive is not merely unpaired, it is destroyed** | Sortie 16 reported that a `<SceneContext>` opening on one line with its close below yields two unrelated `glosaTag` spans. Sortie 17's `multiline_glosa.fountain` shows the worse half: a directive **split mid-tag** across a line break degrades the opener to `SpanKind.text` and reads the continuation as ordinary note prose — `length` is not an attribute name, `4s` is not an attribute value. **A screenwriter who wraps a long directive silently loses it.** `GlosaScanner` carries no cross-line state by construction. Asserted descriptively; carried to Sortie 30 with DL-130. |
+| DL-132 | 2026-07-26 | — | 17, 26 | **Two-way concurrency is not free on this machine — it produced a hang, not a slowdown. Concurrency stays capped at 2; the plan's theoretical 3 is declined.** | Three independent observations this round: (1) Sortie 17's first `make test` in the shared tree **hung ~20 minutes with the xctest agent at 0% CPU** and had to be killed; (2) the supervisor's own probe build **exceeded a 600 s timeout** and had to be re-run after the tree went quiet, where it finished in seconds; (3) Sortie 17 saw `EscriboCoreTests` fail with 10 then 74 issues purely from reading Sortie 26's uncommitted in-flight edits in the shared working tree. **The mitigation that worked is the standing rule already on the books** — verify from a throwaway worktree at your own commit (DL-98/DL-104), which both agents did unprompted and which is why both sets of numbers were trustworthy. **A hung run rather than a failed one is the dangerous shape**, because it reads as "still working". Group C's theoretical 3-way parallelism is declined on this evidence. |
+| DL-133 | 2026-07-26 | WU-4, WU-6 | 21, 27 | Round 3 dispatch: **21 (opus) and 27 (sonnet)**, holding 23 back | Three sorties became eligible at once when Sortie 17 landed — 21, 23, 27 — the widest gate of the mission, exactly as DL-114 predicted. Chose by longest remaining chain: `21 → 22 → 28 → 29 → 30` is 5 deep and binding, so **Sortie 21 goes first and gets opus** (complexity 16; it is the hardest remaining core sortie and carries DL-112). `27 → 28 → 29 → 30` is 4 deep, so **Sortie 27 goes second at sonnet** (complexity 11, matching the DL-118 precedent where a sonnet call at 11 held). `23 → 24 → 30` is 3 deep and the writer touches files nobody else does, so it loses nothing by waiting one round — and holding it keeps concurrency at 2 per DL-132. File ownership is disjoint: 21 owns `Sources/EscriboCore/**` + `Tests/EscriboCoreTests/**`, 27 owns `Sources/SwiftEscribo/**` + `Tests/SwiftEscriboTests/**`. |
+
 ---
 
 ## Overall Status
@@ -408,15 +437,21 @@ orders: Sortie 17 owns `Tests/EscriboCoreTests/**` + `Package.swift`; Sortie 26 
   Fountain) and WU-4 (Sorties 18–22, Markdown) **in parallel** — the first concurrency
   of this mission. Group A, 12 sorties and 40% of the plan, ran strictly serial by
   necessity and is now behind us.
-### Current position (2026-07-26, resume — Sorties 17 and 26 in flight)
+### Current position (2026-07-26, round 3 — Sorties 21 and 27 in flight)
 
-- Sorties completed: **20 / 30** (1–16, 18, 19, 20, 25 — all supervisor-verified; 16 and 25
-  cleared their *pending re-verify* status this round, DL-126 and DL-127)
-- Sorties in flight: **2** — Sortie 17 (WU-3, opus) and Sortie 26 (WU-6, opus), dispatched
-  in parallel at concurrency 2
-- Tree re-verified green at `b5aafeb` before dispatch: core **243/17** (gate **352**),
-  macOS **134/23**, iOS **123/21**. Two supervisor falsification probes fired and were
-  reverted; working tree clean at dispatch time.
+- Sorties completed: **22 / 30** (1–20, 25, 26 — every one supervisor-verified, none
+  taken on report alone)
+- Sorties in flight: **2** — Sortie 21 (WU-4, opus) and Sortie 27 (WU-6, sonnet)
+- Work units: **3 / 7 COMPLETE** (WU-1, WU-2, **WU-3 closed this round**). WU-4 RUNNING at
+  21; WU-6 RUNNING at 27; **WU-5 RUNNING and eligible at 23**, held one round by DL-132;
+  WU-7 gated on 27, 22.
+- **Tree is GREEN** at `6f4b1ba`, all three re-run by the supervisor at the tip rather than
+  reported: `make test-core` 0 (**260/19**), `make test` 0 (**167/27**), `make test-ios` 0
+  (**148/24**). Charter clean: no regex, `EscriboCore` imports **nothing at all**, no XCTest.
+- **Four supervisor probes fired this round** (DL-126, DL-127, DL-128, DL-129), all
+  reverted, tree clean after each. The gate stayed green through the one that mattered.
+- **Remaining critical chain**: `21 → 22 → 28 → 29 → 30`. Five sorties, and Sortie 21 is
+  the only thing standing between the mission and its last work unit.
 - Work units: **2 / 7 COMPLETE** (WU-1, WU-2). WU-3 RUNNING at **17**; WU-4 **STALLED**
   at 21 pending Sortie 17 (DL-114); WU-6 RUNNING at **26**; WU-5 gated on 17; WU-7 gated
   on 27, 17, 22.
@@ -449,8 +484,11 @@ orders: Sortie 17 owns `Tests/EscriboCoreTests/**` + `Package.swift`; Sortie 26 
 - **DL-112 → Sortie 21**: `openConstruct` is one field shared by two grammars.
   Fountain-in-Markdown needs a **second field**, not a cleverer tag, or it converges
   early inside fenced blocks.
-- **DL-120 → Sortie 17 / 30**: GLOSA is scanned per line while notes are multi-line;
-  a directive spanning lines is not recognized as a pair.
+- **DL-130 → UNOWNED, ESCALATED TO USER**: a lone-tab title-page value ends the title page,
+  so 2 of 9 keys survive in a real Highland export and `CREDIT:` becomes a character cue.
+  No sortie in the plan owns this. Hits Sorties 23–24 hardest.
+- **DL-131 → Sortie 30** (supersedes DL-120): a GLOSA directive wrapped across a line
+  break is destroyed, not merely unpaired.
 - **DL-111 → Sortie 24**: confirm the title-page **span** route round-trips
   byte-identically, or add `keyRange` to `LineRecord`.
 - **DL-122 → whoever raises Markdown's lookahead (else Sortie 30)**: tight lists
