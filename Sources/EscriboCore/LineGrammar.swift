@@ -100,18 +100,28 @@ struct LineScan {
   /// which is the single defect class the incremental design exists to prevent.
   var endState: LineState
 
+  /// The column alignments this line declares, if it is a GFM table delimiter row.
+  ///
+  /// Empty everywhere else, and empty is the default so that no existing grammar and no
+  /// future one has to mention it. It travels to ``LineRecord/tableAlignments`` untouched —
+  /// the engine has no repair to make, because there is no invariant an array of
+  /// alignments could violate.
+  var tableAlignments: [TableAlignment]
+
   init(
     spans: [EscriboSpan] = [],
     element: ElementKind,
     contentRange: Range<Int>? = nil,
     depth: Int = 0,
-    endState: LineState
+    endState: LineState,
+    tableAlignments: [TableAlignment] = []
   ) {
     self.spans = spans
     self.element = element
     self.contentRange = contentRange
     self.depth = depth
     self.endState = endState
+    self.tableAlignments = tableAlignments
   }
 }
 

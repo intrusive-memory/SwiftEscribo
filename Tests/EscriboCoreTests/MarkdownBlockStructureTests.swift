@@ -377,20 +377,32 @@ struct MarkdownBlockStructureTests {
 
   @Test("`---`, `***`, and `___` are thematic breaks, with or without spaces between")
   func thematicBreaks() {
-    for text in ["---", "***", "___", "- - -", "* * *", "_ _ _", "-----", "   ---"] {
-      #expect(Self.elements(text) == [.thematicBreak], "\(text.debugDescription)")
+    for text in ["\n---", "***", "___", "- - -", "* * *", "_ _ _", "-----", "   ---"] {
+      #expect(
+        Self.elements(text).last == .thematicBreak, "\(text.debugDescription)")
     }
     for text in ["--", "**", "__", "- -", "---x", "- --a"] {
       #expect(Self.elements(text) != [.thematicBreak], "\(text.debugDescription)")
     }
 
+    // **Amended by Sortie 20, deliberately and not silently.** `---` on the document's
+    // *first* line opens a YAML frontmatter region rather than a thematic break — the one
+    // position-dependent reinterpretation in this grammar, and the reason `\n---` rather
+    // than `---` leads the list above. Everywhere else, including one line down, it is a
+    // break exactly as this test has always said. Note which of the eight fixtures above
+    // do *not* move: `-----` is five hyphens and `   ---` is indented, and a frontmatter
+    // fence is exactly three, flush left.
+    #expect(Self.elements("---") == [.frontmatterDelimiter], "line one opens frontmatter")
+    #expect(Self.elements("-----") == [.thematicBreak], "five hyphens are not a fence")
+    #expect(Self.elements("   ---") == [.thematicBreak], "an indented run is not a fence")
+
     // Pure delimiter: the whole run is a marker and the content range is empty.
-    let result = Self.fullScan("---")
-    #expect(result.spans.count == 1)
-    #expect(result.spans[0].range == 0..<3)
-    #expect(result.spans[0].kind == .thematicBreak)
-    #expect(result.spans[0].role == .marker)
-    #expect(result.lineRecords[0].contentRange == 3..<3)
+    let result = Self.fullScan("\n---")
+    #expect(result.spans.count == 2, "the blank first line's terminator, then the run")
+    #expect(result.spans[1].range == 1..<4)
+    #expect(result.spans[1].kind == .thematicBreak)
+    #expect(result.spans[1].role == .marker)
+    #expect(result.lineRecords[1].contentRange == 4..<4)
 
     // Four columns of indent makes it code, not a break.
     #expect(Self.elements("    ---") == [.codeBlock])
@@ -417,7 +429,9 @@ struct MarkdownBlockStructureTests {
     // that calls every run of dashes a heading: with a blank line above, the same text is
     // a thematic break.
     #expect(Self.elements("Foo\n\n---") == [.paragraph, .blank, .thematicBreak])
-    #expect(Self.elements("---") == [.thematicBreak])
+    // `\n---` rather than `---`: Sortie 20 gives the document's *first* line to YAML
+    // frontmatter. One line down, the rule this test is about is unchanged.
+    #expect(Self.elements("\n---") == [.blank, .thematicBreak])
 
     // `***` and `___` are never setext underlines, so they stay thematic breaks under a
     // paragraph.

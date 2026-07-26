@@ -53,6 +53,24 @@ public struct LineRecord: Equatable, Sendable {
   /// one entry shape. Zero for anything unnested.
   public let depth: Int
 
+  /// The column alignments a GFM table **delimiter row** declares, left to right. Empty
+  /// on every other line.
+  ///
+  /// This is the one thing a table's geometry depends on that neither ``element`` nor
+  /// ``depth`` can carry: alignment is per *column*, and both of those are per *line*.
+  /// Packing four two-bit fields into `depth` was the alternative and was rejected — it
+  /// would make geometry keyed by `(element, depth)` meaningless for tables, which is the
+  /// one thing `depth` exists for.
+  ///
+  /// **Only the delimiter row carries it.** A body row's record has an empty array, and a
+  /// consumer that wants to align a cell reads the delimiter row above it. The reason is
+  /// the reason every field on ``LineState`` is a scalar: one `LineState` is stored per
+  /// line for the whole document, so carrying an alignment array in the state to hand down
+  /// to each body row would cost one allocation per line of every document, table or not.
+  /// An empty Swift `Array` allocates nothing, so the field itself is free on the
+  /// overwhelming majority of lines that have none.
+  public let tableAlignments: [TableAlignment]
+
   /// Creates a line record.
   ///
   /// `internal` on purpose: records are scanner output, and ``startState`` is not
@@ -63,7 +81,8 @@ public struct LineRecord: Equatable, Sendable {
     contentRange: Range<Int>,
     element: ElementKind,
     startState: LineState,
-    depth: Int = 0
+    depth: Int = 0,
+    tableAlignments: [TableAlignment] = []
   ) {
     self.index = index
     self.range = range
@@ -71,5 +90,6 @@ public struct LineRecord: Equatable, Sendable {
     self.element = element
     self.startState = startState
     self.depth = depth
+    self.tableAlignments = tableAlignments
   }
 }

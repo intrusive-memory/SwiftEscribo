@@ -10,6 +10,24 @@ private let asterisk: UInt16 = 0x2A
 /// `_`.
 private let underscore: UInt16 = 0x5F
 
+/// `~`.
+private let tilde: UInt16 = 0x7E
+
+/// `@`.
+private let atSign: UInt16 = 0x40
+
+/// `.`.
+private let fullStop: UInt16 = 0x2E
+
+/// `+`.
+private let plusSign: UInt16 = 0x2B
+
+/// `-`.
+private let hyphen: UInt16 = 0x2D
+
+/// `:`.
+private let colon: UInt16 = 0x3A
+
 /// `[`.
 private let leftBracket: UInt16 = 0x5B
 
@@ -84,6 +102,14 @@ private func isUnicodeWhitespace(_ unit: UInt16) -> Bool {
   }
 }
 
+/// Whether `unit` is an ASCII letter.
+private func isASCIILetter(_ unit: UInt16) -> Bool {
+  (unit >= 0x41 && unit <= 0x5A) || (unit >= 0x61 && unit <= 0x7A)
+}
+
+/// Whether `unit` is an ASCII digit.
+private func isASCIIDigit(_ unit: UInt16) -> Bool { unit >= 0x30 && unit <= 0x39 }
+
 private func isHighSurrogate(_ unit: UInt16) -> Bool {
   unit >= highSurrogateFirst && unit <= highSurrogateLast
 }
@@ -144,7 +170,8 @@ private enum InlineKindCode {
 // MARK: - The entry point
 
 /// CommonMark **inline** structure: emphasis, strong emphasis, code spans, links, images,
-/// and hard breaks — flattened into consecutive tiling spans.
+/// hard breaks, autolinks, and GFM strikethrough — flattened into consecutive tiling
+/// spans.
 ///
 /// ## The output shape, which is the point
 ///
@@ -193,6 +220,24 @@ private enum InlineKindCode {
 /// - **A hard break is emitted wherever its syntax appears**, including on the last line of
 ///   a paragraph, where CommonMark says it is not one. Knowing it is the last line is
 ///   lookahead this grammar does not have.
+/// - **Autolinks are the bracketed form only** — `<https://example.com>` and
+///   `<user@example.com>`, which is CommonMark's. GFM's *extended* autolink, which turns a
+///   bare `www.example.com` or `https://example.com` in running text into a link, is
+///   deliberately not here: it needs trailing-punctuation trimming, a parenthesis-balance
+///   rule, and a preceding-character rule, each of which changes where a span *ends* on
+///   ordinary prose that contains a dot. Adding it is a self-contained piece of work with
+///   its own tests, and doing it inside a sortie whose subject is frontmatter would put a
+///   whole new failure surface on lines that have no link syntax in them at all.
+///
+/// ## Strikethrough is emphasis, in the same matcher
+///
+/// GFM's `~~struck~~` runs through the identical delimiter-run machinery `*` and `_` use,
+/// with three differences and no fourth: a `~` run longer than two is literal, an opener
+/// and a closer must be the **same length** (`~x~~` is not strikethrough), and the rule of
+/// three does not apply — it is CommonMark's tie-breaker for emphasis, and GFM's tildes are
+/// not emphasis. Reusing the matcher rather than adding a second pass is what keeps
+/// `**~~both~~**` coming back as one span carrying `[.strong, .strikethrough]` for free:
+/// the union is already how this file works.
 ///
 /// ## Surrogate pairs
 ///
@@ -292,7 +337,7 @@ enum MarkdownInline {
   private static func containsInlineSyntax(_ units: [UInt16], _ range: Range<Int>) -> Bool {
     for offset in range {
       switch units[offset] {
-      case asterisk, underscore, backtick, leftBracket, backslash: return true
+      case asterisk, underscore, backtick, leftBracket, backslash, tilde, lessThan: return true
       default: continue
       }
     }
@@ -302,15 +347,16 @@ enum MarkdownInline {
 
 // MARK: - Delimiter runs
 
-/// One maximal run of `*` or `_`, with the two questions CommonMark asks of it.
+/// One maximal run of `*`, `_`, or `~`, with the two questions CommonMark asks of it.
 private struct DelimiterRun {
   /// Where the run starts, as an index into the line's units.
   let start: Int
 
-  /// How long the run is. Never changes; ``remaining`` is what the matcher spends.
+  /// How long the run is. Never changes; ``remaining`` is what the matcher spends, and the
+  /// **original** length is what the rule of three and GFM's tilde length rule both read.
   let length: Int
 
-  /// `*` or `_`.
+  /// `*`, `_`, or `~`.
   let character: UInt16
 
   /// Whether this run may open emphasis.
@@ -430,13 +476,134 @@ private struct InlineWalk {
         cursor = closeBracket(at: cursor)
         continue
       }
-      if unit == asterisk || unit == underscore {
+      if unit == lessThan {
+        // An autolink is settled here and painted here; it never reaches the delimiter
+        // machinery, and a `<` that does not open one is ordinary text.
+        if let end = scanAutolink(from: cursor) {
+          cursor = end
+          continue
+        }
+        cursor += 1
+        continue
+      }
+      if unit == asterisk || unit == underscore || unit == tilde {
         cursor = collectDelimiterRun(at: cursor)
         continue
       }
       cursor += 1
     }
     processEmphasis(stackBottom: 0)
+  }
+
+  // MARK: Autolinks
+
+  /// Scans `<https://example.com>` or `<user@example.com>` starting at the `<`, painting
+  /// it if it is one. Returns where scanning resumes, or `nil` if this `<` opens nothing.
+  ///
+  /// The angle brackets are ``SpanRole/marker`` and the URI is content, both carrying
+  /// ``SpanKind/linkURL`` — the same kind an inline link's destination gets, because what a
+  /// theme wants to do to one destination it wants to do to both.
+  private mutating func scanAutolink(from start: Int) -> Int? {
+    var close = start + 1
+    while close < range.upperBound, units[close] != greaterThan {
+      let unit = units[close]
+      // No whitespace and no `<` inside an autolink, per CommonMark. Control characters
+      // are excluded by the same test, which is why it is written as a range.
+      if unit == lessThan || unit <= space { return nil }
+      close += 1
+    }
+    guard close < range.upperBound, close > start + 1 else { return nil }
+
+    let inner = (start + 1)..<close
+    guard isURIAutolink(inner) || isEmailAutolink(inner) else { return nil }
+
+    for offset in start...close {
+      attributes[slot(offset)].kindCode = InlineKindCode.linkURL
+      attributes[slot(offset)].isMarker = true
+    }
+    for offset in inner {
+      attributes[slot(offset)].isMarker = false
+    }
+    return close + 1
+  }
+
+  /// Whether `inner` is an absolute URI: a scheme of 2–32 characters starting with a
+  /// letter and continuing with letters, digits, `+`, `-`, or `.`, then a `:`.
+  ///
+  /// Everything after the colon is already known to contain no whitespace and no `<`,
+  /// which is the whole of what CommonMark asks of it.
+  private func isURIAutolink(_ inner: Range<Int>) -> Bool {
+    guard isASCIILetter(units[inner.lowerBound]) else { return false }
+    var cursor = inner.lowerBound + 1
+    while cursor < inner.upperBound {
+      let unit = units[cursor]
+      if unit == colon { break }
+      guard
+        isASCIILetter(unit) || isASCIIDigit(unit) || unit == plusSign || unit == hyphen
+          || unit == fullStop
+      else { return false }
+      cursor += 1
+    }
+    guard cursor < inner.upperBound, units[cursor] == colon else { return false }
+    let schemeLength = cursor - inner.lowerBound
+    return schemeLength >= 2 && schemeLength <= 32
+  }
+
+  /// Whether `inner` is an email address: a non-empty local part, one `@`, and a domain of
+  /// dot-separated labels of letters, digits, and interior hyphens.
+  ///
+  /// A hand-written approximation of CommonMark's email regex, and approximate on purpose:
+  /// the exact grammar exists to reject addresses a mail server would, and this one exists
+  /// to decide whether to paint a span. Getting it slightly wide costs a link where a reader
+  /// wrote something that looks exactly like an address.
+  private func isEmailAutolink(_ inner: Range<Int>) -> Bool {
+    var at = -1
+    for offset in inner where units[offset] == atSign {
+      // More than one `@` is not an address.
+      if at >= 0 { return false }
+      at = offset
+    }
+    guard at > inner.lowerBound, at + 1 < inner.upperBound else { return false }
+
+    for offset in inner.lowerBound..<at {
+      let unit = units[offset]
+      guard isASCIILetter(unit) || isASCIIDigit(unit) || isEmailLocalPunctuation(unit) else {
+        return false
+      }
+    }
+
+    var labelLength = 0
+    var cursor = at + 1
+    var sawDot = false
+    while cursor < inner.upperBound {
+      let unit = units[cursor]
+      if unit == fullStop {
+        guard labelLength > 0, units[cursor - 1] != hyphen else { return false }
+        sawDot = true
+        labelLength = 0
+        cursor += 1
+        continue
+      }
+      if unit == hyphen {
+        guard labelLength > 0 else { return false }
+      } else {
+        guard isASCIILetter(unit) || isASCIIDigit(unit) else { return false }
+      }
+      labelLength += 1
+      guard labelLength <= 63 else { return false }
+      cursor += 1
+    }
+    return sawDot && labelLength > 0 && units[inner.upperBound - 1] != hyphen
+  }
+
+  /// The ASCII punctuation CommonMark allows in an email local part.
+  private func isEmailLocalPunctuation(_ unit: UInt16) -> Bool {
+    switch unit {
+    case 0x2E, 0x21, 0x23, 0x24, 0x25, 0x26, 0x27, 0x2A, 0x2B, 0x2F, 0x3D, 0x3F, 0x5E, 0x5F,
+      0x60, 0x7B, 0x7C, 0x7D, 0x7E, 0x2D:
+      return true
+    default: return false
+    }
   }
 
   // MARK: Code spans
@@ -658,6 +825,13 @@ private struct InlineWalk {
     if character == asterisk {
       canOpen = leftFlanking
       canClose = rightFlanking
+    } else if character == tilde {
+      // GFM: a run of three or more tildes is literal text. Recorded rather than skipped so
+      // the run is still consumed in one step and cannot be reconsidered delimiter by
+      // delimiter on the next iteration.
+      let usable = end - start <= 2
+      canOpen = usable && leftFlanking
+      canClose = usable && rightFlanking
     } else {
       canOpen = leftFlanking && (!rightFlanking || beforeIsPunctuation)
       canClose = rightFlanking && (!leftFlanking || afterIsPunctuation)
@@ -688,7 +862,7 @@ private struct InlineWalk {
     // failed, so the floor is remembered per shape: delimiter character × whether the
     // closer can also open × run length mod three, which is exactly what the rule of three
     // reads.
-    var openersBottom = [Int](repeating: stackBottom, count: 12)
+    var openersBottom = [Int](repeating: stackBottom, count: 18)
 
     var closerIndex = stackBottom
     while closerIndex < delimiters.count {
@@ -704,7 +878,8 @@ private struct InlineWalk {
       while openerIndex >= floor {
         let opener = delimiters[openerIndex]
         if opener.character == delimiters[closerIndex].character, opener.canOpen,
-          opener.remaining > 0, !ruleOfThreeBlocks(opener, delimiters[closerIndex])
+          opener.remaining > 0, !ruleOfThreeBlocks(opener, delimiters[closerIndex]),
+          !lengthMismatchBlocks(opener, delimiters[closerIndex])
         {
           found = true
           break
@@ -734,24 +909,49 @@ private struct InlineWalk {
   /// open, and its length mod three — the three things the rule of three consults, so two
   /// closers sharing a slot are interchangeable as far as matching is concerned.
   private func shapeKey(_ closer: DelimiterRun) -> Int {
-    let character = closer.character == asterisk ? 0 : 1
+    let character: Int
+    switch closer.character {
+    case asterisk: character = 0
+    case underscore: character = 1
+    default: character = 2
+    }
     return character * 6 + (closer.canOpen ? 3 : 0) + (closer.length % 3)
   }
 
   /// CommonMark's "rule of three": when one of the two runs can both open and close, a
   /// pair is forbidden if the sum of the *original* lengths is a multiple of three unless
   /// both lengths are.
+  ///
+  /// Emphasis only. It is CommonMark's tie-breaker for `*` and `_`, GFM's tildes are not
+  /// emphasis, and applying it to them would make `~x~` — two runs of one, summing to two —
+  /// behave differently from `~~x~~` for a reason that has nothing to do with tildes.
   private func ruleOfThreeBlocks(_ opener: DelimiterRun, _ closer: DelimiterRun) -> Bool {
+    guard opener.character != tilde else { return false }
     guard closer.canOpen || opener.canClose else { return false }
     guard (opener.length + closer.length) % 3 == 0 else { return false }
     return !(opener.length % 3 == 0 && closer.length % 3 == 0)
+  }
+
+  /// GFM's strikethrough length rule: a `~` opener pairs only with a closer of the **same**
+  /// original length, so `~~x~` and `~x~~` are literal tildes rather than a struck `x`.
+  ///
+  /// Emphasis has no such rule — `***x*` is legal and pairs one asterisk — which is why
+  /// this is a separate predicate rather than a clause inside ``ruleOfThreeBlocks(_:_:)``.
+  private func lengthMismatchBlocks(_ opener: DelimiterRun, _ closer: DelimiterRun) -> Bool {
+    opener.character == tilde && opener.length != closer.length
   }
 
   /// Spends one or two delimiters from each side of a matched pair and paints the result.
   private mutating func applyPair(openerIndex: Int, closerIndex: Int) {
     let opener = delimiters[openerIndex]
     let closer = delimiters[closerIndex]
-    let use = (opener.remaining >= 2 && closer.remaining >= 2) ? 2 : 1
+    // Tildes spend the whole run at once: the two runs are the same length by the time
+    // this is reached, and GFM has no "one tilde is light strikethrough" reading to make
+    // spending one at a time mean anything.
+    let use =
+      opener.character == tilde
+      ? min(opener.remaining, closer.remaining)
+      : ((opener.remaining >= 2 && closer.remaining >= 2) ? 2 : 1)
 
     // An opener spends from its right end and a closer from its left, so the spent
     // delimiters are always the ones nearest the content. That is what makes `***x***`
@@ -761,7 +961,10 @@ private struct InlineWalk {
     let closerSpentStart = closer.start + closer.length - closer.remaining
     let closerSpentEnd = closerSpentStart + use
 
-    let bit = use == 2 ? StyleSet.strong.rawValue : StyleSet.emphasis.rawValue
+    let bit: UInt16 =
+      opener.character == tilde
+      ? StyleSet.strikethrough.rawValue
+      : (use == 2 ? StyleSet.strong.rawValue : StyleSet.emphasis.rawValue)
     for offset in openerSpentStart..<closerSpentEnd {
       attributes[slot(offset)].style |= bit
     }

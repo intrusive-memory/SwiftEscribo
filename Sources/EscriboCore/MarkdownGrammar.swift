@@ -43,6 +43,27 @@ private let digitZero: UInt16 = 0x30
 /// `9`.
 private let digitNine: UInt16 = 0x39
 
+/// `|`.
+private let verticalBar: UInt16 = 0x7C
+
+/// `:`.
+private let colon: UInt16 = 0x3A
+
+/// `[`.
+private let leftBracket: UInt16 = 0x5B
+
+/// `]`.
+private let rightBracket: UInt16 = 0x5D
+
+/// `\`.
+private let backslash: UInt16 = 0x5C
+
+/// `x`.
+private let lowercaseX: UInt16 = 0x78
+
+/// `X`.
+private let uppercaseX: UInt16 = 0x58
+
 /// Whether `unit` is a space or a tab. The only two characters CommonMark counts as
 /// indentation, and the only two this grammar ever skips.
 private func isSpaceOrTab(_ unit: UInt16) -> Bool { unit == space || unit == tab }
@@ -239,12 +260,54 @@ struct MarkdownBlockState: Equatable, Sendable {
 ///   ``ElementKind/blockquote`` line, not a heading inside a quote. Expressing both at
 ///   once needs a container axis on ``LineRecord``, which is public API.
 /// - A list item's own content is likewise not re-scanned: `- # Title` is a list item.
+///
+/// ## GFM and YAML frontmatter, added in Sortie 20
+///
+/// Tables, task-list checkboxes, and YAML frontmatter are block structure and live here;
+/// strikethrough and autolinks are inline and live in ``MarkdownInline``. Three decisions
+/// in this half are worth stating where a later sortie will find them.
+///
+/// **Frontmatter is decided by line *position*, not by state.** A region opens only when
+/// ``GrammarLine/index`` is zero, because the state entering line 0 —
+/// ``LineState/documentStart`` — is a state many later lines legitimately begin in too, so
+/// state alone cannot say "this is the top of the document". Reading the index is sound
+/// for the incremental engine for one reason, and it is worth writing down: line 0 begins
+/// at offset 0, so **any** edit that could change which line is line 0 must touch offset 0,
+/// and an edit touching offset 0 always rescans from line 0. There is no edit that renumbers
+/// line 0 without rescanning it.
+///
+/// **A table's header row is not classified as one.** GFM recognizes a header only by the
+/// delimiter row beneath it, which is one line of lookahead this grammar does not have —
+/// the same gap the setext underline has, and it waits on the same later sortie. The
+/// delimiter row is recognized instead, from its own text plus
+/// ``MarkdownBlockState/paragraphOpen`` arriving from above, and the header stays a
+/// ``ElementKind/paragraph``. For the same reason the delimiter row's **cell count is never
+/// checked against the header's**, which GFM requires; a delimiter row under any paragraph
+/// opens a table.
+///
+/// **A table ends at a blank line or at a line with no `|` in it.** GFM ends it at a blank
+/// line or at the start of another block-level construct, which would mean re-running the
+/// whole construct chain speculatively for every row. Requiring a pipe gets every real
+/// document right — headings, fences, quotes, and lists have no pipe — and gets `# a | b`
+/// directly after a table wrong, which is the trade.
 struct MarkdownGrammar: LineGrammar {
 
   /// The ``LineState/openConstruct`` tag meaning "a fenced code block is open".
   ///
   /// Its meaning belongs to this grammar; the scanner only ever compares it.
   static let fenceTag: UInt16 = 1
+
+  /// The ``LineState/openConstruct`` tag meaning "a YAML frontmatter region is open".
+  ///
+  /// A tag rather than a new field on ``LineState`` because the three multi-line
+  /// constructs this grammar has — a fence, a frontmatter region, a table — are mutually
+  /// exclusive: a document inside one is inside no other. One scalar therefore says which,
+  /// and convergence across a frontmatter region falls out of the same comparison that
+  /// makes convergence across a fence work.
+  static let frontmatterTag: UInt16 = 2
+
+  /// The ``LineState/openConstruct`` tag meaning "a GFM table's body is open".
+  static let tableTag: UInt16 = 3
 
   /// The width of a CommonMark tab stop, in **visual columns**.
   ///
@@ -270,9 +333,27 @@ struct MarkdownGrammar: LineGrammar {
       return scanInsideFence(line, state: state)
     }
 
+    // Inside frontmatter, nothing else is syntax either — a `#` is a YAML comment and a
+    // `- ` is a YAML sequence entry, not a heading and not a list. Two outcomes and no
+    // third, exactly as inside a fence: the line closes the region, or it is an entry. That
+    // is what makes an **unterminated** region scan to the end of the document and return
+    // normally rather than needing an error path that does not exist.
+    if state.openConstruct == Self.frontmatterTag {
+      return scanInsideFrontmatter(line)
+    }
+
     let units = line.units
     let indent = leadingIndent(units)
     let incoming = state.markdownBlocks
+
+    // A table body row, before the blank check would classify nothing and before the
+    // construct chain would reclassify it. A blank line falls through and closes the table;
+    // so does a line with no `|`, which is then scanned as whatever it actually is.
+    if state.openConstruct == Self.tableTag, indent.units != units.count,
+      containsUnescapedPipe(units)
+    {
+      return scanTableRow(line, blocks: incoming)
+    }
 
     // A whitespace-only line is **blank** in Markdown — CommonMark's block separator is
     // "a line containing no characters, or only spaces and tabs" — which is a grammar's
@@ -280,6 +361,14 @@ struct MarkdownGrammar: LineGrammar {
     // deliberately does not decide it.
     if indent.units == units.count {
       return scanBlank(line, blocks: incoming)
+    }
+
+    // Frontmatter, and **only** on the document's first line. This is the one construct in
+    // this grammar decided by where the line is rather than by what it says, and it is the
+    // reason `---` on line 1 and `---` on line 5 are different elements. See the type's
+    // documentation for why reading the line index does not break incremental convergence.
+    if line.index == 0, let scan = scanFrontmatterOpening(line) {
+      return scan
     }
 
     // Close every list item this line has outdented past, then measure the line against
@@ -311,6 +400,14 @@ struct MarkdownGrammar: LineGrammar {
     // the thematic-break case regardless of what is above them.
     if incoming.paragraphOpen,
       let scan = scanSetextUnderline(line, indent: indent, blocks: blocks)
+    {
+      return scan
+    }
+    // A table delimiter row before the thematic break, because `---|---` reaches neither
+    // the setext case nor the break case — both stop at the first `|` — but reads as one of
+    // them to anyone skimming the chain. Placed here so the ordering is written down.
+    if incoming.paragraphOpen,
+      let scan = scanTableDelimiterRow(line, indent: indent, blocks: blocks)
     {
       return scan
     }
@@ -674,23 +771,401 @@ struct MarkdownGrammar: LineGrammar {
     next.pushList(contentColumn: contentColumn)
     next.paragraphOpen = !isBlankItem
 
+    // A GFM task-list checkbox, if the item opens with one. It does **not** move the
+    // content column pushed above: GFM measures an item's content from just past its list
+    // marker, and a checkbox is content that happens to be syntax. Moving it would make a
+    // continuation line under `- [ ] a` need four more columns of indent than one under
+    // `- a`, which no writer expects and no renderer does.
+    let checkbox = taskListCheckbox(units, from: contentUnits)
+    let textUnits = checkbox?.end ?? contentUnits
+
     let base = line.contentRange.lowerBound
     var spans: [EscriboSpan] = [
       EscriboSpan(
         range: (base + indent.units)..<(base + contentUnits), kind: .listItem, role: .marker)
     ]
+    if let checkbox {
+      spans.append(
+        EscriboSpan(
+          range: (base + contentUnits)..<(base + checkbox.end),
+          kind: checkbox.checked ? .taskListChecked : .taskListUnchecked,
+          role: .marker))
+    }
     spans.append(
       contentsOf: MarkdownInline.spans(
-        in: units, range: contentUnits..<units.count, base: base, kind: .listItem,
+        in: units, range: textUnits..<units.count, base: base, kind: .listItem,
         allowsHardBreak: true))
 
     return LineScan(
       spans: spans,
       element: ordered ? .orderedListItem : .unorderedListItem,
-      contentRange: (base + contentUnits)..<line.contentRange.upperBound,
+      contentRange: (base + textUnits)..<line.contentRange.upperBound,
       depth: depth,
       endState: LineState(markdownBlocks: next)
     )
+  }
+
+  /// A GFM task-list checkbox at `start`, plus the whitespace after it — or `nil`.
+  ///
+  /// `[ ]`, `[x]`, or `[X]`, and it must be followed by whitespace or end the line, so
+  /// `- [x]y` is an ordinary item whose text begins with a bracket. The returned `end` is
+  /// past the trailing whitespace, so the item's text begins at the first character a
+  /// reader sees — the same rule the ATX heading marker follows.
+  ///
+  /// The two states are distinguished by ``SpanKind``, not by ``StyleSet`` and not by
+  /// ``SpanRole``: a theme draws an empty box or a tick, which is a difference in what the
+  /// run *is*, and the style axis is a set of emphasis flags with nowhere to say it.
+  private func taskListCheckbox(_ units: [UInt16], from start: Int)
+    -> (end: Int, checked: Bool)?
+  {
+    guard start + 2 < units.count else { return nil }
+    guard units[start] == leftBracket, units[start + 2] == rightBracket else { return nil }
+
+    let mark = units[start + 1]
+    let checked: Bool
+    if mark == lowercaseX || mark == uppercaseX {
+      checked = true
+    } else if isSpaceOrTab(mark) {
+      checked = false
+    } else {
+      return nil
+    }
+
+    var end = start + 3
+    guard end == units.count || isSpaceOrTab(units[end]) else { return nil }
+    while end < units.count, isSpaceOrTab(units[end]) {
+      end += 1
+    }
+    return (end, checked)
+  }
+
+  // MARK: - YAML frontmatter
+
+  /// Scans the `---` that opens a document's YAML frontmatter region, or returns `nil`.
+  ///
+  /// Only ever called with ``GrammarLine/index`` zero. Everything about this construct is
+  /// that restriction: `---` is a ``ElementKind/thematicBreak`` on every other line of
+  /// every document, and turning the same three characters into a region delimiter one line
+  /// higher is the whole of what this method adds. `---` on line five stays a thematic
+  /// break because this method is never reached there, not because it declines the line.
+  ///
+  /// **Exactly three hyphens**, no leading whitespace, nothing but whitespace after them.
+  /// Three and not "three or more", so that `----` on line one is still a thematic break:
+  /// Jekyll, Hugo, and every other tool that reads this region spell the fence `---`, and
+  /// widening the rule would silently swallow the top of a document that opens with a rule.
+  private func scanFrontmatterOpening(_ line: GrammarLine) -> LineScan? {
+    guard let runEnd = frontmatterDelimiterEnd(line.units) else { return nil }
+    return frontmatterDelimiterScan(line, runEnd: runEnd, opening: true)
+  }
+
+  /// Scans a line that begins **inside** an open frontmatter region.
+  ///
+  /// Two outcomes and no third, exactly as inside a fence: the line closes the region, or
+  /// it is an entry. There is no failure case, which is what makes an unterminated region
+  /// scan to the end of the document and return normally — the state simply stays open, and
+  /// the last line of the document is the last line of the region.
+  ///
+  /// **What "unterminated frontmatter degrades to `.text`" means here, stated exactly.**
+  /// This grammar has zero lookahead, so at the opening `---` it cannot know whether a
+  /// closing one exists; retro-classifying the opener is not available to it and will not be
+  /// until the sortie that owns raising the lookahead. What it can do, and does, is refuse
+  /// to invent structure: a line inside the region that is not `key:`-shaped comes back as a
+  /// single ``SpanKind/text`` span. A region that was never YAML — the unterminated case in
+  /// practice — is therefore `.text` from its second line to the end of the document, which
+  /// is the outcome the requirement asks for by the route a line grammar can actually take.
+  private func scanInsideFrontmatter(_ line: GrammarLine) -> LineScan {
+    if let runEnd = frontmatterDelimiterEnd(line.units) {
+      return frontmatterDelimiterScan(line, runEnd: runEnd, opening: false)
+    }
+    return scanFrontmatterEntry(line)
+  }
+
+  /// The shared shape of an opening and a closing frontmatter fence: one marker span, an
+  /// empty content range, and the state the region is or is not open in.
+  private func frontmatterDelimiterScan(
+    _ line: GrammarLine, runEnd: Int, opening: Bool
+  ) -> LineScan {
+    let base = line.contentRange.lowerBound
+    return LineScan(
+      spans: [
+        EscriboSpan(range: base..<(base + runEnd), kind: .frontmatterDelimiter, role: .marker)
+      ],
+      element: .frontmatterDelimiter,
+      // Pure delimiter, like a closing code fence: no content, so an empty range where
+      // content would have begun.
+      contentRange: (base + runEnd)..<(base + runEnd),
+      endState: opening ? LineState(openConstruct: Self.frontmatterTag) : LineState()
+    )
+  }
+
+  /// The end offset of a frontmatter fence run, or `nil` if this line is not one.
+  ///
+  /// No leading whitespace — a fence sits flush left — exactly three hyphens, and nothing
+  /// but spaces and tabs after them.
+  private func frontmatterDelimiterEnd(_ units: [UInt16]) -> Int? {
+    var runEnd = 0
+    while runEnd < units.count, units[runEnd] == hyphen {
+      runEnd += 1
+    }
+    guard runEnd == 3 else { return nil }
+    var cursor = runEnd
+    while cursor < units.count, isSpaceOrTab(units[cursor]) {
+      cursor += 1
+    }
+    guard cursor == units.count else { return nil }
+    return runEnd
+  }
+
+  /// Scans one line inside a frontmatter region into key and value **spans**.
+  ///
+  /// Spans, never values. `EscriboCore` imports nothing at all, so there is no YAML parser
+  /// here and deliberately no date, number, or boolean anywhere in this package's output:
+  /// the scanner says where the value is and the source says what it is. A consumer that
+  /// wants `type: docs` as a dictionary reads the ranges and does its own parsing, with its
+  /// own dependencies, outside this package.
+  ///
+  /// The key is everything from the first non-whitespace character to the first `:` that is
+  /// followed by whitespace or ends the line — YAML's own rule, and the reason
+  /// `url: https://example.com` does not split at the scheme's colon. A leading `- ` is
+  /// consumed as part of the leading marker so a sequence of mappings still finds its keys.
+  private func scanFrontmatterEntry(_ line: GrammarLine) -> LineScan {
+    let units = line.units
+    let base = line.contentRange.lowerBound
+    let openState = LineState(openConstruct: Self.frontmatterTag)
+
+    var keyStart = 0
+    while keyStart < units.count, isSpaceOrTab(units[keyStart]) {
+      keyStart += 1
+    }
+    // A YAML sequence entry — `- name: bob`. The dash and its space are marker, and the
+    // key search resumes after them.
+    if keyStart < units.count, units[keyStart] == hyphen,
+      keyStart + 1 < units.count, isSpaceOrTab(units[keyStart + 1])
+    {
+      keyStart += 2
+      while keyStart < units.count, isSpaceOrTab(units[keyStart]) {
+        keyStart += 1
+      }
+    }
+
+    // A `#` comment and a blank line are not entries, and neither is a line with no key.
+    // All three take the degrade path below rather than pretending to a structure they do
+    // not have.
+    if keyStart < units.count, units[keyStart] != numberSign,
+      let colonOffset = frontmatterKeySeparator(units, from: keyStart), colonOffset > keyStart
+    {
+      var valueStart = colonOffset + 1
+      while valueStart < units.count, isSpaceOrTab(units[valueStart]) {
+        valueStart += 1
+      }
+      var spans: [EscriboSpan] = [
+        EscriboSpan(
+          range: (base + keyStart)..<(base + colonOffset), kind: .frontmatterKey),
+        // The `:` and the whitespace after it, as a marker carrying the key's own kind —
+        // the rule every marker in this package obeys.
+        EscriboSpan(
+          range: (base + colonOffset)..<(base + valueStart), kind: .frontmatterKey,
+          role: .marker),
+      ]
+      if valueStart < units.count {
+        spans.append(
+          EscriboSpan(
+            range: (base + valueStart)..<line.contentRange.upperBound, kind: .frontmatterValue))
+      }
+      return LineScan(
+        spans: spans,
+        element: .frontmatter,
+        contentRange: (base + valueStart)..<line.contentRange.upperBound,
+        endState: openState
+      )
+    }
+
+    // Degrade: one `.text` span over whatever is there, and the region stays open.
+    return LineScan(
+      spans: line.contentRange.isEmpty
+        ? [] : [EscriboSpan(range: line.contentRange, kind: .text)],
+      element: .frontmatter,
+      contentRange: line.contentRange,
+      endState: openState
+    )
+  }
+
+  /// The offset of the `:` separating a frontmatter key from its value, or `nil`.
+  ///
+  /// YAML's rule: the colon must be followed by whitespace or end the line. Without it
+  /// `url: https://example.com` would split at `https:` and the key would be `url: https`.
+  private func frontmatterKeySeparator(_ units: [UInt16], from start: Int) -> Int? {
+    var cursor = start
+    while cursor < units.count {
+      if units[cursor] == colon, cursor + 1 == units.count || isSpaceOrTab(units[cursor + 1]) {
+        return cursor
+      }
+      cursor += 1
+    }
+    return nil
+  }
+
+  // MARK: - GFM tables
+
+  /// Scans `|:---|---:|` — a table's delimiter row — or returns `nil`.
+  ///
+  /// Only reachable with ``MarkdownBlockState/paragraphOpen`` set, because in GFM a
+  /// delimiter row is only a delimiter row under a header, and a header is a paragraph line
+  /// as far as this grammar is concerned. Two consequences of having no lookahead, both
+  /// deliberate and both stated in the type's documentation: the header line above stays a
+  /// ``ElementKind/paragraph``, and the delimiter row's cell count is never checked against
+  /// the header's.
+  ///
+  /// **At least one `|` is required**, which is what keeps this method from competing with
+  /// the setext underline and the thematic break: `---` under a paragraph reaches neither
+  /// this method's success path nor its ambiguity, because it has no pipe at all.
+  ///
+  /// The alignments go on the **line record** rather than into a span, because alignment is
+  /// per *column* and a span has no column axis — see ``LineRecord/tableAlignments``.
+  private func scanTableDelimiterRow(
+    _ line: GrammarLine, indent: Indent, blocks: MarkdownBlockState
+  ) -> LineScan? {
+    let units = line.units
+    var cursor = indent.units
+    var sawPipe = false
+    var alignments: [TableAlignment] = []
+
+    if units[cursor] == verticalBar {
+      sawPipe = true
+      cursor += 1
+    }
+    while cursor < units.count {
+      while cursor < units.count, isSpaceOrTab(units[cursor]) {
+        cursor += 1
+      }
+      // Trailing whitespace after the last `|`. The row is complete.
+      if cursor == units.count { break }
+
+      let leftColon = units[cursor] == colon
+      if leftColon { cursor += 1 }
+      var dashes = 0
+      while cursor < units.count, units[cursor] == hyphen {
+        dashes += 1
+        cursor += 1
+      }
+      guard dashes >= 1 else { return nil }
+      let rightColon = cursor < units.count && units[cursor] == colon
+      if rightColon { cursor += 1 }
+      while cursor < units.count, isSpaceOrTab(units[cursor]) {
+        cursor += 1
+      }
+
+      alignments.append(Self.alignment(left: leftColon, right: rightColon))
+      if cursor == units.count { break }
+      guard units[cursor] == verticalBar else { return nil }
+      sawPipe = true
+      cursor += 1
+    }
+    guard sawPipe, !alignments.isEmpty else { return nil }
+
+    let base = line.contentRange.lowerBound
+    return LineScan(
+      spans: [
+        EscriboSpan(
+          range: (base + indent.units)..<line.contentRange.upperBound, kind: .tableDelimiter,
+          role: .marker)
+      ],
+      element: .tableDelimiterRow,
+      // Pure delimiter, like a thematic break: the row prints as a rule and has no content.
+      contentRange: line.contentRange.upperBound..<line.contentRange.upperBound,
+      depth: max(0, blocks.listDepth - 1),
+      endState: LineState(
+        openConstruct: Self.tableTag,
+        // The block context is carried **through** the table for the reason it is carried
+        // through a fence: dropping it would close every open list item at the table and
+        // reopen nothing after it, which is a state omission the gate test cannot see.
+        markdownBlocks: closingParagraph(blocks)
+      ),
+      tableAlignments: alignments
+    )
+  }
+
+  /// Which alignment a delimiter cell's colons declare.
+  private static func alignment(left: Bool, right: Bool) -> TableAlignment {
+    switch (left, right) {
+    case (true, true): return .center
+    case (true, false): return .left
+    case (false, true): return .right
+    case (false, false): return .unspecified
+    }
+  }
+
+  /// Scans a table body row: cell text as content, each separating `|` as a marker.
+  ///
+  /// Cells are inline-scanned, so `| **bold** | [link](x) |` is a row whose first cell is
+  /// strong and whose second is a link. `allowsHardBreak` is false: a trailing double space
+  /// inside a table is not a line break in GFM, and emitting one would paint the row's last
+  /// cell short of its own end.
+  ///
+  /// A `\|` is a literal pipe and does **not** end a cell, which is the one escape GFM
+  /// gives tables and the only way to put a pipe in a cell at all.
+  ///
+  /// The record carries **no** alignments; a consumer aligning a cell reads them off the
+  /// delimiter row above. See ``LineRecord/tableAlignments`` for the allocation argument
+  /// behind that.
+  private func scanTableRow(_ line: GrammarLine, blocks: MarkdownBlockState) -> LineScan {
+    let units = line.units
+    let base = line.contentRange.lowerBound
+    var spans: [EscriboSpan] = []
+    var cellStart = 0
+    var cursor = 0
+
+    func appendCell(_ end: Int) {
+      guard end > cellStart else { return }
+      spans.append(
+        contentsOf: MarkdownInline.spans(
+          in: units, range: cellStart..<end, base: base, kind: .tableCell,
+          allowsHardBreak: false))
+    }
+
+    while cursor < units.count {
+      if units[cursor] == backslash, cursor + 1 < units.count {
+        cursor += 2
+        continue
+      }
+      if units[cursor] == verticalBar {
+        appendCell(cursor)
+        spans.append(
+          EscriboSpan(
+            range: (base + cursor)..<(base + cursor + 1), kind: .tableCell, role: .marker))
+        cursor += 1
+        cellStart = cursor
+        continue
+      }
+      cursor += 1
+    }
+    appendCell(units.count)
+
+    return LineScan(
+      spans: spans,
+      element: .tableRow,
+      contentRange: line.contentRange,
+      depth: max(0, blocks.listDepth - 1),
+      endState: LineState(
+        openConstruct: Self.tableTag, markdownBlocks: closingParagraph(blocks))
+    )
+  }
+
+  /// Whether `units` holds a `|` that is not backslash-escaped.
+  ///
+  /// The one question that decides whether an open table continues across this line. Linear
+  /// and allocation-free, like everything else on this path.
+  private func containsUnescapedPipe(_ units: [UInt16]) -> Bool {
+    var cursor = 0
+    while cursor < units.count {
+      if units[cursor] == backslash {
+        cursor += 2
+        continue
+      }
+      if units[cursor] == verticalBar { return true }
+      cursor += 1
+    }
+    return false
   }
 
   // MARK: - Indented code blocks

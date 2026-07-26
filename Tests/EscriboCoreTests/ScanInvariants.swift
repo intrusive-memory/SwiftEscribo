@@ -271,11 +271,17 @@ enum ScanInvariants {
     let contentOffset: Int
     let contentLength: Int
     let startState: LineState
+    /// Included so the gate compares it. A field on `LineRecord` that this type omitted
+    /// would be a field an incremental scan could get wrong on every seed and never be
+    /// caught — which is exactly the hole `PaintedDocument` exists to close.
+    let tableAlignments: [TableAlignment]
     let spans: [PaintedSpan]
 
     var description: String {
       "\(element.rawValue)(depth \(depth), \(length) units, content +\(contentOffset)…"
-        + "+\(contentOffset + contentLength), spans \(spans))"
+        + "+\(contentOffset + contentLength)"
+        + (tableAlignments.isEmpty ? "" : ", align \(tableAlignments.map(\.rawValue))")
+        + ", spans \(spans))"
     }
   }
 
@@ -311,6 +317,7 @@ enum ScanInvariants {
         contentOffset: record.contentRange.lowerBound - record.range.lowerBound,
         contentLength: record.contentRange.count,
         startState: record.startState,
+        tableAlignments: record.tableAlignments,
         spans: buckets[offset])
     }
   }

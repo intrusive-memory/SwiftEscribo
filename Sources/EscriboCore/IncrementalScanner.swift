@@ -261,7 +261,8 @@ struct IncrementalScanner<Grammar: LineGrammar> {
           contentRange: clamped(scan.contentRange ?? current.contentRange, into: current.range),
           element: scan.element,
           startState: entering,
-          depth: max(0, scan.depth)
+          depth: max(0, scan.depth),
+          tableAlignments: scan.tableAlignments
         ))
       spans.append(
         contentsOf: SpanTiling.tile(
