@@ -116,10 +116,9 @@ enum ResolvedGrammar: LineGrammar {
     case .markdown:
       self = .markdown(MarkdownGrammar())
     case .fountain:
-      // Block elements, the dialogue block, notes, boneyard, and the title page. GLOSA
-      // structure inside a note is still to come, and until it arrives a note's text is
-      // one span — a gap in richness, never in totality. Every line classifies and every
-      // scan tiles.
+      // Block elements, the dialogue block, notes, boneyard, and the title page, with
+      // GLOSA directives inside notes subdivided structurally by `GlosaScanner`. Every
+      // line classifies and every scan tiles.
       self = .fountain(FountainGrammar())
     default:
       self = .text(TextGrammar())

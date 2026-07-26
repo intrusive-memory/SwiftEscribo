@@ -253,9 +253,11 @@ extension SpanKind {
   /// carry content only, and the closing line carries the `]]`. Which line a marker sits
   /// on is the source's business, not the styler's.
   ///
-  /// A note's content is one span here. GLOSA directives inside a note —
-  /// `[[<breath length="4s"/>]]` — are scanned structurally by a later sortie, which
-  /// subdivides this span rather than replacing this kind.
+  /// A note's content is prose text here by default. A GLOSA directive inside a note —
+  /// `[[<breath length="4s"/>]]` — is subdivided by ``GlosaScanner`` into ``glosaTag``,
+  /// ``glosaAttributeName``, ``glosaAttributeValue``, and ``glosaPunctuation`` spans;
+  /// this kind still owns whatever prose sits around and between directives, and the
+  /// note's own `[[`/`]]` markers stay this kind regardless.
   public static let note = SpanKind(rawValue: "note")
 
   /// Fountain boneyard — `/* commented out */` — with its `/*` and `*/` as
@@ -288,4 +290,43 @@ extension SpanKind {
   /// document's metadata has to be able to tell which run is which without re-scanning the
   /// line.
   public static let titlePageValue = SpanKind(rawValue: "titlePageValue")
+
+  // MARK: - GLOSA directives inside Fountain notes
+
+  /// A GLOSA directive's tag name — the `breath` of `<breath length="4s"/>`, or the
+  /// `SceneContext` of `<SceneContext>` or its closer `</SceneContext>`.
+  ///
+  /// Structural only: any run of ASCII letters immediately after `<` or `</` is a tag
+  /// name here. Whether `breath` is a tag GLOSA actually defines is ``GlosaCore``'s
+  /// business (EXECUTION_PLAN.md § Sortie 16) — this package has no tag table and never
+  /// will, so an unrecognized tag scans exactly like a recognized one.
+  public static let glosaTag = SpanKind(rawValue: "glosaTag")
+
+  /// A GLOSA directive's attribute name — the `length` and `strength` of
+  /// `<breath length="4s" strength="strong"/>`.
+  ///
+  /// As with ``glosaTag``, no attribute is checked against a list: any run of ASCII
+  /// letters where an attribute name is structurally expected is one.
+  public static let glosaAttributeName = SpanKind(rawValue: "glosaAttributeName")
+
+  /// A GLOSA attribute's value — the `4s` of `length="4s"`, quotes excluded.
+  ///
+  /// The quotes themselves are ``glosaPunctuation``, exactly as a link's brackets are
+  /// ``SpanKind/link`` but its parentheses are ``SpanKind/linkURL``'s marker: the value
+  /// is what a reader or a downstream tool cares about, and the quoting is syntax around
+  /// it.
+  public static let glosaAttributeValue = SpanKind(rawValue: "glosaAttributeValue")
+
+  /// A GLOSA directive's punctuation — `<`, `</`, `>`, `/>`, `=`, the attribute quotes,
+  /// and the whitespace between tokens.
+  ///
+  /// Its own ``SpanKind`` rather than a ``SpanRole/marker`` role shared with an adjacent
+  /// kind, unlike most delimiters in this vocabulary: a GLOSA directive's punctuation
+  /// does not belong to any single one of ``glosaTag``, ``glosaAttributeName``, or
+  /// ``glosaAttributeValue`` — the `=` between an attribute name and its value belongs
+  /// to neither — so there is no single kind for it to share role with. The sortie brief
+  /// asks for this by name for exactly that reason. Emitted with ``SpanRole/marker`` all
+  /// the same, so a theme dims it the way every other piece of syntax in this vocabulary
+  /// is dimmed.
+  public static let glosaPunctuation = SpanKind(rawValue: "glosaPunctuation")
 }

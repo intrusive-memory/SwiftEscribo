@@ -879,6 +879,12 @@ struct FountainGrammar: LineGrammar {
     if region != 0 { out.firstRegion = region }
 
     /// Records the region running from `regionStart` as ending at `end`.
+    ///
+    /// A note's content is handed to ``GlosaScanner`` rather than emitted as one span:
+    /// Sortie 16 subdivides it into GLOSA structure wherever the text looks like a
+    /// directive, and leaves it as plain ``SpanKind/note`` prose everywhere else.
+    /// Boneyard content is untouched — GLOSA inside struck-out text is out of this
+    /// sortie's scope, which is "inside a note".
     func closeRegion(at end: Int, withMarker hasCloser: Bool) {
       let kind: SpanKind = region == Self.noteTag ? .note : .boneyard
       let textEnd = hasCloser ? end - 2 : end
@@ -887,7 +893,11 @@ struct FountainGrammar: LineGrammar {
           EscriboSpan(range: (base + regionStart)..<(base + textStart), kind: kind, role: .marker))
       }
       if textEnd > textStart {
-        out.spans.append(EscriboSpan(range: (base + textStart)..<(base + textEnd), kind: kind))
+        if kind == .note {
+          out.spans.append(contentsOf: GlosaScanner.scan(units, in: textStart..<textEnd, base: base))
+        } else {
+          out.spans.append(EscriboSpan(range: (base + textStart)..<(base + textEnd), kind: kind))
+        }
       }
       if hasCloser {
         out.spans.append(
