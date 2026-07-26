@@ -41,6 +41,15 @@ let package = Package(
     .testTarget(
       name: "EscriboCoreTests",
       dependencies: ["EscriboCore"],
+      // The Fountain fixture corpus — three vendored screenplays and the hostile
+      // documents authored alongside them — plus their golden snapshots. `.copy` rather
+      // than `.process` so the bytes reach the bundle **unaltered**: several fixtures
+      // exist precisely to carry CRLF, a lone CR, or a missing final terminator, and a
+      // resource rule entitled to transform them would launder away the thing under test.
+      // The directory structure is preserved, so the loader reaches them at
+      // `Fixtures/Fountain` and `Fixtures/Golden` through `Bundle.module`. No test may
+      // name a path outside the package.
+      resources: [.copy("Fixtures")],
       swiftSettings: [
         .enableUpcomingFeature("StrictConcurrency")
       ]
