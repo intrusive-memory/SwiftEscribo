@@ -57,14 +57,23 @@ updated: 2026-07-25
 
 ### WU-1 Core Substrate
 - Work unit state: RUNNING
-- Current sortie: 4 of 6
-- Sortie state: DISPATCHED
+- Current sortie: 5 of 6
+- Sortie state: PENDING (dispatch held until the Sortie 4 agent goes quiet — DL-19)
 - Sortie type: code
-- Model: opus
-- Complexity score: 23 (also forced by override: foundation_score 1 + 26 dependents)
-- Attempt: 1 of 3 (original agent `ade45006d96f0f850` still in flight — DL-19; the
-  re-dispatch was redundant, stood down with zero footprint, and is NOT an attempt)
-- Last verified: Sortie 3 COMPLETED — supervisor re-ran `make build` (exit 0) and
+- Model: TBD at dispatch
+- Complexity score: TBD at dispatch
+- Attempt: — (Sortie 4 closed at attempt 1; the redundant re-dispatch was NOT an attempt)
+- Last verified: Sortie 4 COMPLETED, commit `26ad85f` (+1,436 / −54 across 8 files).
+  Supervisor independently re-ran every exit criterion: `make test-core` **TEST
+  SUCCEEDED**, 73 tests / 8 suites; the EC2 grep returns no match and both entry points
+  read `-> ScanResult` with no `throws`/`async`; EC3–EC6 are asserted by a shared
+  `expectInvariants` helper driven over 8 corpus documents × every start offset ×
+  deletion length × replacement × 3 grammars — thousands of distinct edits against a
+  floor of 20. Charter re-checked: no regex, `EscriboCore` still imports nothing at all.
+  DL-14 discharged — `provisionalRecord` returns zero hits across `Sources/` and
+  `Tests/`. Bonus: `expectIncrementalMatchesFull` already asserts incremental ≡ full,
+  pre-empting Sortie 6's gate one layer up.
+- Previously verified: Sortie 3 COMPLETED — supervisor re-ran `make build` (exit 0) and
   `make test-core` (exit 0, 57 tests / 7 suites), confirmed `LineIndex` is internal
   and `UTF16TextSource` public, confirmed no `fullScan`/`incrementalScan` identifier
   leaked into Sources, no timing API anywhere under Tests, `EscriboCore` still
@@ -80,7 +89,7 @@ updated: 2026-07-25
 | 1 | COMPLETED | opus | 1 | `6a3c8ae` | build 0, test-core 0 (13 tests), 4/4 greps clean, 5 targets |
 | 2 | COMPLETED | opus | 1 | `c30ede2` | build 0, test-core 0 (32 tests), greps clean, opacity negative reproduced by supervisor probe |
 | 3 | COMPLETED | opus | 1 | `224a248` | build 0, test-core 0 (57 tests), 7/7 terminator fixtures, access levels correct, no timing API, ~2,200-edit incremental sweep |
-| 4 | DISPATCHED | opus | 1 | — | — |
+| 4 | COMPLETED | opus | 1 | `26ad85f` | test-core 0 (73 tests / 8 suites), EC2 grep clean, DL-14 fully discharged, thousands-of-edits sweep asserts all four invariants, no regex, still imports nothing |
 
 ### WU-2 Editor Substrate
 - Work unit state: NOT_STARTED
@@ -154,13 +163,15 @@ completion are therefore tracked by transcript mtime + `git log`, per DL-19.
 | DL-17 | 2026-07-25 | WU-1 | 4 | Model: opus | Complexity 23. The convergence engine is the highest-risk algorithm in the package and every grammar depends on its lookahead contract. |
 | DL-8 | 2026-07-25 | WU-1 | 2 | Model: opus | Complexity 21. Override also applies. The span/record model is the scanner→editor seam; the plan states plainly that a wrong answer here is rework in every later sortie. |
 | DL-18 | 2026-07-25 | WU-1 | 4 | ~~Sortie 4 RE-DISPATCHED at attempt 1~~ **RETRACTED — the liveness verification behind this decision was WRONG. See DL-19.** | Original (incorrect) reasoning, preserved for the brief: "The first supervisor session ended before the Sortie 4 agent returned. On resume: `TaskList` empty, no `claude` process older than the new session, no stranded build, working tree clean at `40e98a9`. The agent produced nothing." Every one of those observations was true and the conclusion drawn from them was still false. |
+| DL-20 | 2026-07-25 | WU-1 | 4 | CLEARED (supervisor's own DL-15 flag withdrawn): `backwardExtent` defaulting to `max(1, lookahead)` is sound, not a conflation | The stand-down agent flagged, and the supervisor repeated, that folding `lookahead` into the backward rule looked like the coupling DL-15 warns about. Inspection says otherwise, and the coupling is *required*: if line L's classification depends on lines L+1…L+n, then an edit at line E can change the classification of lines E−n…E, so correct rescanning **must** start at least `n` lines back. `backwardExtent ≥ lookahead` is a soundness obligation, and the engine's `max(1, backwardExtent, lookahead)` is a defensive floor that repairs an unsound grammar declaration rather than an arbitrary merge. DL-15's actual concern — Sortie 3's **code-unit** widening (`\r\n` pairing) vs Sortie 4's **grammar-state** widening — remains correctly honored: they are separate functions in separate types (`LineIndex` vs `IncrementalScanner.backwardWidening`). No action needed; do not "fix" this in a later sortie. |
+| DL-21 | 2026-07-25 | WU-1 | 5 | Sortie 5 dispatch HELD until the Sortie 4 agent's transcript goes quiet | Direct consequence of DL-19. Dispatching into a tree that another live agent is still touching is precisely the collision just survived, and surviving it was luck plus one agent's good judgment, not a control. The gate is ≥150 s with no transcript write, plus a clean tree. |
 | DL-19 | 2026-07-25 | WU-1 | 4 | CORRECTION: the original Sortie 4 agent was ALIVE the whole time. Redundant re-dispatch stood down with zero footprint. | The incumbent is `agent-ade45006d96f0f850` in session `a448d579`, dispatched 22:47 (the Sortie 4 dispatch minute), transcript still being written at 23:02:51 and growing past 458 KB. It had simply read for ~12 minutes before its first write — EXECUTION_PLAN.md is 58 KB and REQUIREMENTS.md 45 KB. **Why the check failed:** (a) `TaskList` is per-session and cannot see another session's agents; (b) `ps` cannot see an agent that is between tool calls, because there is no long-lived per-agent process to find; (c) "clean tree at the dispatch commit" is satisfied identically by a dead agent and by a live one that has read but not yet written. Three independent signals, all consistent with death, none capable of detecting life. The re-dispatched agent caught this itself — its first `Write` was rejected because the incumbent had created that exact file seconds earlier — and it stood down without writing a single line rather than corrupt the tree. Correct call; it is credited with the catch, not charged with the redundancy. **Reliable liveness signal, adopted going forward:** mtime of the agent's own transcript at `~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl`, cross-checked against source-tree mtimes. Never `ps`, never task lists across sessions, never a clean tree alone. |
 
 ---
 
 ## Overall Status
 
-- Sorties completed: 3 / 30 (Sorties 1, 2, 3 — all supervisor-verified)
-- Sorties in flight: 1 (Sortie 4, WU-1)
-- Work units completed: 0 / 7 (WU-1 RUNNING at 4 of 6; WU-2…WU-7 gated)
+- Sorties completed: 4 / 30 (Sorties 1–4 — all supervisor-verified)
+- Sorties in flight: 0 (Sortie 5 PENDING, held per DL-21)
+- Work units completed: 0 / 7 (WU-1 RUNNING at 5 of 6; WU-2…WU-7 gated)
 - Blocked: none
