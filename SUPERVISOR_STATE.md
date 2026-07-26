@@ -234,7 +234,15 @@ updated: 2026-07-26
 
 ### WU-6 Editor Behavior
 - Work unit state: **RUNNING** (unlocked 2026-07-26 — Sorties 20 and 12 both COMPLETED)
-- Current sortie: **27** of 30 — **PARTIAL**, awaiting continuation (DL-134, DL-135)
+- Work unit state: **COMPLETED** (2026-07-26 — all 3 sorties, 25–27, verified)
+- Current sortie: 27 of 27 — all complete
+- Sortie 27: **COMPLETED — supervisor-verified**, commits `57df2a1` + `26eafc8` (one
+  PARTIAL→continuation cycle, no attempt increment). All three re-run by the supervisor on
+  a **quiet machine**: `make test-core` 0 (**271/20**), `make test` 0 (**179/28**),
+  `make test-ios` 0 (**160/25**) — +12 tests / +1 suite on both platforms, the new
+  `GeometryRuleSetTests`. DL-46 grep clean in both trees. Supervisor probe fired
+  **143 issues across 11 tests** (DL-142). Two supervisor process errors on this sortie —
+  **DL-140** and **DL-141** — are recorded against the supervisor, not the agents.
 - Sortie 26: **COMPLETED — supervisor-verified**, commit `6478d8e`. Verified in an
   **isolated worktree** at that SHA (the shared tree was dirty with Sortie 17's work):
   `make test` 0 (**167/27**), `make test-ios` 0 (**148/24**), core 243/17 — counts match.
@@ -253,6 +261,7 @@ updated: 2026-07-26
 | Sortie | State | Model | Attempts | Commit | Verified by supervisor |
 |--------|-------|-------|----------|--------|------------------------|
 | 25 | COMPLETED | opus | 1 | `33a56bb` | supervisor re-ran all three (134/23 + 123/21 + 243/17); marker-deletion probe fired 6 named rows (DL-127); **DL-74 rule 4 discharged** |
+| 27 | COMPLETED | sonnet | 1 (PARTIAL→cont., no increment) | `57df2a1` + `26eafc8` | supervisor re-ran all three on a quiet machine (271/20 + 179/28 + 160/25); DL-46 grep clean; marker-resize probe fired **143 issues / 11 tests** (DL-142); `57df2a1` carries a probe artifact — bisect hazard (DL-143) |
 | 26 | COMPLETED | opus | 1 | `6478d8e` | supervisor worktree-verified (167/27 + 148/24 + 243/17); cue-Return probe fired 8 issues across 4 tests (DL-128); Return column declared a documented decline, not a silent one |
 
 ### WU-7 Verification & Hardening
@@ -438,6 +447,11 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-138 | 2026-07-26 | WU-4 | 21 | **`MarkdownGrammar.lookahead` raised 0 → 1 — correct, but the blast radius is every Markdown document, not just fenced ones** | The engine sizes the `LineWindow` from the **host** grammar, so a host declaring zero hands the nested Fountain scan an empty window: `line(ahead:)` answers `nil` for every line of every fenced screenplay and no natural character cue is ever recognized inside one. Raising it is the right fix and the agent documented it well. Two consequences the supervisor is recording rather than leaving implicit: (1) `backwardExtent` was already floored at `max(1, lookahead) == 1`, so **no edit rescans further back** — no regression there; (2) the forward rescan window now extends one line further past convergence **for every Markdown document in the package**, which is a cost **Sortie 28 must measure against its ≤1 ms in-line-edit budget**, not assume away. **→ Sortie 28.** |
 | DL-139 | 2026-07-26 | WU-4 | 21 | Documentation drift caught by the supervisor, not the agent — `MarkdownGrammar`'s type doc still says lookahead is zero | The `lookahead` property at `MarkdownGrammar.swift:364` returns `1` and its own doc comment explains why. But the **type-level** doc still opens its lookahead section with "**Zero.** Every construct here is decided by the line's own text…" and reasons "**because lookahead is zero**, a setext underline classifies *itself* as `heading` and does not retro-classify the paragraph above it". The *behavior* is unchanged and the gap is still real — the grammar does not consume the lookahead for setext — but the stated **reason** is now false, and the number it cites is wrong. Harmless today; exactly the comment a future reader trusts. **→ Sortie 30.** |
 
+| DL-140 | 2026-07-26 | — | 27 | **SUPERVISOR ERROR: two agents ran the same sortie in the same working tree. "The agent notified me it stopped" is NOT "the agent is dead."** | The supervisor ruled Sortie 27 PARTIAL and dispatched a continuation while the **original agent was still alive**. Its first notification arrived because it had backgrounded a `make test`; killing that hung child (DL-134) let it resume, and it ran ~38 more tool calls, created its own verification worktree, and notified a second time. For part of round 3 there were **two agents editing and committing Sortie 27 in one shared tree** — precisely the condition the supervisor had just declared eliminated by dropping to concurrency 1. **New standing rule: before dispatching any continuation, confirm the prior agent is finished by process state, not by its notification.** A task notification means "stopped for now and resumable", not "terminated". |
+| DL-141 | 2026-07-26 | — | 27 | **SUPERVISOR ERROR: an over-confident attribution, retracted.** | The continuation agent reported a commit it had not made and hypothesized that another agent was writing to the shared tree concurrently. The supervisor investigated, found the commit contained a comment reading `// FALSIFICATION PROBE (Sortie 27, temporary)`, and concluded on that basis that the agent had committed its own probe and misdiagnosed it. **That conclusion was wrong, or at least unestablished** — DL-140 shows a second Sortie 27 agent was live in the same tree, and *both* agents were running Sortie 27, so either could have authored that label. The reflog cannot separate them: same identity, same repo, sequential commits. **The agent's hypothesis was most likely correct and the supervisor's rebuttal was not.** Recorded because this mission's standard is that a claim must be falsifiable before it is asserted, and that standard binds the supervisor at least as tightly as the agents. Attribution is left unresolved; it does not affect the shipped code. |
+| DL-142 | 2026-07-26 | WU-6 | 27 | **Supervisor probe: Architecture §3 is defended in depth, by three sorties at once** | Neither of the agent's probes touched the "markers are never resized" rule, so the supervisor targeted it: made point size depend on the span's **role** rather than the line, in `EscriboStyler.swift:293` (`key.role == .marker ? 0.5 : 1.0`). **143 issues across 11 distinct tests**, spanning Sortie 7's source-theme and role-stage tests, Sortie 8's geometry tests, and Sortie 27's own `headingMarkerAndContentShareOnePointSize`. The structural guarantee — size is computed from `line.element`/`line.depth`, never from the span — is asserted from three independent directions. Reverted; tree clean at `26eafc8`. **Method note:** a first run of this probe piped through `head -8` and appeared to show only 2 tests firing, which read as a missing assertion; the truncation was the supervisor's own and the re-run without it gave the true 143/11. **Never truncate a probe's output — a probe measures how much fired.** |
+| DL-143 | 2026-07-26 | WU-6 | 27 | Third commit in this mission that does not represent intended state — bisect hazard, fixed forward not amended | `57df2a1` committed the geometry table **with a falsification probe still applied** (`.unorderedListItem` depth 2 forced equal to depth 1), so bisecting across it hits a table that fails its own doubling test. `26eafc8` removes it. Fixing forward rather than amending was the right call on a shared branch. Joins DL-99's two commits that do not build in isolation. **Squash at PR time**; `git bisect` cannot be trusted across `fd34bed`, `632887e`, or `57df2a1`. |
+
 ---
 
 ## Overall Status
@@ -454,10 +468,11 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   necessity and is now behind us.
 ### Current position (2026-07-26, round 3 — Sorties 21 and 27 in flight)
 
-- Sorties completed: **23 / 30** (1–21, 25, 26 — every one supervisor-verified, none
+- Sorties completed: **24 / 30** (1–21, 25, 26, 27 — every one supervisor-verified, none
   taken on report alone)
-- Sorties in flight: **1** — Sortie 27 continuation (WU-6, sonnet), dispatched **solo**
-  under DL-134. Its PARTIAL work was left uncommitted in the tree for it to inherit.
+- Sorties in flight: **0**
+- Work units: **4 / 7 COMPLETE** (WU-1, WU-2, WU-3, **WU-6 closed this round**).
+  WU-4 RUNNING at 22; WU-5 RUNNING at 23; WU-7 gated on 22.
 - **Concurrency is now 1.** Two-way parallelism cost a 42-minute hang this round and is
   withdrawn for the remainder of the mission.
 - Work units: **3 / 7 COMPLETE** (WU-1, WU-2, **WU-3 closed this round**). WU-4 RUNNING at
@@ -470,11 +485,18 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   reverted, tree clean after each. The gate stayed green through the one that mattered.
 - **Remaining critical chain**: `22 → 28 → 29 → 30`. Four sorties. Sortie 21 cleared the
   hardest link; WU-4 has one sortie left.
-- **Serial queue from here** (DL-134): 27 continuation → 23 → 22 → 24 → 28 → 29 → 30.
-- **Tree is GREEN** at `1906c3e` + `6b28dad`: core **271/20**, macOS **167/27**, iOS
-  **148/24** — all re-run by the supervisor in an isolated worktree, because the shared
-  tree is dirty with Sortie 27's partial work and reports a false **179/28** on macOS.
-  That contamination is itself DL-132/DL-134 evidence and will clear when 27 commits.
+- **Serial queue from here** (DL-134): 23 → 22 → 24 → 28 → 29 → 30. Six left.
+- **Tree is GREEN and clean** at `26eafc8`: core **271/20**, macOS **179/28**, iOS
+  **160/25** — all re-run by the supervisor on a quiet machine after a contaminated run
+  had to be discarded (see below). Charter clean: no regex, `EscriboCore` imports
+  **nothing at all**, no XCTest.
+- **A contaminated run was caught by counting, not by exit code.** The supervisor's first
+  iOS verification reported `TEST FAILED` with core at **137/20** — a number appearing
+  nowhere else in the mission, against a true 271/20. The cause was the still-live first
+  Sortie 27 agent building concurrently (DL-140). Re-run on a quiet machine: clean pass.
+  **This is DL-103 paying for itself**: without a recorded expected count, a truncated run
+  is indistinguishable from a real one, and a *failing* truncated run is worse — it would
+  have sent a healthy sortie into a needless BACKOFF.
 - Work units: **2 / 7 COMPLETE** (WU-1, WU-2). WU-3 RUNNING at **17**; WU-4 **STALLED**
   at 21 pending Sortie 17 (DL-114); WU-6 RUNNING at **26**; WU-5 gated on 17; WU-7 gated
   on 27, 17, 22.
