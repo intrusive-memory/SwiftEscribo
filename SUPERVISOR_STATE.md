@@ -88,11 +88,20 @@ updated: 2026-07-26
 
 ### WU-2 Editor Substrate
 - Work unit state: **RUNNING** (unlocked 2026-07-26 — WU-1 COMPLETED)
-- Current sortie: 11 of 30 (fifth of 7–12)
-- Sortie state: **PARTIAL** — every literal exit criterion passes and was re-verified,
-  but the supervisor found a gap the criteria do not cover (DL-68). Continuation
-  dispatched to the same agent; **attempt counter NOT incremented** — partial work is
-  progress, not failure.
+- Current sortie: 12 of 30 (last of 7–12 — completes WU-2 and forks the plan)
+- Sortie state: DISPATCHED
+- Sortie type: code
+- Model: opus
+- Complexity score: 22
+- Attempt: 1 of 3
+- Last verified: Sortie 11 COMPLETED across two dispatches, commits `2dc4d56` +
+  `4a6cb7f`. `make test` exit **0** (71/14) and `make test-ios` exit **0** (**74/14**).
+  The DL-68 continuation landed: reverting `spellCheckingType` to `.default` reddens
+  both `Spell checking stays on, decoupled from the autocorrect-off default` and the
+  extended `The autocorrect host opt-in toggles autocorrectionType, and nothing else`,
+  so the platform parity is asserted rather than assumed. Three earlier probes fired
+  (DL-67). No SwiftUI or Representable anywhere under `Sources/SwiftEscribo/` — the
+  DL-63 deferral was correctly mirrored and is now Sortie 12's to discharge.
 - Sortie type: code
 - Model: sonnet
 - Complexity score: 7
@@ -138,6 +147,7 @@ updated: 2026-07-26
 | 8 | COMPLETED | opus | 1 | `a1947c9` | test 0 **and test-ios 0** (40/6 + 98/11), 4/4 greps clean, one invalidation path preserved, two falsification probes fired (DL-45) |
 | 9 | COMPLETED | opus | 1 | `370f918` | test 0 and test-ios 0 (62/11 + 98/11), coordinator imports 0 UI frameworks, DL-44 hazard probed and guarded (DL-53) |
 | 10 | COMPLETED | **sonnet** | 1 | `e2dab05` | test 0 and test-ios 0 (70/13 + 98/11), two new files only, three falsification probes fired (DL-62); Representable conformance deferred (DL-63) |
+| 11 | COMPLETED | sonnet | 1 (PARTIAL→continuation, no increment) | `2dc4d56` + `4a6cb7f` | test 0 (71/14) and test-ios 0 (74/14), compile-time parity assertion, three probes fired (DL-67), DL-68 spell-checking gap closed and probed |
 
 ### WU-3 Fountain Depth
 - Work unit state: NOT_STARTED
@@ -175,7 +185,7 @@ updated: 2026-07-26
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------|-----------------|---------|-------------|---------------|
-| WU-2 | 11 | PARTIAL → DISPATCHED (continuation) | 1/3 | sonnet | 7 | (session `fa1c4c1d`) | — | 2026-07-26 10:05 PDT |
+| WU-2 | 12 | DISPATCHED | 1/3 | opus | 22 | (session `fa1c4c1d`) | — | 2026-07-26 10:25 PDT |
 
 ---
 
@@ -251,15 +261,20 @@ updated: 2026-07-26
 | DL-67 | 2026-07-26 | WU-2 | 11 | Supervisor probed all three substantive iOS claims; the work holds | Three simultaneous independent breaks on `IOSTextView.swift`: `usingTextLayoutManager: false`, `autocorrectionType = .yes`, and `hasMarkedText = { true }`. **Six** tests went red, each naming its own break — the TextKit 2 stack, the hygiene defaults, the autocorrect opt-in, marked-text reporting, the convenience-initializer shape, and heading styling. Reverted; `make test` 0 (71/14) and `make test-ios` 0 (73/14). The parity criterion is discharged better than asked: `let coordinator: EditorCoordinator = editor.coordinator` under both `#if` branches is a **compile-time** assertion, so it cannot be satisfied by a runtime coincidence. |
 | DL-68 | 2026-07-26 | WU-2 | 11 | **RULING on the agent's question, and it goes the other way: iOS must set `spellCheckingType = .yes`. Sortie 11 is PARTIAL until it does.** | The agent left `spellCheckingType` at the system default and asked for a ruling, which was the right instinct — but `.default` on iOS does not mean "on". UIKit defines it as *"enable spell checking based on the state of autocorrection"*, and this sortie sets `autocorrectionType = .no` as a hard requirement. **The two settings interact: turning autocorrect off silently turns spell checking off.** REQUIREMENTS.md § Text-system hygiene says spell **checking** "is permitted and encouraged", with no platform qualification, and explains why it is safe — it draws with temporary attributes that do not participate in `setAttributes(_:range:)` and therefore survive restyling. Sortie 10 honors that explicitly on macOS (`isContinuousSpellCheckingEnabled = true`, asserted). Left as shipped, the same package gives a user spell checking on a Mac and none on an iPhone, from a trait they never set, with no test asserting it either way. That is exactly the class of silent platform divergence Sortie 11 exists to prevent. **One line plus one assertion**; continuation sent to the same agent rather than deferred to Sortie 12, because iOS input traits are this sortie's task 2 and Sortie 12's subject is SwiftUI binding. |
 | DL-69 | 2026-07-26 | WU-2 | 11 | Correction to the sortie report, recorded so the brief does not inherit it | The report attributes the absence of an undo seam to "DL-58". DL-58 is about the coordinator's non-genericity. The undo decision is REQUIREMENTS.md **Known limitations §1** — UIKit's native undo granularity is accepted. No action needed; the behavior is correct and only the citation was wrong. |
+| DL-70 | 2026-07-26 | WU-2 | 11 | DL-68 continuation verified and probed; Sortie 11 COMPLETED | `spellCheckingType = .yes` is set at `IOSTextView.swift:143` and asserted in three places. Supervisor probe: reverting the single line to `.default` — the state the sortie originally shipped — reddens both `Spell checking stays on, decoupled from the autocorrect-off default` and the extended `The autocorrect host opt-in toggles autocorrectionType, and nothing else`. The second is the one worth having: it asserts that flipping the host opt-in leaves `spellCheckingType`, `smartQuotesType`, and `smartDashesType` alone in **both** directions, which is what stops UIKit's trait coupling from reappearing through the opt-in later. `make test` 0 (71/14), `make test-ios` 0 (74/14). |
+| DL-71 | 2026-07-26 | WU-2 | 12 | Model: opus | Complexity 22 (5 turns-band + 2 file-count + 10 foundation/dependents + 3 risk + 2 ambiguity). Three things stack here. Sortie 12 completes WU-2 and is the fork point for 18 downstream sorties. Its binding rule 1 is *correctness, not optimization* — REQUIREMENTS.md states plainly that without the equality check SwiftUI's update cycle feeds the editor its own output and the view fights the user's typing, which is a defect that only appears under a live run loop and would not be caught by any single-shot test. And it carries the DL-63 obligation: the entire public surface of `SwiftEscribo` does not exist until this sortie ships it. |
 | DL-32 | 2026-07-26 | WU-2 | 7 | Model: opus | Complexity 25 (8 turns-band + 4 file-count + 10 foundation/dependents + 3 risk + 0 ambiguity). Override also applies: foundation_score 1 with 23 dependents. The theme lookup table and the styler cache are the second half of the scanner→editor seam and are consumed by all three Representables; the composition order and the single invalidation path are exactly the shape that does not retrofit. |
 
 ---
 
 ## Overall Status
 
-- Sorties completed: **10 / 30** (Sorties 1–10 — all supervisor-verified)
-- Sorties in flight: 1 (Sortie 11, WU-2)
-- Work units completed: **1 / 7** (WU-1 COMPLETE; WU-2 RUNNING at 11 of 12; WU-3…WU-7 gated)
+- Sorties completed: **11 / 30** (Sorties 1–11 — all supervisor-verified)
+- Sorties in flight: 1 (Sortie 12, WU-2 — the last of the strictly-serial run)
+- Work units completed: **1 / 7** (WU-1 COMPLETE; WU-2 RUNNING at 12 of 12; WU-3…WU-7 gated)
+- **Next gate**: Sortie 12 completing unlocks WU-3 (Sorties 13–17, Fountain) and WU-4
+  (Sorties 18–22, Markdown) **in parallel** — the first concurrency in this mission.
+  Group A, 12 sorties and 40% of the plan, has run strictly serial by necessity.
 - **Open obligation**: no SwiftUI `Representable` exists yet. Sortie 12 owes both
   conformances plus the public editor view — see DL-63. If that is missed, the package
   ships with no public entry point from `SwiftEscribo` at all.
