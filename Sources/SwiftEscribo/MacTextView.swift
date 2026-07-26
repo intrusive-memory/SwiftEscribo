@@ -37,7 +37,12 @@
 
     /// The text view itself, guaranteed to sit on the TextKit 2 stack — see
     /// ``makeTextView()``.
-    let textView: NSTextView
+    ///
+    /// Declared as ``EscriboNativeTextView``, not as `NSTextView`, and that is the
+    /// assertion: Sortie 25's Return affordance lives in an override on that subclass, so a
+    /// later change that hands back a plain `NSTextView` here stops compiling rather than
+    /// silently shipping an editor whose Return key does nothing special.
+    let textView: EscriboNativeTextView
 
     /// The platform-neutral coordinator, adopted unchanged (Sortie 9).
     let coordinator: EditorCoordinator
@@ -65,6 +70,13 @@
       // marked-text closure, then run the first full scan.
       coordinator.hasMarkedText = { [weak textView] in textView?.hasMarkedText() ?? false }
       coordinator.restyleEverything()
+
+      // Sortie 25. Return goes through `EscriboTextView.handleReturnKey()`, which either
+      // performs the whole rewrite as one trip through the input path or declines and lets
+      // `NSTextView` insert a plain newline. `[weak self]` because the text view outlives
+      // nothing here but is retained by the scroll view, and a strong capture would make
+      // this object immortal.
+      textView.returnKeyHandler = { [weak self] in self?.handleReturnKey() ?? false }
     }
 
     /// Builds the view over a fresh styler constructed from `theme`.
@@ -83,8 +95,8 @@
     /// the one initializer that states the layout stack as an explicit, checkable
     /// argument rather than an inferred default, so it is the only one used here — the
     /// resulting view's `textLayoutManager` is guaranteed non-nil.
-    private static func makeTextView() -> NSTextView {
-      let textView = NSTextView(usingTextLayoutManager: true)
+    private static func makeTextView() -> EscriboNativeTextView {
+      let textView = EscriboNativeTextView(usingTextLayoutManager: true)
 
       // REQUIREMENTS.md § Text-system hygiene: every one of these rewrites the user's
       // source behind their back, and in an editor whose premise is that the string is
@@ -103,6 +115,14 @@
       // Plain text is the value (Architecture §1): every attribute this view's storage
       // ever carries is syntax styling the coordinator applies, never user-chosen rich
       // text from a font panel or a formatted paste.
+      //
+      // DL-65: `isRichText = false` is what makes REQUIREMENTS.md § Undo's "Paste inserts
+      // verbatim with no transformation" true on the AppKit side. With it off, `NSTextView`
+      // advertises RTF among its readable pasteboard types and a paste from a word processor
+      // arrives carrying fonts and colours that the styler would then fight. With it on, the
+      // plain-text flavour is the only one read. `PasteIsVerbatimTests` asserts that against
+      // a pasteboard carrying both flavours, so deleting this line goes red for the reason
+      // it matters rather than merely for the flag's value.
       textView.isRichText = false
       textView.usesFontPanel = false
       textView.allowsUndo = true
@@ -121,7 +141,7 @@
     }
 
     /// Wraps `textView` in a scroll view configured for vertical text flow.
-    private static func makeScrollView(hosting textView: NSTextView) -> NSScrollView {
+    private static func makeScrollView(hosting textView: EscriboNativeTextView) -> NSScrollView {
       let scrollView = NSScrollView()
       scrollView.hasVerticalScroller = true
       scrollView.hasHorizontalScroller = false

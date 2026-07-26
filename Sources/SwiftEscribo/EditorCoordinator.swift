@@ -114,6 +114,28 @@ final class EditorCoordinator: NSObject {
   /// How many edits have been skipped because a composition was in flight.
   private(set) var markedTextSkipCount = 0
 
+  /// The line records the most recent scan produced, in order.
+  ///
+  /// ## Why records are retained when spans are not
+  ///
+  /// REQUIREMENTS.md § Spans is explicit that spans "are produced for a requested range on
+  /// demand and are **not** retained for the whole document" — they exist to become
+  /// character attributes and are worthless the moment they have. Line records are the other
+  /// output of the same pass and answer a different question, "what *is* this line," which
+  /// an editing affordance has to ask between scans rather than during one.
+  ///
+  /// Sortie 25's list continuation is the first caller. It has to know whether the caret's
+  /// line is a list item — and, just as importantly, whether it is a YAML frontmatter entry
+  /// or the inside of a code fence that merely looks like one (DL-108). Re-deriving that
+  /// lexically would put a second, disagreeing copy of the grammar beside the editor; asking
+  /// the scanner for it is free, because the scan already happened.
+  ///
+  /// Bounded by the last scan, which is a handful of lines per keystroke and the whole
+  /// document exactly once per full scan. That last case is a real cost — on the order of a
+  /// few hundred kilobytes for a 120 KB screenplay — paid on attach, language switch, and
+  /// external reset, and never on the typing path.
+  private(set) var lastLineRecords: [LineRecord] = []
+
   // MARK: - Private state
 
   /// Set while ``apply(_:)`` is writing, so the attribute edits it causes cannot re-enter
@@ -292,6 +314,7 @@ final class EditorCoordinator: NSObject {
     let limit = textStorage.length
     restyleCount += 1
     lastAppliedRange = Self.clamped(result.dirtyRange, to: limit) ?? (0..<0)
+    lastLineRecords = result.lineRecords
 
     isApplying = true
     textStorage.beginEditing()
@@ -328,6 +351,75 @@ final class EditorCoordinator: NSObject {
       textStorage.addAttribute(
         .paragraphStyle, value: run.style, range: Self.nsRange(range))
     }
+  }
+
+  // MARK: - Asking the scanner about a line
+
+  /// How the scanner classified the line containing `offset`, or `nil` if it cannot say.
+  ///
+  /// The seam an editing affordance uses to ask "what is this line?" without re-deriving the
+  /// grammar beside the editor. A `- item` inside YAML frontmatter is YAML; inside a fenced
+  /// code block it is code; inside a `fountain` fence it is Fountain. All three answers come
+  /// out of this one call, and none of them needed a rule at the call site (DL-108).
+  ///
+  /// ## The miss path is a full scan, and that is the right cost
+  ///
+  /// ``lastLineRecords`` holds the last scan's window, so the common case — the writer typed
+  /// on this line and then pressed Return — is a hit with no work at all. A miss means the
+  /// caret is somewhere the last scan did not cover, which happens when the writer clicks
+  /// elsewhere and presses Return without typing first. Rather than guess, or answer from a
+  /// stale index, that path full-scans and asks again.
+  ///
+  /// A full scan is the cold-scan budget (REQUIREMENTS.md § Performance budget: 50 ms
+  /// ceiling, 10 ms target for 120 KB) paid on a single Return keystroke, not on the typing
+  /// path, and not per character. The alternative — a document-wide record cache the
+  /// coordinator maintains across every edit — buys a rare keystroke some milliseconds in
+  /// exchange for an invalidation rule on the hot path, which is the wrong trade and the
+  /// usual source of "the affordance fired on stale state" bugs.
+  ///
+  /// - Returns: `nil` when the document has never been scanned, or when `offset` lies
+  ///   outside it. A caller that gets `nil` must do the boring thing.
+  func elementKind(atUTF16Offset offset: Int) -> ElementKind? {
+    if let record = Self.record(containing: offset, in: lastLineRecords) {
+      return record.element
+    }
+    restyleEverything()
+    return Self.record(containing: offset, in: lastLineRecords)?.element
+  }
+
+  /// The record whose line contains `offset`, by binary search.
+  ///
+  /// Records tile the lines they cover in order and their ranges include terminators, so a
+  /// search for the **last** record starting at or before `offset` lands on the right line
+  /// for every offset inside the covered window.
+  ///
+  /// Two boundary cases decide the comparisons, and both are real:
+  ///
+  /// - `offset` may equal a record's `upperBound`. The final line of a document that ends
+  ///   without a terminator has an offset one past its last character where the caret
+  ///   legitimately sits, and an empty final line after a trailing terminator has an *empty*
+  ///   range. `<=` admits both; `<` would answer `nil` for a caret at the end of the
+  ///   document, which is where a writer presses Return most often.
+  /// - `records` may be an incremental window rather than the whole document. An offset
+  ///   before the window finds nothing; one after it lands on the last record and fails the
+  ///   `upperBound` check. Both answer `nil`, which is the honest answer — this window
+  ///   cannot classify that line.
+  static func record(containing offset: Int, in records: [LineRecord]) -> LineRecord? {
+    var low = records.startIndex
+    var high = records.endIndex - 1
+    var found = -1
+    while low <= high {
+      let middle = low + (high - low) / 2
+      if records[middle].range.lowerBound <= offset {
+        found = middle
+        low = middle + 1
+      } else {
+        high = middle - 1
+      }
+    }
+    guard found >= 0 else { return nil }
+    let record = records[found]
+    return offset <= record.range.upperBound ? record : nil
   }
 
   // MARK: - Range arithmetic

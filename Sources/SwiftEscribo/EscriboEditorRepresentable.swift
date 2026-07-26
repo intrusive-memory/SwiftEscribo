@@ -30,17 +30,19 @@ import SwiftUI
 /// cannot; its coordinator is created once by `makeCoordinator()` and survives, so it is
 /// the only correct owner.
 ///
-/// ## Undo, and what rule 4 actually buys on macOS today
+/// ## Undo
 ///
-/// ``EscriboTextView/applyExternalText(_:)`` groups its reset on the platform's
-/// `UndoManager`, which bounds it to at most one undo action. It does not route the reset
-/// through `NSTextView.shouldChangeText(in:replacementString:)` /
-/// `didChangeText()`, which is what would make a programmatic storage mutation *register*
-/// an undo action on macOS at all. That is deliberate: REQUIREMENTS.md § Undo requires that
-/// affordance-driven rewrites go through the text view's own input path, and Sortie 25 owns
-/// building that path once, for the affordances and for paste together. Adding a
-/// second, external-reset-only input path here would be the AppKit-shaped seam Known
-/// limitations §1 warns against, built before the sortie that has to live with it.
+/// Nothing here. ``EscriboTextView/applyExternalText(_:)`` and the Return affordance both go
+/// through ``EscriboTextView/performInputPathEdit(_:)`` — the text view's own input path —
+/// which is the single place in this package where a document's characters change and the
+/// single place undo is registered (REQUIREMENTS.md § Undo). This bridge neither groups, nor
+/// coalesces, nor registers anything, because there is one seam and this is not it.
+///
+/// It does supply the *view* delegate, and `NSTextView` asks its delegate for an
+/// `UndoManager` before falling back to the responder chain. This type deliberately does not
+/// answer that question: in a real host the responder chain reaches a window with a real
+/// undo manager, and intercepting it here would replace the host's undo stack with a private
+/// one.
 ///
 /// `@MainActor` for the reason DL-64 gives: views are main-actor-isolated, and
 /// ``EditorCoordinator`` deliberately is not.

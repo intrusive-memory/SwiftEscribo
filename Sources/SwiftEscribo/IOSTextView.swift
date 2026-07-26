@@ -60,7 +60,12 @@
     /// The text view itself, guaranteed to sit on the TextKit 2 stack — see
     /// ``makeTextView()``. `UITextView` self-scrolls, so unlike the macOS
     /// `EscriboTextView` there is no `scrollView` property here.
-    let textView: UITextView
+    ///
+    /// Declared as ``EscriboNativeTextView``, not as `UITextView`, for the reason the macOS
+    /// half gives: Sortie 25's Return affordance is an override on that subclass, and typing
+    /// the property as the subclass makes "this editor's Return key is wired" a fact the
+    /// compiler checks rather than a line someone could delete.
+    let textView: EscriboNativeTextView
 
     /// The platform-neutral coordinator, adopted unchanged (Sortie 9) — the same declared
     /// type the macOS Representable drives.
@@ -89,6 +94,11 @@
       // question is a property, not a method.
       coordinator.hasMarkedText = { [weak textView] in textView?.markedTextRange != nil }
       coordinator.restyleEverything()
+
+      // Sortie 25, wired identically to macOS. UIKit spells the Return key as
+      // `insertText("\n")` where AppKit spells it `insertNewline(_:)`; both land on the same
+      // `EscriboTextView.handleReturnKey()`, which is the point of Architecture §10.
+      textView.returnKeyHandler = { [weak self] in self?.handleReturnKey() ?? false }
     }
 
     /// Builds the view over a fresh styler constructed from `theme`.
@@ -120,8 +130,8 @@
     /// the one initializer that states the layout stack as an explicit, checkable argument
     /// rather than an inferred default. The resulting view's `textLayoutManager` is
     /// guaranteed non-nil.
-    private static func makeTextView() -> UITextView {
-      let textView = UITextView(usingTextLayoutManager: true)
+    private static func makeTextView() -> EscriboNativeTextView {
+      let textView = EscriboNativeTextView(usingTextLayoutManager: true)
 
       // REQUIREMENTS.md § Text-system hygiene: every one of these rewrites the user's
       // source behind their back, and in an editor whose premise is that the string is

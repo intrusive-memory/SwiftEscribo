@@ -177,28 +177,31 @@ extension EscriboTextView {
   ///
   /// > Register as a single undo action.
   ///
-  /// An explicit undo grouping around the whole reset, on the platform's own
-  /// `UndoManager`. Deliberately *not* an undo seam: REQUIREMENTS.md Known limitations §1
-  /// accepts each platform's native undo granularity, and the coordinator "must not grow an
-  /// AppKit-shaped undo seam that UIKit cannot adopt."
+  /// **Closed by Sortie 25, and it was genuinely unmet before.** The reset now goes through
+  /// ``EscriboTextView/performInputPathEdit(_:)`` — the text view's *own* input path —
+  /// rather than mutating text storage directly.
   ///
-  /// **What that grouping does and does not buy, stated plainly so it is not "fixed"
-  /// wrongly later.** The grouping bounds this reset at **at most one** undo action; it
-  /// cannot manufacture an action the platform did not register. On macOS it registers
-  /// **zero** today: `NSTextView` registers undo from
-  /// `shouldChangeText(in:replacementString:)` / `didChangeText()`, its own input path, and
-  /// a direct text-storage mutation does not go through it. So an external reset is
-  /// currently **not undoable on macOS**, and rule 4 is met in the "not more than one"
-  /// direction only.
+  /// The history is worth keeping, because the old shape looked correct. Sortie 12 bracketed
+  /// the mutation in `beginUndoGrouping()`/`endUndoGrouping()`, which bounds a reset at **at
+  /// most one** undo action but cannot manufacture an action the platform never registered.
+  /// On macOS it registered **zero**: `NSTextView` records undo from
+  /// `shouldChangeText(in:replacementString:)` / `didChangeText()`, and a direct
+  /// `NSTextStorage.replaceCharacters` goes through neither. An external reset was therefore
+  /// not undoable on macOS at all, and rule 4 was met only in the "not more than one"
+  /// direction. Sortie 12 said so rather than claiming the rule, and deferred it here
+  /// deliberately.
   ///
-  /// This is a **deliberate, ruled-on deferral, not an oversight.** Closing it here would
-  /// mean building a second, external-reset-only input path, and REQUIREMENTS.md § Undo is
-  /// explicit that mutating storage after the fact "registers a second undo group, and no
-  /// amount of `NSUndoManager` grouping reliably merges it afterward. This is a design
-  /// constraint, not an implementation detail — it determines the shape of the
-  /// coordinator." Sortie 25 builds that path **once**, for list continuation, smart Tab,
-  /// and verbatim paste together; routing this reset through it is part of that sortie's
-  /// obligation. Do not add a private one here.
+  /// The deferral had a specific reason and it is the reason this call is now one line:
+  /// closing it then would have meant a second, external-reset-only input path, which is the
+  /// duplicate AppKit-shaped seam Known limitations §1 warns against. Sortie 25 builds the
+  /// path **once**, for list continuation and this reset together, so there is exactly one
+  /// place in the package where a document's characters change and exactly one undo story to
+  /// reason about. Do not add a private one here.
+  ///
+  /// On iOS undo granularity remains whatever UIKit provides (Known limitations §1). The
+  /// *shape* is identical on both platforms — one transaction through the text view's own
+  /// input path — which is what makes that limitation a scheduling fact rather than an
+  /// architectural one.
   ///
   /// - Parameter incoming: The document the host wants displayed.
   /// - Returns: `true` if the document was replaced, `false` if rule 1 fired.
@@ -212,17 +215,13 @@ extension EscriboTextView {
     // Rule 3, first half: the selection as it stood before the reset.
     let previousSelection = textView.selectedRange
 
-    // Rule 4.
-    let undoManager = textView.undoManager
-    undoManager?.beginUndoGrouping()
-
-    // Rule 2, first half.
-    storage.beginEditing()
-    storage.replaceCharacters(
-      in: NSRange(location: 0, length: storage.length), with: incoming)
-    storage.endEditing()
-
-    undoManager?.endUndoGrouping()
+    // Rules 2 (first half) and 4, together, and they are the same call on purpose. The input
+    // path replaces the full range with `replaceCharacters(in:with:)` inside
+    // `beginEditing()`/`endEditing()` — never `setAttributedString` (Architecture §8) — and
+    // registers exactly one undo action while doing it.
+    performInputPathEdit(
+      InputPathEdit(
+        replacing: NSRange(location: 0, length: storage.length), with: incoming))
 
     // Rule 2, second half.
     coordinator.restyleEverything()
