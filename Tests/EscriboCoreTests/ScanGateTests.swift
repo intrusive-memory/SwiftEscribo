@@ -104,6 +104,16 @@ struct GateDocument: Sendable, CustomTestStringConvertible {
 ///   Fountain document here: this is a **convergence** check and it cannot fail on a wrong
 ///   note, boneyard, or title-page rule. `FountainRegionTests` is where those are asserted
 ///   by hand.
+/// - `fountain in markdown` is a Markdown document hosting a ```` ```fountain ```` fence,
+///   added by Sortie 21. It is the only document here whose lines are scanned by **two**
+///   grammars, and the only one where two multi-line constructs are open at once — the outer
+///   fence and, on three of its lines, an inner boneyard. That is what it is here for: the
+///   fence's opening and closing lines are a **state boundary**, and the edit shapes above
+///   drop fences, boneyards, and multi-line deletions across it repeatedly, which is where a
+///   nested state that converges early would show up as a rescan window that stops inside
+///   the block. As with every other document here it is a **convergence** check and cannot
+///   fail on a wrong nesting rule — both sides run the same grammar.
+///   `FountainInMarkdownTests` is where the nesting itself is asserted by hand.
 let gateCorpus: [GateDocument] = [
   GateDocument(
     name: "lf markdown",
@@ -212,6 +222,24 @@ let gateCorpus: [GateDocument] = [
 
       BOB
       Hello there.
+      """),
+  GateDocument(
+    name: "fountain in markdown",
+    text: """
+      # Notes
+
+      ```fountain
+      Title: THE THING
+
+      INT. HOUSE - DAY
+
+      BOB
+      Hello there.
+
+      /* struck out */
+      ```
+
+      tail paragraph
       """),
 ]
 

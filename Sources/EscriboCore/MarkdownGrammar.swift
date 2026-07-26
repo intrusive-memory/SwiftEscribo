@@ -61,6 +61,14 @@ private let backslash: UInt16 = 0x5C
 /// `x`.
 private let lowercaseX: UInt16 = 0x78
 
+/// `fountain`, lowercased, as the info string that dispatches a fence to the Fountain
+/// grammar.
+///
+/// Built through `String.UTF16View`, which is standard library — `EscriboCore` imports
+/// nothing, and nothing here needs it to. Compared against a case-folded copy of the info
+/// string's first word, so ```` ```Fountain ```` and ```` ```FOUNTAIN ```` dispatch too.
+private let fountainInfoWord: [UInt16] = Array("fountain".utf16)
+
 /// `X`.
 private let uppercaseX: UInt16 = 0x58
 
@@ -309,6 +317,20 @@ struct MarkdownGrammar: LineGrammar {
   /// The ``LineState/openConstruct`` tag meaning "a GFM table's body is open".
   static let tableTag: UInt16 = 3
 
+  /// The ``LineState/openConstruct`` tag meaning "a fenced code block tagged `fountain` is
+  /// open".
+  ///
+  /// A tag of its own rather than ``fenceTag`` plus a flag, because it answers a question
+  /// asked before anything else on the line is looked at: *which grammar scans this line?*
+  /// Folding it into `fenceTag` would mean every line inside every fence in every document
+  /// re-derived the answer from an info string that is no longer on the line.
+  ///
+  /// **It is not where the nested Fountain state lives.** That is
+  /// ``LineState/nestedFountain``, and the separation is the whole of DL-112: this tag says
+  /// the *outer* construct is open, and the nested state says which *inner* construct is —
+  /// a boneyard inside a fence is both at once, and one scalar cannot say so.
+  static let fountainFenceTag: UInt16 = 4
+
   /// The width of a CommonMark tab stop, in **visual columns**.
   ///
   /// Four, and stated once. A tab width of one is the classic way indented code stops
@@ -321,10 +343,36 @@ struct MarkdownGrammar: LineGrammar {
   /// column**, not from the left margin.
   static let maxConstructIndentColumns = 3
 
-  var lookahead: Int { 0 }
+  /// One, and only because of the nested `fountain` fence.
+  ///
+  /// **No construct in this file reads the line below it.** Every Markdown decision here is
+  /// still made from the line's own text plus the state arriving from above — the setext
+  /// underline and the table delimiter row both key off
+  /// ``MarkdownBlockState/paragraphOpen`` rather than looking ahead, and the known gaps that
+  /// causes are documented on the type. What needs the line below is the *guest*:
+  /// ``FountainGrammar`` declares a lookahead of one for its character-cue rule, and the
+  /// engine sizes the ``LineWindow`` from the **host** grammar's declaration. Declaring zero
+  /// here would hand the nested scan a window with nothing in it, `line(ahead:)` would
+  /// answer `nil` for every line of every fenced screenplay, and no natural cue would ever
+  /// be recognized inside one — a wrong answer produced by a number a hundred lines away
+  /// from the rule it broke.
+  ///
+  /// Raising it is safe for everything else and not free: ``LineGrammar/backwardExtent``
+  /// defaults to `max(1, lookahead)`, which was already one, so no edit rescans further
+  /// back; the rescan window extends one line further forward past convergence, which is
+  /// conservative padding and cannot change a painted line.
+  var lookahead: Int { 1 }
 
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan {
     let line = window.current
+
+    // A `fountain` fence, before the ordinary fence check, because the two tags are
+    // mutually exclusive and this one answers a different question: not "is this line
+    // code?" but "which grammar reads this line?". Everything inside is a screenplay
+    // until the fence closes — or, if it never closes, until the end of the document.
+    if state.openConstruct == Self.fountainFenceTag {
+      return scanInsideFountainFence(window, state: state)
+    }
 
     // Inside a fence, nothing else is syntax. A `#` is a hash and a `~~~` is three
     // tildes unless the open fence was opened with tildes and is no longer than this
@@ -1228,9 +1276,8 @@ struct MarkdownGrammar: LineGrammar {
         range: (base + indent.units)..<(base + runEnd), kind: .codeBlock, role: .marker)
     ]
     if !info.isEmpty {
-      // Sortie 21 reads this span's text to dispatch a `fountain` fence to the Fountain
-      // scanner, which is why the info string is its own kind rather than part of the
-      // marker.
+      // The info string's text is what dispatches a `fountain` fence to the Fountain
+      // scanner, which is why it is its own kind rather than part of the marker.
       spans.append(
         EscriboSpan(
           range: (base + info.lowerBound)..<(base + info.upperBound), kind: .codeInfoString))
@@ -1242,15 +1289,138 @@ struct MarkdownGrammar: LineGrammar {
       contentRange: (base + info.lowerBound)..<(base + info.upperBound),
       depth: max(0, blocks.listDepth - 1),
       endState: LineState(
-        openConstruct: Self.fenceTag,
+        // The info string is read **once**, here, and its answer is carried as a tag. Every
+        // line inside the block then knows which grammar reads it without re-deriving it
+        // from a line that is no longer in the window.
+        openConstruct: namesFountain(units, info) ? Self.fountainFenceTag : Self.fenceTag,
         fenceCharacter: character,
         fenceLength: UInt16(min(runLength, Int(UInt16.max))),
         // The block context is carried **through** the fence. Dropping it here would
         // close every open list item at the fence and reopen nothing at its end, which is
         // a state omission the gate test cannot see.
         markdownBlocks: closingParagraph(blocks)
+        // `nestedFountain` stays at its default, and that default is the point: its
+        // `titlePage` is `.documentStart`, so the fence's first content line is the one
+        // line a nested title page may open on — the same rule a standalone screenplay
+        // gets from line zero, reached by the same route rather than by a special case.
       )
     )
+  }
+
+  /// Whether a fence's info string names Fountain: its **first word**, compared
+  /// ASCII-case-insensitively against `fountain`.
+  ///
+  /// The first word only, because CommonMark's info string is "a language, then whatever
+  /// the renderer wants" — ```` ```fountain title=scene ```` is a Fountain block. ASCII case
+  /// folding only, because a case-folding table would be a Unicode dependency this module
+  /// does not have and every spelling anyone writes this in is ASCII. No regex, per the
+  /// charter: this is a length check and a loop of code-unit comparisons.
+  private func namesFountain(_ units: [UInt16], _ info: Range<Int>) -> Bool {
+    var end = info.lowerBound
+    while end < info.upperBound, !isSpaceOrTab(units[end]) {
+      end += 1
+    }
+    guard end - info.lowerBound == fountainInfoWord.count else { return false }
+    for offset in 0..<fountainInfoWord.count {
+      var unit = units[info.lowerBound + offset]
+      // `A`...`Z` folded to lowercase. Nothing else is touched.
+      if unit >= 0x41, unit <= 0x5A { unit += 0x20 }
+      if unit != fountainInfoWord[offset] { return false }
+    }
+    return true
+  }
+
+  // MARK: - The nested Fountain scan
+
+  /// Scans a line that begins inside an open ```` ```fountain ```` fence.
+  ///
+  /// Three properties hold here and each is a task this sortie was given.
+  ///
+  /// **The inner scan is offset, not separate.** ``FountainGrammar`` is handed the same
+  /// ``GrammarLine`` this grammar was handed — the same `units` array, the same
+  /// `contentRange`, whose `lowerBound` is an offset into the **outer** document — and it
+  /// lays every span out against `line.contentRange.lowerBound` exactly as it does in a
+  /// standalone screenplay. So outer-document coordinates are not translated back from
+  /// inner ones; they are the only coordinates that ever existed. Nothing is substringed,
+  /// nothing is re-based, and the per-keystroke allocation a substring would cost is not
+  /// paid because there is no substring.
+  ///
+  /// **The inner state is part of the outer state.** It rides in
+  /// ``LineState/nestedFountain`` — a second field, never a second meaning for
+  /// ``LineState/openConstruct`` — so a boneyard open *inside* a fence is two facts held at
+  /// once. A state that recorded only "we are in a fence" would be identical on every line
+  /// of the block, the incremental scanner would converge on the block's second line, and
+  /// an edit inside a fenced screenplay would repaint one line of it (DL-112).
+  ///
+  /// **One level, no recursion.** Fountain hosts nothing — it has no fence syntax — so this
+  /// method is never reached from inside itself, and the nested state can be a fixed-size
+  /// value rather than a boxed `LineState`.
+  ///
+  /// The closing fence is checked **first** and belongs to Markdown, not to the guest: it is
+  /// the host's delimiter, and handing it to the Fountain grammar would classify ```` ``` ````
+  /// as action and leave the fence open forever.
+  private func scanInsideFountainFence(_ window: LineWindow, state: LineState) -> LineScan {
+    let line = window.current
+    let units = line.units
+    let base = line.contentRange.lowerBound
+    let blocks = state.markdownBlocks
+
+    if let runEnd = closingFenceEnd(units, state: state) {
+      return LineScan(
+        spans: [
+          EscriboSpan(
+            range: (base + leadingIndent(units).units)..<(base + runEnd), kind: .codeBlock,
+            role: .marker)
+        ],
+        element: .codeFence,
+        contentRange: (base + runEnd)..<(base + runEnd),
+        depth: max(0, blocks.listDepth - 1),
+        // The fence is closed: the nested state goes with it, back to its default, where it
+        // compares equal to itself for the rest of the document.
+        endState: LineState(markdownBlocks: closingParagraph(blocks))
+      )
+    }
+
+    let scan = FountainGrammar().scanLine(
+      LineWindow(nestedWindow(window, state: state)), state: .nested(state.nestedFountain))
+
+    return LineScan(
+      spans: scan.spans,
+      element: scan.element,
+      contentRange: scan.contentRange,
+      depth: scan.depth,
+      endState: LineState(
+        openConstruct: Self.fountainFenceTag,
+        // The fence's own character and length still have to be carried, or the *next*
+        // line could not tell a closing fence from a line of action that starts with
+        // backticks.
+        fenceCharacter: state.fenceCharacter,
+        fenceLength: state.fenceLength,
+        markdownBlocks: blocks,
+        // The whole Fountain half, not the region tag alone. See ``NestedFountainState``.
+        nestedFountain: scan.endState.fountainHalf
+      )
+    )
+  }
+
+  /// The window the nested scan sees: this line, plus the next one **only when the next
+  /// line is still inside the fence**.
+  ///
+  /// The host's closing fence is not part of the guest's document, and hiding it is what
+  /// makes a fenced screenplay scan identically to the same text scanned standalone. The
+  /// case it decides is Fountain's cue rule: an ALL-CAPS line is a character cue only when a
+  /// non-blank line follows it, so with the closing ```` ``` ```` visible, the last line of
+  /// every fenced block would be a cue for a speaker who never speaks. `line(ahead:)`
+  /// answers `nil` both for "past the end of the document" and for "past the declared
+  /// lookahead", and the guest is entitled to no finer distinction — so "the fence ends
+  /// here" is delivered as the same `nil` that the end of a document is.
+  ///
+  /// Reading the next line's text is within this grammar's declared ``lookahead`` of one, so
+  /// the convergence engine already rescans one line past the point where state converges.
+  private func nestedWindow(_ window: LineWindow, state: LineState) -> [GrammarLine] {
+    guard let ahead = window.line(ahead: 1) else { return [window.current] }
+    guard closingFenceEnd(ahead.units, state: state) == nil else { return [window.current] }
+    return [window.current, ahead]
   }
 
   /// Scans a line that begins inside an open fenced code block.
