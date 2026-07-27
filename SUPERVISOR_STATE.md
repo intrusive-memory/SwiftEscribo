@@ -335,12 +335,29 @@ updated: 2026-07-27
 
 ### WU-7 Verification & Hardening
 - Work unit state: **RUNNING** — unlocked 2026-07-27 when Sortie 22 completed.
-- Current sortie: **28** of 30 — **DISPATCHED 2026-07-27, opus, complexity 14, attempt 1/3**
-  (DL-174 records the model call, including the sonnet case I rejected)
+- Current sortie: **29** of 30 — **DISPATCHED 2026-07-27, opus, complexity 15, attempt 1/3**
+  (DL-181 records the model call)
+- Sortie 28: **COMPLETED — supervisor-verified**, commit `ff7e8ce`. All four targets re-run
+  by the supervisor: `make test-performance` 0 (**12/5**), `make test-core` 0 (**314/30**),
+  `make test` 0 (**179/28** + **44/10** + **314/30**), `make test-ios` 0 (**160/25** +
+  **44/10** + **314/30**). `git diff 0e127ec..ff7e8ce -- Sources/` is **empty** — the sortie
+  measured and did not optimize, as ordered. Every exit criterion re-checked independently:
+  fixture **130,739 bytes** (≥110 KB required), `.copy` resource, loads via `Bundle.module`;
+  workflow triggers parse to `push`/`schedule`/`workflow_dispatch` with **no**
+  `pull_request`; `runs-on: macos-26`; **both** `xcodebuild` invocations carry `arch=arm64`
+  **and** `ARCHS=arm64`, checked per-invocation rather than by `grep -c`; `cold-scan: <N> ms`
+  present on stdout. Supervisor reproduced the numbers: cold scan **5.224 ms**, in-line edit
+  **0.026 ms**, ratio **3.986×**.
+  **Supervisor probe fired (DL-177) — and it half-fired, which is the finding.**
 - Sortie type: code
 - Model: opus
-- Complexity score: 14
+- Complexity score: 14 (Sortie 28) / 15 (Sortie 29)
 - Attempt: 1 of 3
+
+#### Sortie history — WU-7
+| Sortie | State | Model | Attempts | Commit | Verified by supervisor |
+|--------|-------|-------|----------|--------|------------------------|
+| 28 | COMPLETED | opus | 1 | `ff7e8ce` | supervisor re-ran all four (12/5 + 314/30 + 179/28 + 160/25) and reproduced the measurements; every criterion re-checked per-invocation, not by grep count; **Debug-configuration probe fired 2 issues but exposed that the 50 ms ceiling does not defend the config (DL-177)**; the 4.4 linearity tolerance ruled correct on the supervisor's own two data points (DL-178) |
 - Notes: All three entry criteria (Sorties 27, 17, 22) are now met, so Sortie 28 is
   **eligible**. It is held one round only because concurrency is 1 (DL-134), not because
   anything gates it — Sortie 28 does **not** depend on Sortie 24. It carries DL-138
@@ -352,7 +369,7 @@ updated: 2026-07-27
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------------|-----------------|---------|-------------|---------------|
-| WU-7 | 28 | DISPATCHED | 1/3 | **opus** | 14 | (round 6, agent A) | — | 2026-07-27 |
+| WU-7 | 29 | DISPATCHED | 1/3 | **opus** | 15 | (round 7, agent A) | — | 2026-07-27 |
 
 **Concurrency 1** (DL-134). Sortie 28 runs alone — and from here there is nothing left to
 run beside it: 28 → 29 → 30 is serial by construction. It owns
@@ -574,13 +591,39 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-172 | 2026-07-27 | — | 24 | **SUPERVISOR ERROR: DL-149 was recorded, given a catcher, and then left out of the dispatch order — so an opus agent spent part of its budget rediscovering it** | DL-149 (from Sortie 31) already described this defect precisely, including the cause and the reason Sortie 31 declined it. The supervisor's Sortie 24 dispatch order carried DL-111, DL-130, DL-163, DL-164 and DL-165 but **not** DL-149, and agents are forbidden from reading `SUPERVISOR_STATE.md` (a rule earned by DL-123 and worth keeping). The obligations list is therefore only as good as the supervisor's discipline in transcribing the relevant entries into each dispatch. **The cost was not zero and not large**: the mission gains an independent second confirmation of the defect from a different direction (the writer rather than the region tests) and, more valuably, a **pinned test** DL-149 never got. **Standing rule: before dispatching, grep the open-obligations list for the sortie's subject matter and paste every hit into the order.** |
 | DL-173 | 2026-07-27 | — | 24/30 | **The disagreement about DL-170's fix is settled by measurement: the fix is one word, the cost Sortie 31 named is real, and NOTHING in 314 tests catches that cost** | Sortie 24 called the fix "one word in `opensTitlePage`"; Sortie 31 had called it a design decision, because on one line of lookahead `Title:` above a lone tab is indistinguishable from a transition above a lone tab. The supervisor applied the one-word change (`!isBlank(ahead.units)` → `!ahead.isEmpty`) and measured: **5 issues across 3 tests** — Sortie 24's DL-170 tripwire, Sortie 31's in-source `DL-136` tripwire (the label collision from DL-150), and one gate document. **No transition test fired, because none exists.** The supervisor then wrote a throwaway probe asserting `"FADE OUT:\n\t\nThe end.\n"` does not open a title page: **it fails under the fix** — line 0 becomes a `titlePageKey`. So both agents were right about different things, and the decision cannot be taken safely today: **whoever fixes DL-170 must first add the transition-above-whitespace assertion, or the fix trades a narrow defect for a wider one silently.** Probe file deleted, grammar reverted, tree clean, core **314/30**. **→ Sortie 30, with the user's call on whether 1.0 fixes it at all.** |
 | DL-174 | 2026-07-27 | WU-7 | 28 | Model: **opus**, complexity 14 — with the sonnet case stated, because it was close | Sortie 28's tasks are unusually well specified (exact byte size, exact budgets, exact greps), which argues for sonnet, and sonnet has held twice at complexity 11 (DL-118, Sortie 27). Three things push it over. (1) **Timing assertions are the canonical flaky-CI trap**, and this sortie decides which numbers are *asserted* versus *reported* — get that wrong and the mission ships a gate that fails randomly, which is worse than no gate. (2) It inherits three open "go measure this" obligations that are open-ended by nature: **DL-138** (the Markdown lookahead 0→1 widened the forward rescan window for every Markdown document — measure it against the ≤1 ms budget, do not assume it away), **DL-75** (the per-change `NSTextStorage.string` → Swift `String` bridge), and **DL-56** (the post-IME-composition full rescan). (3) It creates a **new test target and a new workflow**, so `Package.swift` and CI both move. |
-| DL-175 | — | — | — | *(reserved — handed to Sortie 28 as its first free defect number)* | Per DL-150. |
+| DL-175 | 2026-07-27 | WU-7 | 28 | **`make test-performance` moved to `-configuration Release ENABLE_TESTABILITY=YES` — accepted, and it is the difference between a measurement and a number** | The first run was Debug and the numbers described the compiler, not the scanner: cold scan **48 ms** (would have squeaked under the 50 ms ceiling by 4%), in-line edit **1.08 ms** — *over budget* — and the linearity ratio 4.005. A ~10× `-Onone` pessimism. Shipping code runs optimized, so Release is the only configuration in which these budgets mean anything. The new workflow matches. **The correctness targets stay Debug**, which is correct: they assert behavior, not time. |
+| DL-176 | 2026-07-27 | WU-7 | 28 | **DL-138 is discharged with a number, and it is a small number: 0.07% of the in-line-edit budget** | Sortie 21's `MarkdownGrammar.lookahead` 0→1 raise widens the in-line-edit rescan window by **exactly one line** (3 vs 2, same document, same edit). Priced at Markdown's own marginal per-line cost (full scan ÷ line count = **0.74 µs**), that is **0.00074 ms against a 1 ms budget**. The measured Markdown in-line edit is 0.026 ms, indistinguishable from lookahead-0's. Asserted as a window delta ≤ 2 lines plus the ordinary ≤ 1 ms budget, which is the right shape — the *count* is the durable claim, the microseconds are not. **DL-138 closed.** |
+| DL-177 | 2026-07-27 | WU-7 | 28 | **Supervisor probe: the suite defends its own Release configuration — but only half of it does, and the half that doesn't is the ceiling everyone will quote** | None of the agent's five mutations tested the sortie's own biggest deviation (DL-175): if a maintainer or a CI edit reverts the configuration to Debug, does the gate fail loudly or pass silently? The supervisor ran the suite at `-configuration Debug`. **It fails — 2 issues** — but the failures are `A typical in-line edit with unchanged state stays under 1 ms` (1.054 ms) and the DL-138 case. **The cold-scan ceiling passed at 46.982 ms**, 6% under its 50 ms limit. So the 50 ms number — the one a reader will treat as *the* performance gate — is satisfied by a build that is 10× slower than the shipping one, and the only thing standing between this package and a meaningless performance suite is the 1 ms in-line budget catching a config drift **by 5%**. That is thinner than it looks on paper. **→ Sortie 30**: assert the configuration directly (e.g. fail if a debug-only build setting is active) rather than relying on a budget to notice. |
+| DL-178 | 2026-07-27 | WU-7 | 28 | **RULING: the `LineIndex` linearity tolerance of 4.4 instead of the plan's bare 4.0 is ACCEPTED — and the supervisor has its own measurements, not the agent's** | The plan says a 1 MB single line must index within **4×** the time of a 250 KB single line. Over exactly 4× the data, a perfectly linear algorithm sits at exactly 4.000, so a bare 4.0 is a coin flip on noise. The agent reported five unmodified runs straddling it (4.005, 4.033, 3.997, 3.948, 3.927) and widened to 4.0 × 1.10, **loudly, with the reasoning in both the suite doc comment and the commit message** — which is the correct way to move a threshold. The supervisor did not take that on report: its own two runs measured **3.986** (Release) and **4.022** (Debug), straddling 4.000 exactly as claimed, so the literal criterion would have failed on the supervisor's own second run for reasons having nothing to do with linearity. Sensitivity is unharmed: the quadratic mutation reads **15.46×**. **This is the 16th unfalsifiable-or-unsatisfiable criterion of the mission, and the first one that was *too tight* rather than too loose.** |
+| DL-179 | 2026-07-27 | WU-7 | 28 | **DL-75 measured, and it is the most consequential performance finding of the mission: the scanner is not the editor's bottleneck** | The per-change `NSAttributedString.string` bridge over the same 128 KB document costs **0.522 ms per keystroke — 52% of the entire in-line-edit budget, and 21× the incremental scan it accompanies** (0.025 ms). Every optimization this mission spent effort on lives in the 5% of the budget the scanner occupies; the other half of the budget is a Foundation bridge mandated by REQUIREMENTS.md's `@Binding var text: String`. Correctly **reported, not asserted** — it is in `SwiftEscribo`, not `EscriboCore`, and this sortie measures rather than repairs. **DL-56 also measured: 4.99 ms per committed IME composition**, i.e. a full cold scan, ~200× an incremental edit — within the 50 ms ceiling, so the DL-56 concern is answered rather than merely acknowledged. **→ the binding push is the thing to fix if 1.0 needs headroom, and it is an architecture question, not a scanner one.** |
+| DL-180 | 2026-07-27 | WU-7 | 28/29 | **DL-61 escalated from a risk to an observed fact, three times over — and `tests.yml` still has no `timeout-minutes`** | The agent reproduced the font-resolution hang **twice** during this sortie, both times on the first `make test` against fresh DerivedData, wedged >10 minutes inside `SwiftEscriboTests` font tests, green in 14 s on the immediate re-run. **The supervisor then hit it a third time during this very verification**: `make test` timed out at 10 minutes and had to be killed, and the re-run after `pkill` passed in seconds. `grep -c timeout-minutes .github/workflows/tests.yml` = **0**, on both jobs. So the six-hour-stall class is live in this repo's gating workflow *today*, on the cold-run font path, and it is now reproduced by three independent parties. **Sortie 29 must add `timeout-minutes` to both `tests.yml` jobs** — this is no longer a nice-to-have carried from DL-61. |
+| DL-181 | 2026-07-27 | WU-7 | 29 | Model: **opus**, complexity 15 | Sortie 29 is not the mechanical CI sortie it looks like. It must resolve **DL-4**, open since Sortie 1: its own exit criteria require the CI lint job to invoke `make lint`, but `make lint` runs `swift format -i -r .` — **a formatter that rewrites the repository in place**, not SwiftLint. A CI job invoking it as written would either reformat the checkout or fail for the wrong reason, and the three custom rules would still never run. Reconciling that is a repo-convention decision, not a config edit. It must also **prove all three custom rules can fail** (task 2), which is the mission's own falsifiability standard applied to the lint layer — and the `no_markdown_import_in_sources` rule is currently the **only** thing keeping `swift-markdown` out of every consumer's dependency graph (D-2), so a rule that cannot fail is a charter hole. Plus DL-180. |
+| DL-182 | — | — | — | *(reserved — handed to Sortie 29 as its first free defect number)* | Per DL-150. |
 
 ---
 
 ## Overall Status
 
-### Current position (2026-07-27, round 6 — Sortie 28 in flight) — NEWEST
+### Current position (2026-07-27, round 7 — Sortie 29 in flight) — NEWEST
+
+- Sorties completed: **32 / 33** (all but 29 and 30 — every one supervisor-verified).
+- Sorties in flight: **1** — Sortie 29 (WU-7, opus), SwiftLint enforcement in CI.
+- Work units: **7 / 8 COMPLETE**. WU-7 RUNNING at 29; **one sortie after it.**
+- **Tree is GREEN and clean** at `ff7e8ce`: `make test-performance` 0 (**12/5**),
+  `make test-core` 0 (**314/30**), `make test` 0 (**179/28** + **44/10** + **314/30**),
+  `make test-ios` 0 (**160/25** + **44/10** + **314/30**).
+- **The performance picture, measured rather than assumed**: cold scan **5.2 ms** against a
+  50 ms ceiling and a 10 ms target; in-line edit **0.026 ms** against 1 ms; 10 KB paste
+  0.40 ms; `LineIndex` linear at 3.99×. **The scanner has ~40× headroom and is not the
+  bottleneck** — the `NSAttributedString.string` binding push costs **0.522 ms per
+  keystroke**, 21× the scan it accompanies and 52% of the whole budget (DL-179).
+- **The disagreement register is now a committed artifact**: `FOUNTAIN_SURGEON_01_ERRATA.md`
+  (`3426ca7`), written at the user's request against the explicit possibility of a rollback
+  to zero and a re-implementation. It must be updated with DL-175…DL-181 before `brief`.
+- **DL-61 is now an observed fact reproduced by three independent parties** (DL-180), and
+  `tests.yml` still declares no `timeout-minutes`. Sortie 29 owns it.
+
+### Position (2026-07-27, round 6 — Sortie 28 complete)
 
 - Sorties completed: **31 / 33** (1–27 and 31–33 — every one supervisor-verified, none
   taken on report alone).
