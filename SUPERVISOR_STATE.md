@@ -266,7 +266,15 @@ updated: 2026-07-26
 
 ### WU-8 Title-Page Repair & Metadata Model — ADDED BY USER AMENDMENT 2026-07-26
 - Work unit state: **RUNNING**
-- Current sortie: **32** of 33 — **DISPATCHED**, opus, complexity 15
+- Current sortie: **33** of 33 — PENDING (criteria amended by DL-156 before dispatch)
+- Sortie 32: **COMPLETED — supervisor-verified**, commit `4c30480`. All four re-run by the
+  supervisor: `make build` 0, `make test-core` 0 (**276/20**), `make test` 0 (**179/28** +
+  **26/6** new) , `make test-ios` 0 (**160/25** + **26/6**). **The move is a true copy** —
+  the supervisor diffed all eight vendored files against their `SwiftProyecto` originals:
+  **0 diff lines each** below a 5-line provenance header. Only import in the target is
+  `Foundation`. `SwiftProyecto` untouched; `EscriboCore` gained nothing at all; the only
+  tracked file modified is `Package.swift`. Found **four defects in the moved code**
+  (DL-151…154) and an API gap (DL-157). Supervisor probe established **DL-156**.
 - Sortie 31: **COMPLETED — supervisor-verified**, commit `7ddfb16`. **DL-130 IS FIXED.**
   All three re-run by the supervisor on a quiet machine: `make test-core` 0 (**276/20**,
   +5), `make test` 0 (**179/28**), `make test-ios` 0 (**160/25**) — the two view targets
@@ -477,6 +485,15 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-149 | 2026-07-26 | WU-8 | 31 | **Related defect found and correctly declined: a document whose FIRST key is empty opens no title page at all.** Needs a user decision. | `Title:` / `\t` / `Credit: X` scans with **zero** title-page keys, because the corroboration rule still reads a whitespace-only second line as no corroboration. The agent declined to fix it and its reasoning is sound: on one line of lookahead, `Title:` above a lone tab is indistinguishable from a transition above a lone tab, so widening the rule would turn ordinary transition-led screenplays into title pages. That is a design decision, not a scanning bug, and it sits outside "inside the region only". Captured by a descriptive test so a later sortie that decides it goes red. **Practical exposure is real but narrower than DL-130's**: a Highland export with an **empty TITLE** would still lose its whole title page. Highland writes TITLE first and it is normally populated, so probability is low — but it is the same failure mode one row up. **→ user decision; default catcher Sortie 30.** |
 | DL-150 | 2026-07-26 | — | 31 | **SUPERVISOR PROCESS DEFECT: agents cannot see which DL numbers are taken, and one just collided** | Sortie 31 labelled its new defect **DL-136** in source (`FountainRegionTests.swift:548,559`), but DL-136 was already assigned to the DL-112 discharge. The agent could not have known: the supervisor forbids agents from reading `SUPERVISOR_STATE.md` — a rule earned when Sortie 25 destroyed the file (DL-123) and one that should stay. The collision is therefore the **supervisor's** bookkeeping failure, not the agent's. Resolution: the new defect is **DL-149** in this log; the in-source label reads DL-136 and is left as-is rather than having the supervisor edit test code. **Process fix, effective immediately: every dispatch order now states the next free DL number for the agent to use.** **→ Sortie 30** should reconcile the in-source label. |
 
+| DL-151 | 2026-07-26 | WU-8 | 32 | **REAL DATA LOSS IN LIVE CODE: a top-level `episodes:` with no `season:` is silently discarded on decode** | `episodes` is a **computed** accessor over `seasons`; `init(from:)` only synthesizes a `SeasonDefinition` when `season` is present. The migration guard reads `if finalSeasons == nil && (season != nil \|\| episodes != nil)` and then `if let seasonNum = season` — so with `season` absent the outer guard passes, the inner binding fails, and the episode count has nowhere to go. Because `episodes` is a **known** key, `appSections` never sees it and cannot rescue it. **The supervisor verified this in the fixture bytes**: `confessions-PROJECT.md` carries `episodes: 69` and no `season:` — the 69 is lost on any write-back. Three of four vendored fixtures are in this shape. **This is pre-existing in `SwiftProyecto`, not introduced by the move** — the vendored files are byte-identical — which means the live pipeline has been dropping this on every write-back and nothing surfaced it until a corpus was pointed at it. **→ user decision; it is a behavior change to fix, not a bug fix, because a file could rely on the current shape.** |
+| DL-152 | 2026-07-26 | WU-8 | 32 | `encode(to:)` stamps `schemaVersion: 4` unconditionally, which falsifies Sortie 33's stated formulation | `decode(encode(decode(x))) == decode(x)` is **false for every legacy fixture**, for reasons that have nothing to do with data loss, and `isLegacyV3Format` — documented as tracking origin — reports `false` after one write-back. Caught by the agent and folded into the amended criteria. |
+| DL-153 | 2026-07-26 | WU-8 | 32 | `withCast(_:)` erases the last-updated date | It rebuilds through the memberwise initializer without passing `updated`. The sibling helper `normalizingPaths(relativeTo:)` does pass it, so this is an omission rather than a policy. Not fixed — the move was required to be behavior-preserving. |
+| DL-154 | 2026-07-26 | WU-8 | 32 | `MergeStrategy.preserveExisting` and `.preferNew` are line-for-line identical | Documented as opposites; no input can distinguish them. `.combine` is genuinely a third behavior. Not fixed. |
+| DL-155 | 2026-07-26 | WU-8 | 32 | **`CastMember ==` compares character names ONLY — any gate written with `==` is blind to exactly the loss it exists to catch** | Verified by the supervisor at `CastMember.swift:419-421`: the body is `lhs.character == rhs.character`. `ProjectFrontMatter` synthesizes `Equatable`, so **it reports equal for two front matters whose casts have lost every actor, gender, voice, language and unknown key.** `SeasonDefinition` embeds `[CastMember]?` and inherits the same blindness. The agent caught this in its own draft and built a field-by-field comparator plus a `ComparatorSelfTests` suite that mutates each of seven `CastMember` fields and requires the comparator to notice. **Sortie 33's plan text said `==`; it has been amended.** Had it shipped as written, the gate would have been green against the precise failure the user asked to be protected from. |
+| DL-156 | 2026-07-26 | WU-8 | 32→33 | **SUPERVISOR PROBE, and the most consequential finding of the round: a round-trip gate is blind to DECODE-side data loss, by construction** | The supervisor dropped **every voice from every cast member** in `CastMember.init(from:)` (`voices = [:]`) and re-ran. **3 issues across only 2 tests** — and the corpus test *"Every field survives the round trip, including every unknown key"* **stayed green**. The reason is structural: a round trip compares `decode(x)` against `decode(encode(decode(x)))`, both sides pass through the *same* decoder, a dropped field is missing from both, and they compare equal. Only tests asserting against **literal expected values** caught it. This is the scan gate's lesson (DL-25) reappearing in a new domain: **a self-consistent wrong answer round-trips perfectly.** It also empirically confirms the agent's claim that DL-151 is invisible to round-tripping — that was not reasoning, it is now demonstrated. **Sortie 33's criteria amended**: it must assert cast and unknown-key content against values read from the fixture bytes, and a decode-side `voices` drop must turn the gate red. |
+| DL-157 | 2026-07-26 | WU-8 | 32 | API gap flagged and correctly not folded into a move: unknown keys are round-trippable but **unreadable** | `AppFrontMatterSettings.swift` — the extension giving typed access to `appSections` — stayed in `SwiftProyecto` because the compiler never demanded it. Consequence: in `EscriboProject`, `appSections` and `CastMember.extraKeys` are `internal` with **no public accessor**. Consumers can round-trip unknown keys but cannot read or write them. The agent flagged it rather than widening the move, which was the right call. **→ user decision**, a small deliberate follow-up. |
+| DL-158 | 2026-07-26 | WU-8 | 32 | A real file in the org does not decode today | `lingua-matra/PROJECT.md` writes `languages: [es, fr, it, pt, de]` as bare strings, which `[LanguageDefinition]` cannot decode — that file **throws** on decode. Not vendored, not fixed, recorded so it is not rediscovered as a mystery. |
+
 ---
 
 ## Overall Status
@@ -493,9 +510,9 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   necessity and is now behind us.
 ### Current position (2026-07-26, round 3 — Sorties 21 and 27 in flight)
 
-- Sorties completed: **25 / 33** (1–21, 25, 26, 27, 31 — every one supervisor-verified,
+- Sorties completed: **26 / 33** (1–21, 25, 26, 27, 31, 32 — every one supervisor-verified,
   none taken on report alone). **Total rose from 30 to 33** on the user's WU-8 amendment.
-- Sorties in flight: **1** — Sortie 32 (WU-8, opus), the `EscriboProject` model move
+- Sorties in flight: **0** — Sortie 33 is next, with criteria amended by DL-155 and DL-156
 - Work units: **4 / 7 COMPLETE** (WU-1, WU-2, WU-3, **WU-6 closed this round**).
   WU-4 RUNNING at 22; WU-5 RUNNING at 23; WU-7 gated on 22.
 - **Concurrency is now 1.** Two-way parallelism cost a 42-minute hang this round and is
@@ -510,11 +527,13 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   reverted, tree clean after each. The gate stayed green through the one that mattered.
 - **Remaining critical chain**: `22 → 28 → 29 → 30`. Four sorties. Sortie 21 cleared the
   hardest link; WU-4 has one sortie left.
-- **Serial queue from here** (DL-134): **32 → 33** → 23 → 22 → 24 → 28 → 29 → 30. Eight left.
+- **Serial queue from here** (DL-134): **33** → 23 → 22 → 24 → 28 → 29 → 30. Seven left.
 - **DL-130 IS FIXED** (`7ddfb16`, DL-147) — escalated twice, amended in by the user, closed
   by a one-line change, and the fix is probe-proven in both directions (DL-148).
-- **Tree is GREEN and clean** at `7ddfb16`: core **276/20**, macOS **179/28**, iOS
-  **160/25** — all re-run by the supervisor on a quiet machine. Charter clean: no regex, `EscriboCore` imports
+- **Tree is GREEN and clean** at `4c30480`: `make build` 0, core **276/20**, macOS
+  **179/28**, iOS **160/25**, plus the new `EscriboProjectTests` at **26/6** on both
+  platforms — all re-run by the supervisor on a quiet machine.
+- **`EscriboProject` is the package's third shipping target** (D-5), Foundation-only. Charter clean: no regex, `EscriboCore` imports
   **nothing at all**, no XCTest.
 - **A contaminated run was caught by counting, not by exit code.** The supervisor's first
   iOS verification reported `TEST FAILED` with core at **137/20** — a number appearing

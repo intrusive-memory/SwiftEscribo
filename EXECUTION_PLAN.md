@@ -832,9 +832,36 @@ packages, one of which was broken until Sortie 31.
 **Entry criteria**:
 - [ ] Sortie 32 exit criteria met
 
+<!-- AMENDED 2026-07-26 after Sortie 32 reported DL-152 and the CastMember equality gap.
+     Both would have made this gate green against the exact data loss it exists to catch. -->
+
+**Three facts that change how this gate must be written.** The third was established by a
+supervisor probe, not by reasoning:
+
+0. **A round-trip gate is blind to decode-side data loss, by construction.** It compares
+   `decode(x)` against `decode(encode(decode(x)))` — both sides pass through the *same*
+   decoder, so a field the decoder drops is missing from both and they compare **equal**.
+   The supervisor proved this on the shipped code: dropping **every voice from every cast
+   member** on decode left the corpus test "Every field survives the round trip, including
+   every unknown key" **green**. Only tests asserting against **literal expected values**
+   caught it. **This gate must therefore assert cast and unknown-key content against values
+   read from the fixture bytes — not only against a second decode.** DL-151 (`episodes:`
+   discarded on decode) is a live instance of exactly this class.
+
+1. **`==` is unusable as the comparison.** `CastMember` overrides `==` to compare
+   **character names only**. `ProjectFrontMatter ==` therefore reports equal for a cast
+   that has lost every actor, gender, voice, language, and unknown key. Writing this gate
+   with `==` would make it **green against precisely the data loss it exists to detect**.
+   Compare **field by field**, and ship a self-test proving the comparator itself can fail.
+2. **`encode(to:)` stamps `schemaVersion: 4` unconditionally** (DL-152), so
+   `decode(encode(decode(x))) == decode(x)` is **false for every legacy fixture** for
+   reasons unrelated to data loss. Exclude `schemaVersion` from the comparison, or restrict
+   the corpus to `schemaVersion: 4` files — and say which you chose and why.
+
 **Tasks**:
-1. Property-test round-tripping: `decode(encode(decode(x))) == decode(x)` over a corpus of
-   real `PROJECT.md` front matter, including files carrying keys the model does not know.
+1. Property-test round-tripping over a corpus of real `PROJECT.md` front matter, including
+   files carrying keys the model does not know. Compare the decoded values **field by
+   field** — never with `==`, for the reason above.
 2. Assert **every** cast member survives: character, actor, gender, voiceDescription,
    every provider key in `voices`, and language. A cast member with only a `character` and
    one with every field populated must both round-trip.
@@ -851,8 +878,15 @@ packages, one of which was broken until Sortie 31.
       repo** (D-3 applies — no path outside the repo, loaded via `Bundle.module`)
 - [ ] A test asserts a cast member with every field populated round-trips field for field
 - [ ] A test asserts an unknown top-level key round-trips with its value intact
-- [ ] Deliberately dropping `appSections` from the encoder turns the gate **red** —
+- [ ] Deliberately dropping `appSections` from the **encoder** turns the gate **red** —
       recorded in the sortie report as proof the test can fail
+- [ ] Deliberately dropping every `voices` entry in the **decoder** also turns the gate
+      **red**. This is the decode-side twin of the criterion above and it is the one that
+      currently fails: it must be caught by an assertion against literal expected values,
+      because round-tripping cannot see it (see fact 0)
+- [ ] For at least one fixture, cast content is asserted against values **read from the
+      committed fixture bytes** — character names, and for one member every provider key
+      and voice id — rather than against a second decode
 
 ---
 
