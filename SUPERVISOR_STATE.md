@@ -335,8 +335,18 @@ updated: 2026-07-27
 
 ### WU-7 Verification & Hardening
 - Work unit state: **RUNNING** — unlocked 2026-07-27 when Sortie 22 completed.
-- Current sortie: **30** of 30 — **DISPATCHED 2026-07-27, opus, complexity 16, attempt 1/3**
-  (DL-186 records the model call). **The last sortie of the mission.**
+- **Work unit state: COMPLETED** (2026-07-27 — all 3 sorties, 28–30, verified)
+- Current sortie: 30 of 30 — all complete
+- Sortie 30: **COMPLETED — supervisor-verified**, commit `8c85565`. **The last sortie of the
+  mission.** Every gate re-run by the supervisor on a quiet machine: `make build` 0,
+  `make lint` 0 (**66 findings, 0 errors**), `make test-core` 0 (**318/31**), `make test` 0
+  (**179/28** + **48/11** + **318/31**), `make test-ios` 0 (**160/25** + **48/11** +
+  **318/31**), `make test-performance` 0 (**13/6**, `build-optimized: true`, cold scan
+  **5.088 ms**). +9 tests / +2 suites, every one accounted for. Charter clean at the tip:
+  no regex under `Sources/`, `EscriboCore` imports **nothing at all**, no XCTest, no
+  `import Markdown`. **`LineState` opacity holds** — the only `public` in `LineState.swift`
+  is the type itself. **Supervisor probe fired (DL-189)**, and the agent **corrected the
+  supervisor's own DL-173 finding** (DL-190).
 - Sortie 29: **COMPLETED — supervisor-verified**, commit `430ce12`. Re-run by the supervisor:
   `make build` 0, `make lint` 0, `make test-core` 0 (**314/30**), `make test` 0 (**179/28**
   + **44/10** + **314/30**), `make test-ios` 0 (**160/25** + **44/10** + **314/30**).
@@ -367,6 +377,7 @@ updated: 2026-07-27
 | Sortie | State | Model | Attempts | Commit | Verified by supervisor |
 |--------|-------|-------|----------|--------|------------------------|
 | 28 | COMPLETED | opus | 1 | `ff7e8ce` | supervisor re-ran all four (12/5 + 314/30 + 179/28 + 160/25) and reproduced the measurements; every criterion re-checked per-invocation, not by grep count; **Debug-configuration probe fired 2 issues but exposed that the 50 ms ceiling does not defend the config (DL-177)**; the 4.4 linearity tolerance ruled correct on the supervisor's own two data points (DL-178) |
+| 30 | COMPLETED | opus | 1 | `8c85565` | supervisor re-ran all six gates (318/31 + 179/28 + 160/25 + 13/6 + build + lint); **0 demotions and the audit's own criterion found vacuous by the agent** (DL-189); setter-opacity probe fired exactly one correct compile error; **DL-173 corrected by the agent and re-measured by the supervisor** (DL-190); 9 agent mutations, all fired |
 | 29 | COMPLETED | opus | 1 | `430ce12` | supervisor re-ran build/lint/all three suites (314/30 + 179/28 + 160/25); **DL-4 resolved after 29 sorties (DL-183)**; charter-rule probe run through `make lint` in an isolated worktree, exit **2** (DL-184); `large_tuple` disable independently confirmed accurate and replaced with a **verified** threshold form (DL-185); DL-180 closed — `timeout-minutes` on all three jobs |
 - Notes: All three entry criteria (Sorties 27, 17, 22) are now met, so Sortie 28 is
   **eligible**. It is held one round only because concurrency is 1 (DL-134), not because
@@ -379,7 +390,7 @@ updated: 2026-07-27
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------------|-----------------|---------|-------------|---------------|
-| WU-7 | 30 | DISPATCHED | 1/3 | **opus** | 16 | (round 8, agent A) | — | 2026-07-27 |
+| — | — | **none — mission sorties complete** | — | — | — | — | — | — |
 
 **Concurrency 1** (DL-134). Sortie 28 runs alone — and from here there is nothing left to
 run beside it: 28 → 29 → 30 is serial by construction. It owns
@@ -613,14 +624,31 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-184 | 2026-07-27 | WU-7 | 29 | **Supervisor probe: the gate works through the REAL chain, not just through `swiftlint`** | The agent proved all three custom rules fire by invoking `swiftlint` directly. That is one link short of what CI actually does: CI runs `make lint`, and a Makefile recipe can mask an exit code in half a dozen ways. The supervisor therefore probed the full chain in an **isolated worktree at the committed SHA**, choosing the charter-critical rule of the three — `no_markdown_import_in_sources`, which per D-2 is the **only** mechanism keeping `swift-markdown` out of every downstream consumer's dependency graph, since SwiftPM prunes a test-only dependency as a graph property and would give no build error. Clean tree: `make lint` exit **0**. With `import Markdown` prepended to a **shipping** target: `make lint` exit **2**, one `error:` naming the rule and the file. Probe verified present with `grep -qF` before linting (per DL-53). Worktree removed; main tree never touched. **The charter now has a guard rail that has been proven to fire end to end.** |
 | DL-185 | 2026-07-27 | WU-7 | 29 | **The `large_tuple` widening is accurate as reported — and the supervisor found and VERIFIED a strictly better form of it. Ruled: accept now, replace in Sortie 30.** | To keep the gate green the agent added `large_tuple` to `disabled_rules`, flagged it as a deliberate widening in the config, the commit message and its report — the right way to do a thing like this. The supervisor re-enabled the rule and measured: **17 violations, all 17 under `Tests/`, zero in `Sources/`, 16 warnings and exactly 1 error** at `FountainInMarkdownTests.swift:81`, the 4-member expectation table. Every number the agent reported is correct, and it was forbidden from touching `Tests/` by the supervisor's own dispatch, so disabling was the only lever it had. **But `disabled_rules` deletes the signal**, and this mission's own standard (Sortie 22's oracle: "a documented divergence that stops occurring must fail") is that you narrow a gate, never blank it. **The supervisor's first proposed alternative — `large_tuple: severity: warning` — was measured and DOES NOT WORK**: `large_tuple` is a *threshold* rule, not a severity rule, and the run still exited 2. The form that does work was then verified: **`large_tuple: {warning: 2, error: 5}` → exit 0, all 17 findings still reported, 0 errors.** Same green gate, signal fully preserved. **→ Sortie 30 replaces the disable with the threshold.** Recorded in full because the supervisor's first suggestion was wrong and measuring it is the only reason a wrong suggestion did not become a dispatch order. |
 | DL-186 | 2026-07-27 | WU-7 | 30 | Model: **opus**, complexity 16 — the last sortie, and the one carrying the most inherited weight | Its own three tasks are moderate, but Sortie 30 is the named catcher for **fourteen** accumulated obligations, and its central task is **source-breaking**: demoting public declarations to `internal` in a package whose semver commitments make a post-1.0 rename a major release. It must also distinguish three categories that look alike and are not — pre-authorized public exceptions that must be *confirmed, not re-litigated* (DL-9, DL-41); structures it must **not** "simplify" because the simplification is the bug (DL-35's two-level cache, DL-12's internal inits); and genuine 1.0 limitation decisions it must document rather than fix (DL-107, DL-131, DL-149). |
-| DL-187 | — | — | — | *(reserved — handed to Sortie 30 as its first free defect number)* | Per DL-150. |
+| DL-187 | — | — | — | *(reserved — handed to Sortie 30; unused, no new defect found)* | Per DL-150. |
+| DL-189 | 2026-07-27 | WU-7 | 30 | **The audit's own fourth exit criterion was vacuous, the agent found it, and the hole it was hiding is the one that mattered: the package would have shipped with its SECOND public entry point marked `internal` and every gate green** | The criterion — "a test file importing `EscriboCore` **without** `@testable` still compiles and exercises every documented 1.0 entry point" — was satisfied by a `PublicSurfaceTests.swift` that already existed and **never named `FountainWriter`**, which REQUIREMENTS.md lists in the same sentence as the scanner entry points. All ~90 writer tests are `@testable`, so a `FountainWriter` demoted to `internal` would have compiled, passed, and shipped. The agent added `PublicWriterTests` (byte assertions that both an identity writer and an empty writer fail) plus a member-by-member read of `LineRecord`/`ScanResult`/`EscriboSpan`, then proved it: demoting `FountainWriter` now produces **12 compile errors**. **This is the 17th unfalsifiable criterion and the most expensive one the mission nearly shipped** — it is the exact shape of the whole family: a criterion that reads like a guarantee, satisfied by a file that predates it. **Supervisor probe on the other half of the same audit**: `EscriboProject`'s new `public internal(set)` accessors (DL-157) cannot be asserted by any passing test, since the claim is that an assignment *fails to compile*. The supervisor wrote a throwaway non-`@testable` file assigning to `appSections` and built it: **exactly one error — `cannot assign to property: 'appSections' setter is inaccessible`** — with the read on the preceding line compiling clean. Narrow closure confirmed. (The supervisor's first attempt at this probe failed on a wrong initializer signature and was re-run; per DL-53, a probe that fails for the wrong reason measures nothing.) |
+| DL-190 | 2026-07-27 | WU-7 | 30 | **THE AGENT CORRECTED THE SUPERVISOR, AND WAS RIGHT — DL-173's example was wrong and its conclusion was understated** | DL-173 reported that the one-word DL-170 fix makes `"FADE OUT:\n\t\nThe end.\n"` classify as a title page, and called that "a transition-led screenplay". The agent pointed out that **`FADE OUT:` is not a transition in this grammar at all** — Fountain 1.1 recognizes a transition by a literal `TO:` ending, so that document is `.action`, and the supervisor had named the wrong hazard class. It pinned the sharp case instead: **`CUT TO:\n\t\nThe end.\n`**, a *real* transition at document start over a lone tab. **The supervisor re-measured rather than accepting either version**: under the one-word fix, both documents scan as `[titlePageKey, titlePageValue, titlePageValue, blank]` — so the fix eats a genuine `CUT TO:` transition **and swallows the line below it as a title-page value**. DL-173's substance stands and is **worse** than stated; its example was imprecise and is hereby corrected. Both documents are now asserted descriptively in the suite, grammar untouched. **Recorded prominently because an agent correcting the supervisor on the supervisor's own probe is the strongest evidence this mission has that the falsification standard runs in both directions.** |
 | DL-188 | 2026-07-27 | — | 29 | **ERRATUM for the user, outside every agent's file boundary: branch protection does not yet require the new lint job** | The `Lint / SwiftLint` check runs and gates *its own workflow*, but it is not in `required_status_checks.contexts`, so GitHub will not block a merge on it. Same for the performance workflow, which is deliberately not PR-triggered and should **not** be added. Fixing this is a repo-settings change (`gh api --method PUT repos/OWNER/REPO/branches/BRANCH/protection`), not a file edit, so no sortie can do it. **→ user.** |
 
 ---
 
 ## Overall Status
 
-### Current position (2026-07-27, round 8 — Sortie 30 in flight, THE LAST) — NEWEST
+### MISSION SORTIES COMPLETE (2026-07-27, round 8) — NEWEST
+
+- **Sorties completed: 33 / 33. Work units: 8 / 8 COMPLETE.** Every sortie
+  supervisor-verified; **not one was taken on report alone.**
+- **Tree is GREEN and clean** at `8c85565`: `make build` 0, `make lint` 0 (66 findings, 0
+  errors), core **318/31**, macOS **179/28 + 48/11 + 318/31**, iOS **160/25 + 48/11 +
+  318/31**, performance **13/6** with `build-optimized: true`.
+- **The 1.0 audit demoted nothing**: 134 public declarations in `EscriboCore`, every one on
+  the REQUIREMENTS list or forced by it, and every one referenced. `LineState` opacity holds.
+- **Remaining mission flow**: `test-cleanup` → `brief` → `clean`. No sortie work remains.
+- **Open for the user** (all in `FOUNTAIN_SURGEON_01_ERRATA.md`): DL-149/170 (empty first
+  title-page key), DL-151 (live decode-side data loss in `EscriboProject`), DL-188 (branch
+  protection does not require the new lint check), plus the `inclusive_language` renames
+  (source-breaking) and the `opening_brace` formatter/linter disagreement.
+
+### Position (2026-07-27, round 8 — Sortie 30 in flight, THE LAST)
 
 - Sorties completed: **32 / 33**. **Sortie 30 is the final one.**
 - Work units: **7 / 8 COMPLETE**; WU-7 RUNNING at 30.
