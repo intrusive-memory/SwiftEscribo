@@ -235,13 +235,31 @@ updated: 2026-07-27
 | 20 | COMPLETED | opus | 1 | `e911cad` | all three 0 (235/16), **worktree-verified** (DL-104); 3 mutations fired, gate green 235/235 (DL-105); 7th unfailable criterion flagged; autolinks deferred to Sortie 22 (DL-107) |
 
 ### WU-5 Writer
-- Work unit state: **RUNNING**
-- Current sortie: **24** of 33 — **DISPATCHED 2026-07-27, opus, complexity 13, attempt 1/3**
-  (criteria amended by DL-165 before dispatch; DL-169 records the dispatch reasoning)
+- Work unit state: **COMPLETED** (2026-07-27 — both sorties, 23–24, verified)
+- Current sortie: 24 of 24 — all complete
+- Sortie 24: **COMPLETED — supervisor-verified**, commit `a72b1f3`. All three re-run by the
+  supervisor on a quiet machine: `make test-core` 0 (**314/30**, +21/+4), `make test` 0
+  (**179/28** + **44/10** + **314/30**), `make test-ios` 0 (**160/25** + **44/10** +
+  **314/30**) — every count matches the agent's report. Charter clean: no regex under
+  `Sources/`, `EscriboCore` imports **nothing at all**, no XCTest, no `import Markdown`
+  under `Sources/`. **DL-111 is discharged without widening `LineRecord`** — the span route
+  is cross-checked against a hand-written `TitlePageOracle` that never consults the scanner,
+  on every title-page line in the corpus, with a non-vacuity pin
+  (`{episode_01: 9, spanish: 5, episode_10: 5}`). Six agent mutations, **all six fired**.
+  **Supervisor probe fired 38 issues across 11 tests** (DL-171).
 - Sortie type: code
 - Model: opus
 - Complexity score: 13
 - Attempt: 1 of 3
+- Notes: Found **DL-170** — which is a rediscovery of **DL-149**, and that is the
+  supervisor's bookkeeping failure, not the agent's (DL-172). The compensation is that the
+  defect is now **pinned by a test** and its fix has been **measured** (DL-173).
+
+#### Sortie history — WU-5
+| Sortie | State | Model | Attempts | Commit | Verified by supervisor |
+|--------|-------|-------|----------|--------|------------------------|
+| 23 | COMPLETED | opus | 1 | `5c899f2` | supervisor re-ran all three (293/26 + 179/28 + 160/25); terminator-truncation probe fired 5 issues / 3 tests (DL-164); found all three of its own criteria identity-satisfiable and fixed them |
+| 24 | COMPLETED | opus | 1 | `a72b1f3` | supervisor re-ran all three (314/30 + 179/28 + 160/25); **key-order probe fired 38 issues / 11 tests (DL-171)**; DL-111 discharged via an independent oracle; DL-170 found (= DL-149, DL-172) and its fix measured (DL-173) |
 - Sortie 23: **COMPLETED — supervisor-verified**, commit `5c899f2`. All three re-run:
   `make test-core` 0 (**293/26**, +17/+6), `make test` 0 (**179/28**), `make test-ios` 0
   (**160/25**), `EscriboProjectTests` **44/10** — two new files, nothing else touched.
@@ -317,8 +335,12 @@ updated: 2026-07-27
 
 ### WU-7 Verification & Hardening
 - Work unit state: **RUNNING** — unlocked 2026-07-27 when Sortie 22 completed.
-- Current sortie: 28 of 30
-- Sortie state: PENDING
+- Current sortie: **28** of 30 — **DISPATCHED 2026-07-27, opus, complexity 14, attempt 1/3**
+  (DL-174 records the model call, including the sonnet case I rejected)
+- Sortie type: code
+- Model: opus
+- Complexity score: 14
+- Attempt: 1 of 3
 - Notes: All three entry criteria (Sorties 27, 17, 22) are now met, so Sortie 28 is
   **eligible**. It is held one round only because concurrency is 1 (DL-134), not because
   anything gates it — Sortie 28 does **not** depend on Sortie 24. It carries DL-138
@@ -330,13 +352,16 @@ updated: 2026-07-27
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------------|-----------------|---------|-------------|---------------|
-| WU-5 | 24 | DISPATCHED | 1/3 | **opus** | 13 | (round 5, agent A) | — | 2026-07-27 |
+| WU-7 | 28 | DISPATCHED | 1/3 | **opus** | 14 | (round 6, agent A) | — | 2026-07-27 |
 
-**Concurrency 1** (DL-134). Sortie 24 runs alone. Sortie 28 is eligible and held one round
-purely on that cap. Sortie 24 owns `Sources/EscriboCore/Writer/**` +
-`Tests/EscriboCoreTests/**`; it was forbidden `make lint` (DL-123), forbidden from reading
-or writing `SUPERVISOR_STATE.md`, ordered to verify from a throwaway worktree at its own
-commit (DL-98, DL-132), and handed **DL-170** as its first free defect number (DL-150).
+**Concurrency 1** (DL-134). Sortie 28 runs alone — and from here there is nothing left to
+run beside it: 28 → 29 → 30 is serial by construction. It owns
+`Tests/EscriboPerformanceTests/**`, `.github/workflows/**`, `Makefile`, and `Package.swift`;
+it was forbidden `make lint` (DL-123), forbidden from reading or writing
+`SUPERVISOR_STATE.md`, ordered to verify from a throwaway worktree at its own commit
+(DL-98, DL-132), and handed **DL-175** as its first free defect number (DL-150).
+
+Round 5 (closed): Sortie 24 → `a72b1f3` COMPLETED. **WU-5 complete.**
 
 Round 4 (closed): Sortie 22 → `1d02839` COMPLETED; Sortie 23 → `5c899f2` COMPLETED.
 
@@ -544,13 +569,42 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-167 | 2026-07-26 | WU-4 | 22 | Recorded from Sortie 22: **DL-122's unordered half is narrower than this log has been claiming** | An independent parser confirms the ordered half exactly — a tight ordered list's second and third items classify as `paragraph` (`lists:5`, `:6`). But a tight **bullet** list of ordinary items classifies correctly; the unordered defect needs an item with **no content**, where a lone `-` becomes a setext heading (`lists:18`). DL-122's shape was inferred from two examples and one of them generalized further than the evidence supported. **The owner is unchanged** (whoever raises Markdown's lookahead, else Sortie 30), but the repro is now smaller and exact. |
 | DL-168 | 2026-07-27 | WU-4 | 22 | **Supervisor probe on Sortie 22: direction 1 of the oracle is real, and it names the divergence rather than merely failing** | The agent's commit claims the oracle "fails in both directions". Direction 2 (a documented divergence that stops occurring) is self-evidently testable by editing the table; direction 1 — an *undocumented* divergence — is the one that matters and the one no table edit can prove. The supervisor collapsed nested blockquote depth in `MarkdownGrammar.swift:732` (`depth: markers - 1` → `depth: 0`), a mutation aimed at `quotes_and_rules`, whose divergence table is **empty**. Result: **5 issues across 3 tests**, including `Block structure agrees with swift-markdown, or diverges exactly as documented` failing on `quotes_and_rules` with the exact reading of both sides, the source line `"> > nested quote"`, and a copy-pasteable table literal; and `The scanner finds every block class the corpus contains`, the degeneracy guard, which caught that `.blockquote(depth: 1)` had vanished from the corpus entirely. Reverted; tree clean; core back to **298/27**. **Note the second failure is the more interesting one**: the anti-degeneracy test exists precisely so that a scanner which stops producing a block class cannot pass by producing nothing, and it fired without being aimed at. |
 | DL-169 | 2026-07-27 | WU-5 | 24 | Model: **opus**, complexity 13 — and the reason is the mission's own history, not the task's size | On raw scoring this sortie sits at the sonnet/opus boundary: ~30 turns, 3–5 files, machine-verifiable criteria, no dependents. What pushes it over is that **Sortie 24 is the sortie most likely to be handed criteria that cannot fail.** Its original idempotence formulation was unsatisfiable (DL-165); its predecessor found all three of *its own* criteria satisfiable by the identity function (DL-164); the mission has now found **13** unfalsifiable criteria, and the two most recent were both in the writer's neighbourhood. This sortie must therefore *design falsifiability*, not just implement a writer — and it carries DL-111 (does the title-page **span** route round-trip byte-identically, or does `LineRecord` need `keyRange`?) on top of its own tasks. Cheap-first would be false economy on the last correctness sortie of the mission. |
-| DL-170 | — | — | — | *(reserved — handed to Sortie 24 as its first free defect number)* | Per DL-150, every dispatch order now states the next free DL number so agents cannot collide with the supervisor's bookkeeping. |
+| DL-170 | 2026-07-27 | WU-5 | 24 | Recorded from Sortie 24: a title page whose **first** key has a Highland-style empty value opens **no title page at all** — pinned, not fixed. **This is DL-149 rediscovered; see DL-172.** | `"TITLE:\n\t\nEPISODE:\n\tX\n"` scans as `action, blank, character, dialogue` — the whole metadata block read as screenplay body. Cause, confirmed by the supervisor in the source: deviation 10a's *terminator* asks `GrammarLine.isEmpty` (Sortie 31 fixed exactly that), but deviation 11's *corroboration* test in `opensTitlePage` still asks `isBlank` at `FountainGrammar.swift:1046`, which answers true to a lone tab. The one line proving the document has a title page is the one line the opener refuses as corroboration. `episode_01` is unaffected only because its first key has a real value — which is why Sortie 31 did not find it from that fixture. The agent declined to fix it (outside its file boundary) and pinned current behavior in `firstKeyWithAnEmptyValueLosesTheWholeTitlePage`, **documented as meant to go red when the defect is fixed**. That is the right shape: the defect now has a tripwire instead of a log entry. |
+| DL-171 | 2026-07-27 | WU-5 | 24 | **Supervisor probe on Sortie 24: key ORDER is genuinely asserted — and the probe was chosen because sorting survives the fixed-point gate** | None of the agent's six mutations touched ordering, and ordering is an explicit exit criterion ("in its original position relative to other keys"). The interesting property of the mutation is that it is **idempotent**: the supervisor made the writer sort the title page's key groups alphabetically, so `write(parse(y)) == y` still holds and the mission's headline gate is structurally blind to it. Only an order assertion can see it. Result: **38 issues across 11 named tests**, including "`verbsCovered:` keeps its casing and its position among the other keys", "The vendored screenplays' arbitrary keys survive in order", "A duplicate title-page key survives twice, in order", and "Key and value spans, the oracle, and the writer agree on every fixture" (9 issues). Reverted; tree clean; core back to **314/30**. **A bonus finding**: "The writer is a fixed point on every deliberately non-canonical document" *also* fired — sorting is idempotent in the abstract but not through this scanner, because moving an empty-valued key to the front trips DL-170 and the document re-parses differently. The two defects compose. |
+| DL-172 | 2026-07-27 | — | 24 | **SUPERVISOR ERROR: DL-149 was recorded, given a catcher, and then left out of the dispatch order — so an opus agent spent part of its budget rediscovering it** | DL-149 (from Sortie 31) already described this defect precisely, including the cause and the reason Sortie 31 declined it. The supervisor's Sortie 24 dispatch order carried DL-111, DL-130, DL-163, DL-164 and DL-165 but **not** DL-149, and agents are forbidden from reading `SUPERVISOR_STATE.md` (a rule earned by DL-123 and worth keeping). The obligations list is therefore only as good as the supervisor's discipline in transcribing the relevant entries into each dispatch. **The cost was not zero and not large**: the mission gains an independent second confirmation of the defect from a different direction (the writer rather than the region tests) and, more valuably, a **pinned test** DL-149 never got. **Standing rule: before dispatching, grep the open-obligations list for the sortie's subject matter and paste every hit into the order.** |
+| DL-173 | 2026-07-27 | — | 24/30 | **The disagreement about DL-170's fix is settled by measurement: the fix is one word, the cost Sortie 31 named is real, and NOTHING in 314 tests catches that cost** | Sortie 24 called the fix "one word in `opensTitlePage`"; Sortie 31 had called it a design decision, because on one line of lookahead `Title:` above a lone tab is indistinguishable from a transition above a lone tab. The supervisor applied the one-word change (`!isBlank(ahead.units)` → `!ahead.isEmpty`) and measured: **5 issues across 3 tests** — Sortie 24's DL-170 tripwire, Sortie 31's in-source `DL-136` tripwire (the label collision from DL-150), and one gate document. **No transition test fired, because none exists.** The supervisor then wrote a throwaway probe asserting `"FADE OUT:\n\t\nThe end.\n"` does not open a title page: **it fails under the fix** — line 0 becomes a `titlePageKey`. So both agents were right about different things, and the decision cannot be taken safely today: **whoever fixes DL-170 must first add the transition-above-whitespace assertion, or the fix trades a narrow defect for a wider one silently.** Probe file deleted, grammar reverted, tree clean, core **314/30**. **→ Sortie 30, with the user's call on whether 1.0 fixes it at all.** |
+| DL-174 | 2026-07-27 | WU-7 | 28 | Model: **opus**, complexity 14 — with the sonnet case stated, because it was close | Sortie 28's tasks are unusually well specified (exact byte size, exact budgets, exact greps), which argues for sonnet, and sonnet has held twice at complexity 11 (DL-118, Sortie 27). Three things push it over. (1) **Timing assertions are the canonical flaky-CI trap**, and this sortie decides which numbers are *asserted* versus *reported* — get that wrong and the mission ships a gate that fails randomly, which is worse than no gate. (2) It inherits three open "go measure this" obligations that are open-ended by nature: **DL-138** (the Markdown lookahead 0→1 widened the forward rescan window for every Markdown document — measure it against the ≤1 ms budget, do not assume it away), **DL-75** (the per-change `NSTextStorage.string` → Swift `String` bridge), and **DL-56** (the post-IME-composition full rescan). (3) It creates a **new test target and a new workflow**, so `Package.swift` and CI both move. |
+| DL-175 | — | — | — | *(reserved — handed to Sortie 28 as its first free defect number)* | Per DL-150. |
 
 ---
 
 ## Overall Status
 
-### Current position (2026-07-27, round 5 — Sortie 24 in flight) — NEWEST, everything below is history
+### Current position (2026-07-27, round 6 — Sortie 28 in flight) — NEWEST
+
+- Sorties completed: **31 / 33** (1–27 and 31–33 — every one supervisor-verified, none
+  taken on report alone).
+- Sorties in flight: **1** — Sortie 28 (WU-7, opus), the performance suite.
+- Work units: **7 / 8 COMPLETE** (WU-1, WU-2, WU-3, WU-4, **WU-5 closed this round**,
+  WU-6, WU-8). WU-7 RUNNING at 28.
+- **Tree is GREEN and clean** at `a72b1f3`, all three re-run by the supervisor on a quiet
+  machine: `make test-core` 0 (**314/30**), `make test` 0 (**179/28** + **44/10** +
+  **314/30**), `make test-ios` 0 (**160/25** + **44/10** + **314/30**).
+- **Remaining: 2 sorties — 29 and 30, after 28.** Both are hardening; the correctness work
+  of this mission is finished.
+- **Three supervisor probes this round** (DL-171 order, DL-173 the DL-170 fix, and the
+  throwaway transition probe inside DL-173), all reverted, tree clean after each.
+- **The mission's recurring lesson found its cleanest instance this round** (DL-171): a
+  mutation that is *idempotent* passes an idempotence gate by construction. The headline
+  property could not see alphabetical key sorting; eleven ordinary assertions could.
+- **Open items needing a human decision before 1.0** — collected here so `brief` does not
+  have to reconstruct them: **DL-170/DL-149** (fix the first-empty-key title page, and if
+  so, add the transition guard first — DL-173), **DL-151** (a top-level `episodes:` with no
+  `season:` is discarded on decode, in live code), **DL-157** (`appSections` has no public
+  accessor), **DL-107** (GFM extended autolinks unimplemented, and the oracle cannot see
+  it — DL-166).
+
+### Position (2026-07-27, round 5 — Sortie 24 in flight)
 
 - Sorties completed: **30 / 33** (1–23, 25, 26, 27, 31, 32, 33 — every one
   supervisor-verified, none taken on report alone).
@@ -668,8 +722,13 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   share the gap and agree across it. Still open; now a documented 1.0 limitation decision.
 - **DL-167 → same owner as DL-122**: DL-122's unordered half needs an *empty* item to
   reproduce; a tight bullet list of ordinary items is classified correctly.
-- **DL-111 → Sortie 24, in flight**: confirm the title-page span route round-trips
-  byte-identically, or add `keyRange` to `LineRecord`.
+- **DL-111 — DISCHARGED by Sortie 24**: the span route is cross-checked against an
+  independent hand-written oracle on every title-page line in the corpus, with a
+  non-vacuity pin. `LineRecord` did **not** gain `keyRange`, correctly — it would be empty
+  on every line of every non-title-page document.
+- **DL-170 / DL-149 → Sortie 30 + user**: one defect, found twice. Fixing it is one word
+  **and** requires adding the transition-above-whitespace assertion first (DL-173).
+- **DL-138 / DL-75 / DL-56 → Sortie 28, in flight**: three things to measure, not assume.
 - **DL-149, DL-151, DL-157 → user decisions, default catcher Sortie 30**: (a) a document
   whose *first* title-page key is empty opens no title page at all; (b) a top-level
   `episodes:` with no `season:` is silently discarded on decode, in live code; (c)
