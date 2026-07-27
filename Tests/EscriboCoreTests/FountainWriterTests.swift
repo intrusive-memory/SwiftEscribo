@@ -404,9 +404,12 @@ struct FountainWriterCorpusTests {
   ///
   /// ## What this is, and what it deliberately is not
   ///
-  /// It is **not** the idempotence gate — that is `parse(write(parse(x))) == parse(x)`,
-  /// it compares whole records rather than classifications, it has to survive canonical
-  /// title-page writing, and it belongs to Sortie 24. This is the weaker property that a
+  /// It is **not** the idempotence gate. That gate lives in
+  /// `FountainWriterIdempotenceTests` and is a **fixed point of the writer** compared as
+  /// text — `write(parse(write(parse(x)))) == write(parse(x))`. Sortie 24 established that
+  /// the record-level formulation this comment used to name is unsatisfiable for a
+  /// normalizing writer: shortening a line shifts every ``LineRecord/range`` after it, so
+  /// records differ for a reason that is not data loss. This is the weaker property that a
   /// body-element writer can be held to on its own: a transformation that renames an
   /// element is a writer changing the document's meaning, and no amount of "it re-parses
   /// fine" makes that acceptable.

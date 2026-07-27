@@ -1,4 +1,4 @@
-/// `!`, `#`, `.`, `=`, `>`, `@`, `~`, `^`, `(`, `)`, a space, a tab, `\n`, `\r` — the
+/// `!`, `#`, `.`, `:`, `=`, `>`, `@`, `~`, `^`, `(`, `)`, a space, a tab, `\n`, `\r` — the
 /// only code units this file compares against.
 ///
 /// Spelled as constants for the reason ``FountainGrammar``'s are: `EscriboCore` reads
@@ -13,6 +13,7 @@ private let equalsSign: UInt16 = 0x3D
 private let greaterThan: UInt16 = 0x3E
 private let lessThan: UInt16 = 0x3C
 private let atSign: UInt16 = 0x40
+private let colon: UInt16 = 0x3A
 private let tilde: UInt16 = 0x7E
 private let caret: UInt16 = 0x5E
 private let space: UInt16 = 0x20
@@ -47,9 +48,18 @@ private let blockMarkerStarts: [UInt16] = [
 /// heading is gone. That is the point of having a writer at all: a document that has been
 /// through it is spelled one way. It is also why "write a document's parse back out and
 /// get the original bytes" is **not** a property of this type and must never be asserted
-/// anywhere — it fails on every non-canonical input, which is most real input. The
-/// correct formulation is idempotence, `parse(write(parse(x))) == parse(x)`, and it
-/// belongs to the sortie that owns the title page (REQUIREMENTS.md § Verification 4).
+/// anywhere — it fails on every non-canonical input, which is most real input.
+///
+/// The correct formulation is that this writer is a **fixed point**: let `y = write(x)`,
+/// then `write(y) == y`, compared as text. One pass moves a document to its canonical
+/// spelling and every later pass leaves it exactly there (REQUIREMENTS.md § Verification 4).
+/// Two nearby formulations are wrong and are asserted nowhere in this package. `write(x)
+/// == x` is wrong because writing normalizes. `parse(write(x)) == parse(x)` compared as
+/// records is *also* wrong, and less obviously: normalization shortens lines, so every
+/// ``LineRecord/range`` after the first normalized line shifts, and record equality then
+/// fails for a reason that has nothing to do with data loss. A parse-level comparison has
+/// to be over **classifications** — `(element, depth)` per line — which is what
+/// `FountainWriterCorpusTests` compares.
 ///
 /// ## What it preserves, and how
 ///
@@ -73,8 +83,15 @@ private let blockMarkerStarts: [UInt16] = [
 ///    (``ElementKind/character``) — so both are re-lexed out of the tail of the line and
 ///    re-emitted with canonical spacing.
 ///
-/// Notes, boneyard, and the title page are written **verbatim**, byte for byte, including
-/// any GLOSA directive inside a note. See § "Verbatim" below.
+/// Notes and boneyard are written **verbatim**, byte for byte, including any GLOSA
+/// directive inside a note. See § "Verbatim" below.
+///
+/// The title page is normalized like everything else — `Title:   Big Fish` comes back as
+/// `Title: Big Fish` — with one thing held rigid: the **key** is copied out of the source
+/// byte for byte and the keys keep their original order. There is no key list in this
+/// package and there must never be one; `verbsCovered` and `Abstract` are as much keys as
+/// `Title` is (REQUIREMENTS.md § Fountain 2), so a writer that recognized keys would
+/// silently drop this org's own documents' metadata. See § "The title page" below.
 ///
 /// ## The one thing the writer must not do
 ///
@@ -229,22 +246,21 @@ public struct FountainWriter {
     case .action:
       appendRaw(lineEnd: lineEnd, of: units, into: &out)
 
+    // MARK: The title page
+
+    case .titlePageKey:
+      emitTitlePageKey(units: units, lineEnd: lineEnd, content: content, into: &out)
+
+    case .titlePageValue:
+      emitTitlePageValue(units: units, content: content, into: &out)
+
     // MARK: Verbatim
     //
     // A note and a boneyard are not screenplay elements — one is commentary layered over a
     // screenplay and the other is text struck out of one — so there is no canonical
     // spelling to normalize toward, and everything inside them (a GLOSA directive, a
     // half-written tag, an unterminated `/*`) is content that must survive untouched.
-    //
-    // The title page is verbatim for a different reason: writing it canonically is the
-    // next sortie's task, and this is the seam it replaces. Note what the seam must
-    // preserve — a `titlePageValue` record whose content range is **empty** but whose
-    // `range` still covers the bytes Highland wrote (a lone tab, DL-130) is a key with an
-    // empty value, and it is deliberately distinguishable from a key that was never
-    // written at all. Writing the raw range keeps that line in the document; a writer that
-    // skipped records with empty content would delete it and turn "key with empty value"
-    // into "absent key".
-    case .note, .boneyard, .titlePageKey, .titlePageValue:
+    case .note, .boneyard:
       appendRaw(lineEnd: lineEnd, of: units, into: &out)
 
     // Every Markdown element, and anything a later version adds. Verbatim is always
@@ -331,6 +347,97 @@ public struct FountainWriter {
       }
     }
     append(content, of: units, into: &out)
+  }
+
+  // MARK: - The title page
+
+  /// `Key: value` — the key exactly as it was written, one colon, one space, the value.
+  ///
+  /// ## Why the key is re-lexed rather than read off the record
+  ///
+  /// ``LineRecord`` carries the **value** as its ``LineRecord/contentRange`` and does not
+  /// carry the key at all: the key ships as a ``SpanKind/titlePageKey`` span, and spans are
+  /// not an input to this writer (DL-111). Rather than widen the record with a `keyRange`
+  /// that would be empty on every line of every document that is not a title page, the key
+  /// is recovered the same way ``FountainGrammar`` found it — everything before the line's
+  /// **first** colon — which is the same one-place duplication of grammar knowledge that
+  /// `blockMarkerStarts` and the cue tail already are. `FountainWriterTitlePageTests`
+  /// cross-checks the two routes against each other and against the source bytes on every
+  /// title-page line in the corpus, so the duplication cannot drift silently.
+  ///
+  /// ## What is held rigid
+  ///
+  /// Everything up to the colon is copied out verbatim: not trimmed, not case-folded, not
+  /// checked against any list. `verbsCovered` stays `verbsCovered` and `CONTACT INFO` keeps
+  /// its space. What normalizes is only the run of whitespace *between* the colon and the
+  /// value, and a value's trailing whitespace, which the scanner already left outside the
+  /// content range.
+  ///
+  /// A key with an empty value is written as the bare `Key:` — no trailing space, which is
+  /// what makes a second pass a no-op — and its value line, if it had one, is written
+  /// separately by ``emitTitlePageValue(units:content:into:)``. The two records are
+  /// deliberately distinguishable and both survive: `EPISODE:` followed by a lone tab is a
+  /// key whose value is empty (DL-130), and `REVISION:` with nothing under it is a key with
+  /// no value line at all. Both spellings appear in `episode_01.fountain`.
+  private func emitTitlePageKey(
+    units: UnsafeBufferPointer<UInt16>,
+    lineEnd: Int,
+    content: Range<Int>,
+    into out: inout [UInt16]
+  ) {
+    // Totality. A record whose line no longer holds a colon — a stale record against an
+    // edited document — is written verbatim rather than trapped or dropped.
+    guard let colonAt = keyEnd(units, lineEnd: lineEnd) else {
+      appendRaw(lineEnd: lineEnd, of: units, into: &out)
+      return
+    }
+    for offset in 0..<colonAt {
+      out.append(units[offset])
+    }
+    out.append(colon)
+    appendSpaced(content, of: units, into: &out)
+  }
+
+  /// A continuation line: one tab, then the value.
+  ///
+  /// The indent is **not optional and is not copied** — it is re-emitted as a single tab,
+  /// which is what Highland 2 writes and what Fountain's own examples show. Both halves of
+  /// that matter:
+  ///
+  /// * *Not copied*: three spaces and a tab are the same continuation, so normalizing them
+  ///   to one spelling is the writer's job.
+  /// * *Not optional*: a continuation whose value is empty must still be written as a line
+  ///   with something on it. Emitting nothing would produce a genuinely empty line, and an
+  ///   empty line **terminates the title page** (``FountainGrammar`` deviation 10a) — every
+  ///   key below it would drop out of the region on the next parse. This is the one place
+  ///   in this file where writing fewer bytes would change the document's structure rather
+  ///   than its spelling.
+  ///
+  /// De-indenting is not a risk here the way it is inside a dialogue block: a tab-indented
+  /// line cannot be read as a key (``FountainGrammar``'s key must start at the first code
+  /// unit), so this spelling classifies as a continuation for every possible value.
+  private func emitTitlePageValue(
+    units: UnsafeBufferPointer<UInt16>, content: Range<Int>, into out: inout [UInt16]
+  ) {
+    out.append(tab)
+    append(content, of: units, into: &out)
+  }
+
+  /// The offset of the colon that ends a title-page key, or `nil` when the line has none.
+  ///
+  /// Deliberately identical to ``FountainGrammar``'s `titlePageKeyEnd(_:)`: a key begins at
+  /// the first code unit — an indented line is a continuation, not a key — must be
+  /// non-empty, and ends at the **first** colon, since a key may contain spaces but not a
+  /// colon. Reading past the first one would make `Title: Level 1: Simple Sentences` a key
+  /// named `Title: Level 1`, which is a real line in `spanish.fountain`.
+  private func keyEnd(_ units: UnsafeBufferPointer<UInt16>, lineEnd: Int) -> Int? {
+    guard lineEnd > 0, !isSpaceOrTab(units[0]) else { return nil }
+    var offset = 0
+    while offset < lineEnd, units[offset] != colon {
+      offset += 1
+    }
+    guard offset >= 1, offset < lineEnd else { return nil }
+    return offset
   }
 
   // MARK: - Pieces
