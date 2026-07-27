@@ -684,4 +684,3 @@ struct FountainWriterIdempotenceTests {
     }
   }
 }
-

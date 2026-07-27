@@ -545,7 +545,12 @@ struct FountainRegionTests {
     #expect(withEmptyValue.lineRecords[2].contentRange.isEmpty)
   }
 
-  /// **DL-136, found in Sortie 31 and deliberately not fixed there.**
+  /// **DL-149, found in Sortie 31 and deliberately not fixed there.**
+  ///
+  /// DL-150 — this test and its `@Test` display name said **DL-136** from Sortie 31 until
+  /// Sortie 30 reconciled them. That number was already taken by an unrelated finding; the
+  /// defect described here is DL-149, and `Tests/EscriboCoreTests/FountainWriterTitlePageTests.swift`
+  /// pins the writer-side half of it under its other name, DL-170.
   ///
   /// Deviation 11's corroboration still reads a whitespace-only second line as no
   /// corroboration at all, so a document whose **first** key is the empty one opens no
@@ -556,7 +561,7 @@ struct FountainRegionTests {
   ///
   /// Descriptive, like the DL-130 test was: if a later sortie decides the ambiguity, this
   /// goes red and names itself.
-  @Test("Known defect DL-136: a whitespace-only line does not corroborate a bare first key")
+  @Test("Known defect DL-149: a whitespace-only line does not corroborate a bare first key")
   func whitespaceOnlyLineDoesNotCorroborateABareFirstKey() {
     let source = "Title:\n\t\nCredit: Written by\n\nINT. HOUSE - DAY"
     let result = FountainGrammarTests.fullScan(source)
@@ -570,6 +575,39 @@ struct FountainRegionTests {
     // what isolates the defect to the corroboration rule rather than to the region.
     let corroborated = FountainGrammarTests.fullScan("Title:\n\tA\n\nINT. HOUSE - DAY")
     #expect(corroborated.lineRecords[0].element == .titlePageKey)
+
+    // **The hazard the obvious fix walks into, asserted rather than described (Sortie 30).**
+    //
+    // The supervisor measured that the one-word change — reading a whitespace-only second
+    // line as corroboration — makes a transition-led document classify as a title page.
+    // Nothing in this suite asserted the other side of the ambiguity, so the fix would have
+    // looked free right up until it silently converted the top of a screenplay into
+    // metadata. These two documents are that other side.
+    //
+    // `CUT TO:` is the sharp one: it is a *real* Fountain transition (Fountain 1.1 requires
+    // a transition to end in `TO:`), it is a shape screenplays genuinely open on, and it is
+    // indistinguishable from `Title:` over a lone tab on one line of lookahead. If it ever
+    // starts scanning as a title page, a screenwriter's first line has been eaten.
+    //
+    // This is deliberately **not** an assertion that the current behaviour is right — like
+    // the assertions above it, it is descriptive. It is here so that whichever way a later
+    // sortie decides DL-149, it has to decide this at the same time, on purpose, in the
+    // same commit, rather than discovering it from a bug report.
+    let transitionSource = "CUT TO:\n\t\nThe end.\n"
+    let transitionLed = FountainGrammarTests.fullScan(transitionSource)
+    #expect(Self.texts(.titlePageKey, in: transitionLed, of: transitionSource).isEmpty)
+    #expect(
+      transitionLed.lineRecords.map(\.element) == [.transition, .blank, .action, .blank])
+
+    // `FADE OUT:` is `action`, not `transition`, and that is correct rather than a second
+    // defect: Fountain 1.1 recognizes a transition by the literal `TO:` ending, and
+    // `FADE OUT.` / `FADE OUT:` are the spec's own examples of forms that need a leading
+    // `>` to force. Included anyway because it is the document the hazard was measured on,
+    // and because "it is not a title page" is the assertion that matters for both.
+    let fadeSource = "FADE OUT:\n\t\nThe end.\n"
+    let fadeLed = FountainGrammarTests.fullScan(fadeSource)
+    #expect(Self.texts(.titlePageKey, in: fadeLed, of: fadeSource).isEmpty)
+    #expect(fadeLed.lineRecords.map(\.element) == [.action, .blank, .action, .blank])
   }
 
   @Test("A title-page value may contain a colon without becoming two keys")

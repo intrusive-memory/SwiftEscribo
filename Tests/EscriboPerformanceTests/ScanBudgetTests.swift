@@ -46,6 +46,34 @@ import Testing
 @Suite("EscriboCore performance", .serialized)
 struct PerformanceSuite {
 
+  // MARK: - The build the budgets are stated for
+
+  /// **DL-177.** Every threshold below is an arm64 optimized-build threshold. This is the
+  /// gate on that premise; see ``isOptimizedBuild`` for the measurement that made it
+  /// necessary (a Debug run passes the 50 ms cold-scan ceiling at 46.98 ms while reporting
+  /// numbers that are ten times wrong) and for why the check reads the optimization level
+  /// rather than the `DEBUG` compilation condition.
+  ///
+  /// Deliberately its own suite rather than a line inside each budget: a reader scanning
+  /// the failure list needs to see *one* failure that says "you ran this wrong", not six
+  /// that say "the scanner got slower".
+  @Suite("Build configuration")
+  struct BuildConfigurationTests {
+
+    @Test("The budgets below are running against an optimized build, as they are stated for")
+    func suiteIsOptimized() {
+      observe("build-optimized", "\(isOptimizedBuild)")
+      #expect(
+        isOptimizedBuild,
+        """
+        This suite was compiled with -Onone. Every budget in this target is stated for an \
+        optimized arm64 build and is meaningless otherwise — a Debug cold scan measures \
+        ~47 ms against a 50 ms ceiling and passes. Run it with `make test-performance`, \
+        which passes `-configuration Release ENABLE_TESTABILITY=YES`.
+        """)
+    }
+  }
+
   // MARK: - The fixture
 
   @Suite("Assembled fixture")

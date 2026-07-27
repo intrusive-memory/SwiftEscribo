@@ -153,6 +153,159 @@ struct PublicSurfaceTests {
     // `String` satisfies the same protocol, from inside the module.
     #expect("a\r\nb".utf16Count == 4)
   }
+
+  // MARK: - Every member of the record types a consumer receives
+
+  /// Sortie 30. The suite above proves the *types* cross the module boundary; this proves
+  /// every **member** of them does, which is a different claim and the one the audit is
+  /// actually about. A property demoted to `internal` by mistake is invisible to a
+  /// `@testable` suite and to every other test in this target — this method is where it
+  /// stops compiling.
+  ///
+  /// Read rather than merely named: each value is asserted against a number computed by
+  /// hand from the source below, so a member that survived the audit but started returning
+  /// something else is caught here too.
+  @Test("Every public member of LineRecord, ScanResult, and EscriboSpan is readable from outside")
+  func recordMembersAreReadable() {
+    var scanner = EscriboScanner(language: .markdown)
+    //          0123456789
+    // line 0:  "# Title"   + \n   → offsets  0..<8
+    // line 1:  "a | b"     + \n   → offsets  8..<14
+    // line 2:  "|:-|-:|"   + \n   → offsets 14..<22
+    // line 3:  ""                 → offset  22..<22
+    let text = "# Title\na | b\n|:-|-:|\n"
+    let result = scanner.fullScan(text)
+
+    // ScanResult: all four members.
+    #expect(result.dirtyRange == 0..<22)
+    #expect(result.lines == 0..<4)
+    #expect(result.lineRecords.count == 4)
+    #expect(!result.spans.isEmpty)
+
+    // LineRecord: index, range, contentRange, element, depth, startState, tableAlignments.
+    let heading = result.lineRecords[0]
+    #expect(heading.index == 0)
+    #expect(heading.range == 0..<8)
+    #expect(heading.contentRange == 2..<7, "content excludes the `# ` marker and the newline")
+    #expect(heading.element == .heading)
+    #expect(heading.depth == 1)
+    #expect(heading.tableAlignments.isEmpty)
+
+    // `startState` is readable — it is a public stored property — and comparing two of them
+    // is the only thing a consumer can do with one. Asserted across *two independent scans*
+    // rather than against itself, so the comparison is a real one: scanning the same text
+    // twice must yield equal states line for line, and a state that hashed an address or a
+    // scan sequence number would fail here while passing `x == x`.
+    var again = EscriboScanner(language: .markdown)
+    let second = again.fullScan(text)
+    #expect(second.lineRecords.map(\.startState) == result.lineRecords.map(\.startState))
+    #expect(heading.startState == second.lineRecords[0].startState)
+    // …and the delimiter row does *not* begin in the same state as the heading, so equality
+    // is discriminating rather than degenerate.
+    #expect(heading.startState != result.lineRecords[2].startState)
+
+    // `tableAlignments` is the reason ``TableAlignment`` is public at all: it is a stored
+    // property of a public struct, so its type is forced public with it. Reaching a value
+    // of that type from out here is the proof the forcing is real rather than assumed.
+    let delimiter = result.lineRecords[2]
+    #expect(delimiter.element == .tableDelimiterRow)
+    #expect(delimiter.tableAlignments == [.left, .right])
+    #expect(delimiter.tableAlignments[0].rawValue == 1)
+    #expect(TableAlignment(rawValue: 3) == .center)
+    #expect(TableAlignment.unspecified != TableAlignment.left)
+
+    // EscriboSpan: the memberwise initializer's defaults are public API too — a consumer
+    // that has to spell `style:` and `role:` at every call site has a different API than
+    // the one that shipped.
+    let defaulted = EscriboSpan(range: 0..<1, kind: .text)
+    #expect(defaulted.style == [])
+    #expect(defaulted.role == .content)
+  }
+}
+
+/// The canonical writer, exercised the way a consumer sees it — which is the only way it
+/// *can* be exercised for the 1.0 audit.
+///
+/// REQUIREMENTS.md § What is public in 1.0 names "the writer" alongside the scanner entry
+/// points, and until Sortie 30 every one of its ~90 tests lived behind `@testable import`.
+/// Those tests would have stayed green with `FountainWriter` demoted to `internal`, so the
+/// package had no assertion at all that its second shipping entry point was reachable.
+///
+/// ## Why this is not the writer's test suite
+///
+/// `FountainWriterTests` and `FountainWriterTitlePageTests` own the writer's behaviour and
+/// are far more thorough. This is a *reachability* test with teeth: the assertions are byte
+/// comparisons chosen so that neither an identity writer (`return source`) nor an empty one
+/// (`return ""`) can satisfy them, because a reachability test that only checked
+/// `write(...)` compiled would be exactly the vacuous criterion this mission keeps finding.
+@Suite("Public writer entry point (no @testable import)")
+struct PublicWriterTests {
+
+  @Test("A consumer can scan a document and write it back out through the public API")
+  func writerIsPubliclyReachable() {
+    // Every line here is deliberately non-canonical, so a writer that returned its input
+    // unchanged fails on the first assertion:
+    //   `#   ACT ONE` → `# ACT ONE`   (section marker, one space)
+    //   `=====`       → `===`         (page break, exactly three)
+    //   `BOB   ^`     → `BOB ^`       (dual-dialogue caret, one space)
+    let source = "INT. HOUSE - DAY\n\n#   ACT ONE\n\n=====\n\nBOB   ^\nHello.\n"
+
+    var scanner = EscriboScanner(language: .fountain)
+    let result = scanner.fullScan(source)
+    let written = FountainWriter().write(result.lineRecords, from: source)
+
+    #expect(written == "INT. HOUSE - DAY\n\n# ACT ONE\n\n===\n\nBOB ^\nHello.\n")
+    #expect(written != source, "an identity writer would pass every reachability check")
+    #expect(!written.isEmpty)
+
+    // Writing is idempotent: the canonical form of a canonical document is itself. A
+    // writer that normalized on a schedule rather than to a fixed point would pass the
+    // assertion above and fail this one.
+    var second = EscriboScanner(language: .fountain)
+    let reWritten = FountainWriter().write(second.fullScan(written).lineRecords, from: written)
+    #expect(reWritten == written)
+
+    // A subrange is a legal argument and writes that subrange — the documented contract,
+    // and the one thing about the signature a consumer cannot discover by trying it on a
+    // whole document.
+    let firstLineOnly = FountainWriter().write(Array(result.lineRecords.prefix(1)), from: source)
+    #expect(firstLineOnly == "INT. HOUSE - DAY\n")
+
+    // A `UTF16TextSource` that is not a `String` reaches the same generic parameter, which
+    // is what `SwiftEscribo` does with an `NSTextStorage` on every save.
+    let external = ExternalWriterSource(units: Array(source.utf16))
+    #expect(FountainWriter().write(result.lineRecords, from: external) == written)
+  }
+
+  @Test("The writer is total on a record set it was not given the matching grammar for")
+  func writerIsTotalOnForeignRecords() {
+    // REQUIREMENTS.md § Unknown kinds fall back, never fail. Markdown records handed to
+    // the Fountain writer come back verbatim rather than throwing or trapping, and a
+    // consumer must be able to rely on that from outside the module.
+    let source = "# Heading\n\n- item\n"
+    var scanner = EscriboScanner(language: .markdown)
+    let result = scanner.fullScan(source)
+    #expect(FountainWriter().write(result.lineRecords, from: source) == source)
+
+    // …and on nothing at all.
+    #expect(FountainWriter().write([], from: source).isEmpty)
+  }
+}
+
+/// A non-`String`, non-`NSTextStorage` conformer, declared out here so the writer's generic
+/// parameter is exercised across the module boundary rather than only by `String`.
+private struct ExternalWriterSource: UTF16TextSource {
+  let units: [UInt16]
+
+  var utf16Count: Int { units.count }
+
+  func copyUTF16CodeUnits(in range: Range<Int>, into buffer: UnsafeMutableBufferPointer<UInt16>) {
+    var out = 0
+    for offset in range {
+      buffer[out] = units[offset]
+      out += 1
+    }
+  }
 }
 
 /// The public scanner entry point, exercised the way a consumer sees it.

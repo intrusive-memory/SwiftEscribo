@@ -165,8 +165,13 @@ public struct CastMember: Codable, Sendable, Equatable, Hashable, Identifiable {
   /// PROJECT.md round-trips — extra keys are preserved rather than silently
   /// destroyed on write-back.
   ///
-  /// Internal access allows extensions to read and modify within the module.
-  internal var extraKeys: [String: AnyCodable] = [:]
+  /// **DL-157, closed in Sortie 30.** Readable from outside the module, for the same
+  /// reason and on the same terms as ``ProjectFrontMatter/appSections``: the public
+  /// ``init(character:actor:gender:voiceDescription:voices:language:extraKeys:)`` already
+  /// accepted a value for this, so unknown keys could be written from outside and not read
+  /// back. `internal(set)` keeps the setter inside the module, so the dictionary continues
+  /// to mean "exactly what decode did not recognize".
+  public internal(set) var extraKeys: [String: AnyCodable] = [:]
 
   /// Unique identifier based on character name
   public var id: String { character }

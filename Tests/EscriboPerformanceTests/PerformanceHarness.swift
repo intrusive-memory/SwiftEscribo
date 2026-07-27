@@ -262,6 +262,46 @@ func repeated<R>(
   return (Timing(samples: samples), last!)
 }
 
+// MARK: - Build configuration
+
+/// Whether this target was compiled with optimization on (`-O`) rather than `-Onone`.
+///
+/// ## DL-177 — why this exists, and why it is an assertion rather than a comment
+///
+/// Every budget in this target is an arm64 **optimized-build** budget, and the Makefile
+/// says so at length. Nothing enforced it. Measured on the development machine at
+/// `-configuration Debug`, the cold-scan number is 46.98 ms against a 50 ms ceiling: the
+/// suite goes **green** while every number it reports is roughly ten times wrong, and a
+/// reader of that log has no way to tell. The only assertion that noticed the difference
+/// at all was the 1 ms in-line-edit budget, and it noticed by 5% — one busy runner away
+/// from not noticing.
+///
+/// A budget that fails to defend its own build configuration is not a slow gate, it is an
+/// unfalsifiable one: it can be satisfied by a run that measured something else entirely.
+/// So the configuration is asserted directly, first, before any clock is read.
+///
+/// ## Why `_isDebugAssertConfiguration()` and not `#if DEBUG`
+///
+/// `#if DEBUG` tests whether the `DEBUG` *compilation condition* was defined, which is a
+/// convention xcodebuild happens to follow for the Debug configuration — it is a proxy for
+/// a proxy, and `xcodebuild -Onone -DDEBUG` and `xcodebuild -Onone` are indistinguishable
+/// to it in one direction and `-O -DDEBUG` in the other. `_isDebugAssertConfiguration()` is
+/// the stdlib's own read of `-Onone` vs `-O` — it is what `assert` is built on — so it
+/// answers the question the budgets actually depend on. Verified directly, both ways:
+/// `swiftc -Onone` yields `true`, `swiftc -Onone -DDEBUG` yields `true`, and `swiftc -O`
+/// yields `false`.
+///
+/// ## What this proves, and what it does not
+///
+/// It reads *this target's* compile mode, not `EscriboCore`'s. That is exact rather than
+/// approximate for every way this suite can actually be run: `xcodebuild -configuration`
+/// applies to every target in the scheme, so there is no invocation of `make
+/// test-performance` — or of a hand-typed `xcodebuild test -only-testing` — that builds
+/// this target optimized and its dependency `-Onone`. It would stop being exact only if
+/// someone set `SWIFT_OPTIMIZATION_LEVEL` on a single target, which is not a drift mode
+/// that has a reason to happen.
+var isOptimizedBuild: Bool { !_isDebugAssertConfiguration() }
+
 // MARK: - Reporting
 
 /// Prints one measurement in the fixed `name: <N> ms` shape the sortie's exit criteria

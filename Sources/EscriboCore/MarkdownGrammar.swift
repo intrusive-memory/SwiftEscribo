@@ -248,16 +248,25 @@ struct MarkdownBlockState: Equatable, Sendable {
 ///
 /// ## Lookahead
 ///
-/// Zero. Every construct here is decided by the line's own text plus the state it begins
-/// in. That includes the setext underline, which reads ``MarkdownBlockState/paragraphOpen``
-/// arriving from above rather than looking at the line below.
+/// **Declared one; consumed by no Markdown construct.** DL-139 — until Sortie 21 this
+/// section said "Zero", and the number stopped being true when ``lookahead`` was raised to
+/// `1` so that a nested `fountain` fence could hand its guest grammar a window with a line
+/// in it (see the property's own documentation for why the *host* grammar's declaration is
+/// what sizes that window). The behaviour the old prose described did not change, only its
+/// stated cause, and the corrected statement is the narrower one:
 ///
-/// **Known gap, deliberate:** because lookahead is zero, a setext underline classifies
-/// *itself* as ``ElementKind/heading`` and does **not** retro-classify the paragraph line
-/// above it. Doing that requires `lookahead == 1` and the matching backward extent — the
-/// same machinery Fountain's character cue needs — and it is not this sortie's. A
-/// consumer that wants the heading *text* for a setext heading must read the line above a
-/// `heading` record whose content range is empty.
+/// Every Markdown decision in this file is still made from the line's own text plus the
+/// state it begins in. Nothing here calls `line(ahead:)`. That includes the setext
+/// underline and the table delimiter row, both of which read
+/// ``MarkdownBlockState/paragraphOpen`` arriving from above rather than looking at the line
+/// below.
+///
+/// **Known gap, deliberate (DL-88):** because no rule here reads the line below, a setext
+/// underline classifies *itself* as ``ElementKind/heading`` and does **not** retro-classify
+/// the paragraph line above it. Closing it needs the matching *backward* extent as well —
+/// the machinery Fountain's character cue has — and raising `lookahead` alone did not
+/// supply it. A consumer that wants the heading *text* for a setext heading must read the
+/// line above a `heading` record whose content range is empty.
 ///
 /// ## What block structure this grammar does not model
 ///
@@ -285,8 +294,10 @@ struct MarkdownBlockState: Equatable, Sendable {
 /// line 0 without rescanning it.
 ///
 /// **A table's header row is not classified as one.** GFM recognizes a header only by the
-/// delimiter row beneath it, which is one line of lookahead this grammar does not have —
-/// the same gap the setext underline has, and it waits on the same later sortie. The
+/// delimiter row beneath it, which would mean reading the line below plus retro-classifying
+/// the line above — neither of which any rule in this file does, whatever ``lookahead``
+/// happens to be declared as. The same gap the setext underline has, waiting on the same
+/// later sortie. The
 /// delimiter row is recognized instead, from its own text plus
 /// ``MarkdownBlockState/paragraphOpen`` arriving from above, and the header stays a
 /// ``ElementKind/paragraph``. For the same reason the delimiter row's **cell count is never
@@ -610,8 +621,8 @@ struct MarkdownGrammar: LineGrammar {
           range: (base + indent.units)..<(base + runEnd), kind: .heading, role: .marker)
       ],
       element: .heading,
-      // Pure delimiter: the heading's text is the line above, which a zero-lookahead
-      // grammar cannot reclassify. The empty content range says so honestly rather than
+      // Pure delimiter: the heading's text is the line above, which a grammar with no
+      // backward extent cannot reclassify. The empty content range says so honestly rather than
       // claiming the dashes are the heading.
       contentRange: (base + runEnd)..<(base + runEnd),
       depth: character == equalsSign ? 1 : 2,
@@ -914,9 +925,9 @@ struct MarkdownGrammar: LineGrammar {
   /// the last line of the document is the last line of the region.
   ///
   /// **What "unterminated frontmatter degrades to `.text`" means here, stated exactly.**
-  /// This grammar has zero lookahead, so at the opening `---` it cannot know whether a
-  /// closing one exists; retro-classifying the opener is not available to it and will not be
-  /// until the sortie that owns raising the lookahead. What it can do, and does, is refuse
+  /// No rule in this grammar reads the line below, so at the opening `---` it cannot know
+  /// whether a closing one exists; retro-classifying the opener is not available to it and
+  /// will not be until the sortie that owns the backward extent. What it can do, and does, is refuse
   /// to invent structure: a line inside the region that is not `key:`-shaped comes back as a
   /// single ``SpanKind/text`` span. A region that was never YAML — the unterminated case in
   /// practice — is therefore `.text` from its second line to the end of the document, which
@@ -1059,7 +1070,7 @@ struct MarkdownGrammar: LineGrammar {
   ///
   /// Only reachable with ``MarkdownBlockState/paragraphOpen`` set, because in GFM a
   /// delimiter row is only a delimiter row under a header, and a header is a paragraph line
-  /// as far as this grammar is concerned. Two consequences of having no lookahead, both
+  /// as far as this grammar is concerned. Two consequences of reading no line but this one, both
   /// deliberate and both stated in the type's documentation: the header line above stays a
   /// ``ElementKind/paragraph``, and the delimiter row's cell count is never checked against
   /// the header's.

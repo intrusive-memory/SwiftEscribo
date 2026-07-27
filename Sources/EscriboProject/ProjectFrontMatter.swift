@@ -165,10 +165,26 @@ public struct ProjectFrontMatter: Codable, Sendable, Equatable {
 
   // MARK: - App-Specific Settings Storage
 
-  /// Storage for app-specific settings sections.
-  /// Keys are app section identifiers, values are type-erased settings.
-  /// Internal access allows extensions to read and modify within the module.
-  internal var appSections: [String: AnyCodable] = [:]
+  /// Storage for app-specific settings sections: every top-level key in a `PROJECT.md`
+  /// front-matter block that is not one of the declared members above.
+  ///
+  /// Captured on decode and re-emitted verbatim on encode, which is what makes a
+  /// round-trip through this type lossless for keys it has never heard of.
+  ///
+  /// **DL-157, closed in Sortie 30.** This was `internal` with no accessor of any kind, so
+  /// unknown keys round-tripped correctly and were unreadable from outside the module — a
+  /// host app could see that its own settings section survived a save only by diffing the
+  /// file. The public memberwise ``init(type:title:author:created:updated:description:season:episodes:genre:tags:episodesDir:audioDir:filePattern:exportFormat:introFile:outroFile:cast:preGenerateHook:postGenerateHook:tts:schemaVersion:projectType:seasons:languages:variants:episodePath:appSections:)``
+  /// already accepted a value for it, so *writing* was reachable and only *reading* was
+  /// not; the asymmetry was an oversight rather than a design.
+  ///
+  /// `internal(set)` rather than a full `public var`: the two assignments in this file
+  /// (the memberwise initializer and `init(from:)`) are the only mutations in the module,
+  /// and leaving the setter internal keeps the invariant that this dictionary holds
+  /// exactly what decode did not recognize. A caller that wants different unknown keys
+  /// builds a new value through the initializer, which is the same bargain every other
+  /// derived field here makes.
+  public internal(set) var appSections: [String: AnyCodable] = [:]
 
   /// Create a new ProjectFrontMatter instance.
   ///
