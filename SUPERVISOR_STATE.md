@@ -264,6 +264,16 @@ updated: 2026-07-26
 | 27 | COMPLETED | sonnet | 1 (PARTIAL→cont., no increment) | `57df2a1` + `26eafc8` | supervisor re-ran all three on a quiet machine (271/20 + 179/28 + 160/25); DL-46 grep clean; marker-resize probe fired **143 issues / 11 tests** (DL-142); `57df2a1` carries a probe artifact — bisect hazard (DL-143) |
 | 26 | COMPLETED | opus | 1 | `6478d8e` | supervisor worktree-verified (167/27 + 148/24 + 243/17); cue-Return probe fired 8 issues across 4 tests (DL-128); Return column declared a documented decline, not a silent one |
 
+### WU-8 Title-Page Repair & Metadata Model — ADDED BY USER AMENDMENT 2026-07-26
+- Work unit state: **RUNNING**
+- Current sortie: **31** of 33 — **DISPATCHED**, opus, complexity 17
+- Sortie 32: PENDING (gated on 31) — vendor `ProjectFrontMatter` + `CastMember` into a new
+  `EscriboProject` target per **D-5**
+- Sortie 33: PENDING (gated on 32) — the no-data-loss gate for cast and unknown keys
+- Notes: All three run **before Sortie 23**. Sortie 23's entry criteria were amended to
+  require Sortie 31, because building the writer against a scanner that misreads the
+  title page encodes the misreading into the writer. See DL-144.
+
 ### WU-7 Verification & Hardening
 - Work unit state: NOT_STARTED
 - Current sortie: 28 of 30
@@ -452,6 +462,10 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-142 | 2026-07-26 | WU-6 | 27 | **Supervisor probe: Architecture §3 is defended in depth, by three sorties at once** | Neither of the agent's probes touched the "markers are never resized" rule, so the supervisor targeted it: made point size depend on the span's **role** rather than the line, in `EscriboStyler.swift:293` (`key.role == .marker ? 0.5 : 1.0`). **143 issues across 11 distinct tests**, spanning Sortie 7's source-theme and role-stage tests, Sortie 8's geometry tests, and Sortie 27's own `headingMarkerAndContentShareOnePointSize`. The structural guarantee — size is computed from `line.element`/`line.depth`, never from the span — is asserted from three independent directions. Reverted; tree clean at `26eafc8`. **Method note:** a first run of this probe piped through `head -8` and appeared to show only 2 tests firing, which read as a missing assertion; the truncation was the supervisor's own and the re-run without it gave the true 143/11. **Never truncate a probe's output — a probe measures how much fired.** |
 | DL-143 | 2026-07-26 | WU-6 | 27 | Third commit in this mission that does not represent intended state — bisect hazard, fixed forward not amended | `57df2a1` committed the geometry table **with a falsification probe still applied** (`.unorderedListItem` depth 2 forced equal to depth 1), so bisecting across it hits a table that fails its own doubling test. `26eafc8` removes it. Fixing forward rather than amending was the right call on a shared branch. Joins DL-99's two commits that do not build in isolation. **Squash at PR time**; `git bisect` cannot be trusted across `fd34bed`, `632887e`, or `57df2a1`. |
 
+| DL-144 | 2026-07-26 | WU-8 | 31–33 | **PLAN AMENDED BY THE USER — DL-130 now has an owner, and it runs before the writer** | The supervisor escalated DL-130 twice without dispatching against it, on the grounds that inventing a sortie is a plan amendment and therefore the user's call. The user authorized it: add a repair sortie before Sortie 23, move the project-metadata model out of `SwiftProyecto` into this package (deferring the Proyecto-side rewire), fix the defect, and gate it with tests proving the cast data is not dropped. Recorded as **WU-8, Sorties 31–33**, layer 2.5, and **Sortie 23's entry criteria were amended to require Sortie 31**. The ordering is the substance of the amendment: a writer built against a scanner that misreads the title page encodes the misreading, and Sortie 24's idempotence gate would not catch it, because `parse(write(parse(x))) == parse(x)` holds for a self-consistent *wrong* answer. |
+| DL-145 | 2026-07-26 | WU-8 | 32 | **D-5 settled: the moved model goes in a new `EscriboProject` target, not in `EscriboCore`** | The supervisor put the fork to the user rather than choosing silently, because it decides whether `EscriboCore` stays a scanner. `AGENTS.md` states the architecture as "LineIndex + IncrementalScanner ← EscriboCore, Foundation only", and Sortie 30 must audit **every** public declaration in `EscriboCore` against REQUIREMENTS.md § What is public in 1.0. Folding in ~1,450 lines of podcast project metadata would contradict the stated architecture and make the 1.0 audit intractable, while nothing in the scanner consumes project metadata. User chose the new target and the **narrow** move (front matter + cast + compiler-required deps only), leaving `LLMBackend/*`, `ProjectBrowser/*` and the CLI in `SwiftProyecto`. **Sortie 30's scope grows**: it now audits `EscriboProject` on its own terms, separate from the 1.0 list. |
+| DL-146 | 2026-07-26 | WU-8 | 32–33 | The real find behind the amendment: **`ProjectFrontMatter` already solves the problem the Fountain title page gets wrong** | `ProjectFrontMatter` preserves keys it does not recognize via `appSections: [String: AnyCodable]`, decoded from every unknown key. That is the same requirement REQUIREMENTS.md places on the Fountain title page — "arbitrary keys preserved verbatim, spelling, casing, and order" — which Sortie 15 implemented and DL-130 showed was silently defeated by a lone tab. **Two implementations of one idea in two packages, one of them broken.** Both models import Foundation only, so neither fights this package's charter. Sortie 33's gate is aimed squarely at `appSections`: its exit criteria require that deliberately dropping it from the encoder turns the gate red. |
+
 ---
 
 ## Overall Status
@@ -468,9 +482,9 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   necessity and is now behind us.
 ### Current position (2026-07-26, round 3 — Sorties 21 and 27 in flight)
 
-- Sorties completed: **24 / 30** (1–21, 25, 26, 27 — every one supervisor-verified, none
-  taken on report alone)
-- Sorties in flight: **0**
+- Sorties completed: **24 / 33** (1–21, 25, 26, 27 — every one supervisor-verified, none
+  taken on report alone). **Total rose from 30 to 33** on the user's WU-8 amendment.
+- Sorties in flight: **1** — Sortie 31 (WU-8, opus), the DL-130 title-page repair
 - Work units: **4 / 7 COMPLETE** (WU-1, WU-2, WU-3, **WU-6 closed this round**).
   WU-4 RUNNING at 22; WU-5 RUNNING at 23; WU-7 gated on 22.
 - **Concurrency is now 1.** Two-way parallelism cost a 42-minute hang this round and is
@@ -485,7 +499,9 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   reverted, tree clean after each. The gate stayed green through the one that mattered.
 - **Remaining critical chain**: `22 → 28 → 29 → 30`. Four sorties. Sortie 21 cleared the
   hardest link; WU-4 has one sortie left.
-- **Serial queue from here** (DL-134): 23 → 22 → 24 → 28 → 29 → 30. Six left.
+- **Serial queue from here** (DL-134): **31 → 32 → 33** → 23 → 22 → 24 → 28 → 29 → 30.
+  Nine left. WU-8's three sorties are inserted ahead of the writer by DL-144.
+- **DL-130 is no longer unowned.** It was escalated twice and is now Sortie 31's whole job.
 - **Tree is GREEN and clean** at `26eafc8`: core **271/20**, macOS **179/28**, iOS
   **160/25** — all re-run by the supervisor on a quiet machine after a contaminated run
   had to be discarded (see below). Charter clean: no regex, `EscriboCore` imports
@@ -529,9 +545,9 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 - **DL-112 → Sortie 21**: `openConstruct` is one field shared by two grammars.
   Fountain-in-Markdown needs a **second field**, not a cleverer tag, or it converges
   early inside fenced blocks.
-- **DL-130 → UNOWNED, ESCALATED TO USER**: a lone-tab title-page value ends the title page,
-  so 2 of 9 keys survive in a real Highland export and `CREDIT:` becomes a character cue.
-  No sortie in the plan owns this. Hits Sorties 23–24 hardest.
+- **DL-130 → OWNED BY SORTIE 31** (was unowned; escalated twice, amended in by the user
+  2026-07-26 — DL-144). A lone-tab title-page value ends the title page, so 2 of 9 keys
+  survive in a real Highland export and `CREDIT:` becomes a character cue.
 - **DL-131 → Sortie 30** (supersedes DL-120): a GLOSA directive wrapped across a line
   break is destroyed, not merely unpaired.
 - **DL-111 → Sortie 24**: confirm the title-page **span** route round-trips
