@@ -266,9 +266,15 @@ updated: 2026-07-26
 
 ### WU-8 Title-Page Repair & Metadata Model — ADDED BY USER AMENDMENT 2026-07-26
 - Work unit state: **RUNNING**
-- Current sortie: **31** of 33 — **DISPATCHED**, opus, complexity 17
-- Sortie 32: PENDING (gated on 31) — vendor `ProjectFrontMatter` + `CastMember` into a new
-  `EscriboProject` target per **D-5**
+- Current sortie: **32** of 33 — **DISPATCHED**, opus, complexity 15
+- Sortie 31: **COMPLETED — supervisor-verified**, commit `7ddfb16`. **DL-130 IS FIXED.**
+  All three re-run by the supervisor on a quiet machine: `make test-core` 0 (**276/20**,
+  +5), `make test` 0 (**179/28**), `make test-ios` 0 (**160/25**) — the two view targets
+  byte-for-byte at baseline, correct since nothing under `Sources/SwiftEscribo/` changed.
+  **The whole behavioral diff is one line** (DL-147). `episode_01.fountain` now yields
+  **9 of 9** title-page keys, up from 2. Supervisor probe restored the defect and fired
+  **20 issues across 5 tests** (DL-148). Found a related defect it correctly declined to
+  fix (DL-149).
 - Sortie 33: PENDING (gated on 32) — the no-data-loss gate for cast and unknown keys
 - Notes: All three run **before Sortie 23**. Sortie 23's entry criteria were amended to
   require Sortie 31, because building the writer against a scanner that misreads the
@@ -466,6 +472,11 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-145 | 2026-07-26 | WU-8 | 32 | **D-5 settled: the moved model goes in a new `EscriboProject` target, not in `EscriboCore`** | The supervisor put the fork to the user rather than choosing silently, because it decides whether `EscriboCore` stays a scanner. `AGENTS.md` states the architecture as "LineIndex + IncrementalScanner ← EscriboCore, Foundation only", and Sortie 30 must audit **every** public declaration in `EscriboCore` against REQUIREMENTS.md § What is public in 1.0. Folding in ~1,450 lines of podcast project metadata would contradict the stated architecture and make the 1.0 audit intractable, while nothing in the scanner consumes project metadata. User chose the new target and the **narrow** move (front matter + cast + compiler-required deps only), leaving `LLMBackend/*`, `ProjectBrowser/*` and the CLI in `SwiftProyecto`. **Sortie 30's scope grows**: it now audits `EscriboProject` on its own terms, separate from the 1.0 list. |
 | DL-146 | 2026-07-26 | WU-8 | 32–33 | The real find behind the amendment: **`ProjectFrontMatter` already solves the problem the Fountain title page gets wrong** | `ProjectFrontMatter` preserves keys it does not recognize via `appSections: [String: AnyCodable]`, decoded from every unknown key. That is the same requirement REQUIREMENTS.md places on the Fountain title page — "arbitrary keys preserved verbatim, spelling, casing, and order" — which Sortie 15 implemented and DL-130 showed was silently defeated by a lone tab. **Two implementations of one idea in two packages, one of them broken.** Both models import Foundation only, so neither fights this package's charter. Sortie 33's gate is aimed squarely at `appSections`: its exit criteria require that deliberately dropping it from the encoder turns the gate red. |
 
+| DL-147 | 2026-07-26 | WU-8 | 31 | **DL-130 fixed by a one-line change — the narrowest correct fix, and the supervisor verified it is genuinely one line** | The entire behavioral diff in `FountainGrammar.swift` is `if isBlank(line.units) {` → `if line.isEmpty {`, inside the title-page branch only. `GrammarLine.isEmpty` becomes the region's terminator test; `isBlank` (space/tab tolerant) remains the **body's** and is untouched — still declared at line 366 and still used 6 times. A whitespace-only line now falls through to `titlePageLine`, whose existing continuation branch already produced the right record. **No new code path was added.** Everything else in the diff is documentation and tests. `episode_01.fountain` now reads back all nine keys in source order — `TITLE`, `EPISODE`, `CREDIT`, `AUTHOR`, `SOURCE`, `CONTACT INFO`, `DRAFT DATE`, `NOTES`, `REVISION` — where it previously read two. `CREDIT:` is a title-page key again, not a character cue, and nothing in the 17-line region is dialogue. Only `episode_01.golden` was regenerated; nine other goldens untouched, and the totals reconcile exactly with the fix (`character` 145→143, `dialogue` content 181→173, `titlePageKey` 2→9). |
+| DL-148 | 2026-07-26 | WU-8 | 31 | **Supervisor probe: the regression tests genuinely catch the bug they document** | The agent's own two probes both tested the fix's **narrowness** — that a truly empty line still terminates (31 issues), and that widening `isBlank` grammar-wide breaks dialogue boundaries and scene headings (5 issues). Those were the right probes for the trap the brief warned about, and they fired. But neither tested the **opposite** direction: whether the new assertions detect the *original* defect. A suite can be well-guarded against over-correction and blind to the thing it was written for. So the supervisor restored DL-130 exactly (`line.isEmpty` → `isBlank(line.units)`) and re-ran: **20 issues across 5 tests**, every new regression test red by name — "The nine Highland title-page keys survive a lone-tab empty value", "A whitespace-only value line is an empty value, not the end of the title page", "An empty value, a present value, and an absent key are three different records", "A genuinely empty line still ends the title page", and the golden snapshot. Reverted; tree clean at `7ddfb16`, zero probe residue. |
+| DL-149 | 2026-07-26 | WU-8 | 31 | **Related defect found and correctly declined: a document whose FIRST key is empty opens no title page at all.** Needs a user decision. | `Title:` / `\t` / `Credit: X` scans with **zero** title-page keys, because the corroboration rule still reads a whitespace-only second line as no corroboration. The agent declined to fix it and its reasoning is sound: on one line of lookahead, `Title:` above a lone tab is indistinguishable from a transition above a lone tab, so widening the rule would turn ordinary transition-led screenplays into title pages. That is a design decision, not a scanning bug, and it sits outside "inside the region only". Captured by a descriptive test so a later sortie that decides it goes red. **Practical exposure is real but narrower than DL-130's**: a Highland export with an **empty TITLE** would still lose its whole title page. Highland writes TITLE first and it is normally populated, so probability is low — but it is the same failure mode one row up. **→ user decision; default catcher Sortie 30.** |
+| DL-150 | 2026-07-26 | — | 31 | **SUPERVISOR PROCESS DEFECT: agents cannot see which DL numbers are taken, and one just collided** | Sortie 31 labelled its new defect **DL-136** in source (`FountainRegionTests.swift:548,559`), but DL-136 was already assigned to the DL-112 discharge. The agent could not have known: the supervisor forbids agents from reading `SUPERVISOR_STATE.md` — a rule earned when Sortie 25 destroyed the file (DL-123) and one that should stay. The collision is therefore the **supervisor's** bookkeeping failure, not the agent's. Resolution: the new defect is **DL-149** in this log; the in-source label reads DL-136 and is left as-is rather than having the supervisor edit test code. **Process fix, effective immediately: every dispatch order now states the next free DL number for the agent to use.** **→ Sortie 30** should reconcile the in-source label. |
+
 ---
 
 ## Overall Status
@@ -482,9 +493,9 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   necessity and is now behind us.
 ### Current position (2026-07-26, round 3 — Sorties 21 and 27 in flight)
 
-- Sorties completed: **24 / 33** (1–21, 25, 26, 27 — every one supervisor-verified, none
-  taken on report alone). **Total rose from 30 to 33** on the user's WU-8 amendment.
-- Sorties in flight: **1** — Sortie 31 (WU-8, opus), the DL-130 title-page repair
+- Sorties completed: **25 / 33** (1–21, 25, 26, 27, 31 — every one supervisor-verified,
+  none taken on report alone). **Total rose from 30 to 33** on the user's WU-8 amendment.
+- Sorties in flight: **1** — Sortie 32 (WU-8, opus), the `EscriboProject` model move
 - Work units: **4 / 7 COMPLETE** (WU-1, WU-2, WU-3, **WU-6 closed this round**).
   WU-4 RUNNING at 22; WU-5 RUNNING at 23; WU-7 gated on 22.
 - **Concurrency is now 1.** Two-way parallelism cost a 42-minute hang this round and is
@@ -499,12 +510,11 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   reverted, tree clean after each. The gate stayed green through the one that mattered.
 - **Remaining critical chain**: `22 → 28 → 29 → 30`. Four sorties. Sortie 21 cleared the
   hardest link; WU-4 has one sortie left.
-- **Serial queue from here** (DL-134): **31 → 32 → 33** → 23 → 22 → 24 → 28 → 29 → 30.
-  Nine left. WU-8's three sorties are inserted ahead of the writer by DL-144.
-- **DL-130 is no longer unowned.** It was escalated twice and is now Sortie 31's whole job.
-- **Tree is GREEN and clean** at `26eafc8`: core **271/20**, macOS **179/28**, iOS
-  **160/25** — all re-run by the supervisor on a quiet machine after a contaminated run
-  had to be discarded (see below). Charter clean: no regex, `EscriboCore` imports
+- **Serial queue from here** (DL-134): **32 → 33** → 23 → 22 → 24 → 28 → 29 → 30. Eight left.
+- **DL-130 IS FIXED** (`7ddfb16`, DL-147) — escalated twice, amended in by the user, closed
+  by a one-line change, and the fix is probe-proven in both directions (DL-148).
+- **Tree is GREEN and clean** at `7ddfb16`: core **276/20**, macOS **179/28**, iOS
+  **160/25** — all re-run by the supervisor on a quiet machine. Charter clean: no regex, `EscriboCore` imports
   **nothing at all**, no XCTest.
 - **A contaminated run was caught by counting, not by exit code.** The supervisor's first
   iOS verification reported `TEST FAILED` with core at **137/20** — a number appearing
