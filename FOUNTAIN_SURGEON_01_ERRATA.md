@@ -38,15 +38,28 @@ what was true, how it was settled, and what a re-implementation should do instea
 `SUPERVISOR_STATE.md` remains the authoritative Decisions Log; every `DL-n` here points
 into it. This file is the *index of conflicts* and the errata, nothing else.
 
-**Status when written**: 31 of 33 sorties complete, all supervisor-verified. Sortie 28 in
-flight; 29 and 30 remain. Tree green at `a72b1f3`: core **314/30**, macOS **179/28 + 44/10
-+ 314/30**, iOS **160/25 + 44/10 + 314/30**.
+**Status when last updated**: 32 of 33 sorties complete, all supervisor-verified. Sortie 29
+in flight; 30 remains. Tree green at `ff7e8ce`: performance **12/5**, core **314/30**, macOS
+**179/28 + 44/10 + 314/30**, iOS **160/25 + 44/10 + 314/30**.
 
 ---
 
-## 0. The five findings that would change a re-implementation most
+## 0. The six findings that would change a re-implementation most
 
-If nothing else survives, these five do.
+If nothing else survives, these six do.
+
+**0. The scanner was never the bottleneck, and the mission spent its optimization budget in
+the wrong layer.** Measured at Sortie 28 (DL-179): an incremental in-line edit on a 128 KB
+screenplay costs **0.026 ms of a 1 ms budget**. The `NSAttributedString.string` bridge in
+the binding push — mandated by REQUIREMENTS.md's `@Binding var text: String` — costs
+**0.522 ms per keystroke**, which is **21× the scan it accompanies and 52% of the entire
+budget**. A cold full scan of 128 KB is 5.2 ms against a 50 ms ceiling: **~10× headroom**.
+Every incremental-scanning subtlety this mission fought over lives inside 5% of the budget.
+**This does not mean the incremental scanner was wrong to build** — correctness while typing
+was the actual requirement, and the convergence work is what makes the editor's output
+correct, not fast. But a re-implementation should know from day one that *if 1.0 ever needs
+headroom, the binding push is where it is*, and that is an architecture question about the
+`String` binding, not a scanner question.
 
 **1. Exit criteria written before the implementation exists are unfalsifiable at a rate of
 roughly one per two sorties.** The mission's own running tally reached **13** by DL-164 and
@@ -122,12 +135,17 @@ This is the largest class by count and the most portable lesson. Each row is a p
 | 13 | DL-164 | 23 | All three of Sortie 23's exit criteria | **Satisfied by the identity function.** The agent did not argue this — it *implemented the copy-the-source writer and ran it*. | Normalization bundled into each gate document so identity now fails all three; probe fired 23 issues across 8 tests. |
 | 14 | DL-165 | 24 | `parse(write(parse(x))) == parse(x)` | **Unsatisfiable.** A normalizing writer shifts every subsequent `range`, so record equality fails on any non-canonical document for reasons that have nothing to do with data loss. Taking it literally looks like a writer bug and is not one. | Amended **before dispatch** to a fixed point of the writer, compared as text. Two missing criteria added at the same time. |
 | 15 | Sortie 24 report | 24 | Four of its own six criteria, as worded | Identity-satisfiable — including the fixed point itself, since **identity is trivially a fixed point and no formulation of that property can exclude it.** | Each test carries a companion assertion identity fails (`once != source`, byte-for-byte non-canonical inputs). The *pairing*, not the property, is what makes the gate able to fail. |
+| 16 | DL-178 | 28 | "A 1 MB single line indexes within **4×** the time of a 250 KB single line" | **The first criterion in this mission that was too TIGHT rather than too loose.** Over exactly 4× the data a perfectly linear algorithm sits at exactly 4.000, so a bare 4.0 threshold is a coin flip on measurement noise. The agent measured five unmodified runs straddling it (4.005, 4.033, 3.997, 3.948, 3.927); **the supervisor's own two runs read 3.986 and 4.022**, so the literal criterion would have failed a healthy build on the second try. | Widened to 4.0 × 1.10 = 4.4, **loudly** — reasoning in the suite doc comment and the commit message. Sensitivity unharmed: the quadratic mutation reads **15.46×**. |
 
 ### What a re-implementation should do differently
 
-- **Write criteria after a spike, not before.** Nine of the fifteen above are traceable to a
+- **Write criteria after a spike, not before.** Nine of the sixteen above are traceable to a
   criterion authored against an imagined API. The plan's own D-sections (design decisions)
   were good; its *test* wording was consistently ahead of the code.
+- **A numeric threshold placed exactly at the theoretical value is a coin flip** (#16). Any
+  ratio, budget, or bound written in a plan needs a stated tolerance and a stated
+  sensitivity — "what does the broken version read?" 4.4 vs 4.0 costs nothing when the
+  failure mode reads 15.5.
 - **Ban bare literal greps over a source tree as exit criteria** (#2, #3). Scope them, or
   assert the absence of the call rather than the token.
 - **For every "X is preserved" criterion, name the mutation that would violate X** and
@@ -156,6 +174,7 @@ and eventually resolved precisely.
 | DL-156 | Same class, different domain: dropping every voice from every cast member on **decode** | 3 issues, and the corpus test *"Every field survives the round trip, including every unknown key"* **stayed green**. Only literal-expected-value tests caught it. |
 | DL-161 | The fix for DL-156 | Independent oracle (`JSONSerialization` — Foundation's parser, not the model's) + hand-typed literals. Same probe now fires **38 issues across 9 tests**, up from 3 across 2. |
 | DL-171 | An **idempotent** mutation against an idempotence gate (alphabetically sorting title-page keys) | Fixed-point gate structurally blind by construction; **38 issues across 11 ordinary assertions**. |
+| DL-177 | "The performance suite defends its own Release configuration" | **Half true, and the wrong half.** Run at `-configuration Debug` the suite fires 2 issues — but they are the 1 ms in-line budget (1.054 ms) and the DL-138 case. **The 50 ms cold-scan ceiling PASSED, at 46.98 ms.** The number a reader will quote as *the* performance gate is satisfied by a build 10× slower than the shipping one; the only thing catching config drift is a 1 ms budget catching it by 5%. **A ceiling generous enough to be safe is generous enough to be meaningless.** |
 
 **The generalized rule this mission earned**: *a differential or round-trip test compares two
 computations that share a component. It can only see errors in the parts they do not share.*
@@ -273,7 +292,8 @@ by measurement**.
 | DL-103 | Concurrent test runs are slower | They **truncate silently** — one run reported a pass after 50 of 181 tests, with no recorded issue. A truncated *failing* run is worse still: it would send a healthy sortie into a needless BACKOFF. **Consequence: pair every green claim with a test count.** |
 | DL-132 | 3-way parallelism is available in Group C | Three independent observations of **hangs, not slowdowns**: a 20-minute hang at 0% CPU; a supervisor probe build exceeding a 600 s timeout that finished in seconds on a quiet tree; and a suite failing with 10 then 74 issues purely from reading another sortie's uncommitted edits. 3-way declined. |
 | DL-134 | 2-way parallelism is safe | **42-minute hang at 0.0% CPU, killed by the supervisor.** It burns an agent's entire budget *while reading as progress*. Concurrency dropped to **1** for the remainder. The measured cost was near zero — the critical chain was serial by construction. |
-| DL-61 | (unstated) | **Pre-existing, environmental, and a real CI risk**: `make test` intermittently hangs in font resolution, every worker blocked in `+[NSFont fontWithName:size:]` awaiting an idle `fontd`. Reproduced on a **clean tree before any mission code was written**. With no `timeout-minutes`, a hang consumes the GitHub Actions default of **six hours** per job instead of failing fast. |
+| DL-61 → **DL-180** | (unstated) | **No longer a risk — an observed fact, reproduced by three independent parties.** `make test` hangs in font resolution, every worker blocked in `+[NSFont fontWithName:size:]` awaiting an idle `fontd`. Reproduced on a **clean tree before any mission code was written**; twice more by the Sortie 28 agent on first runs against fresh DerivedData; and **once by the supervisor during Sortie 28's verification**, where `make test` wedged past 10 minutes and passed in 14 s after `pkill`. With no `timeout-minutes`, a hang consumes the GitHub Actions default of **six hours** per job instead of failing fast. **`tests.yml` still declares none; Sortie 29 owns it.** |
+| DL-175 | (the plan did not specify a build configuration for the performance suite) | **Debug numbers describe the compiler, not the code.** The first performance run was Debug: cold scan **48 ms** (would have squeaked under the 50 ms ceiling by 4%) and in-line edit **1.08 ms** — *over budget*. A ~10× `-Onone` pessimism. Moved to `-configuration Release ENABLE_TESTABILITY=YES`; correctness targets stay Debug, correctly, since they assert behavior rather than time. **A plan that specifies a timing budget must specify the configuration it is measured in.** |
 | DL-51 | (unstated) | A killed `xcodebuild` orphans an `xctest` agent that blocks the next run. Symptom: indefinite hang, no output. Fix: `pgrep -fl 'xcodebuild\|xctest'`, kill survivors. |
 | DL-114 | Group B is parallel | **Fully gated**: 21 needs 17, 22 needs 21. Parallel for its first three pairs and **serial in its tail**. The plan's dependency graph was right about the edges and wrong about the shape they produce. |
 
@@ -348,8 +368,13 @@ These are **not resolved**. They are the actionable residue of this mission.
 - **DL-158**: `lingua-matra/PROJECT.md` **throws on decode** — it writes `languages:` as
   bare strings, which `[LanguageDefinition]` cannot decode. Not vendored, not fixed,
   recorded so it is not rediscovered as a mystery.
-- **DL-22**: one `[UInt16]` allocation per line scanned, on the hot path. Sortie 28 is
-  measuring it.
+- **DL-22**: one `[UInt16]` allocation per line scanned, on the hot path. Measured at
+  Sortie 28 and **not worth fixing**: the whole cold scan it dominates is 5.2 ms against a
+  50 ms ceiling, ~0.74 µs per line.
+- **DL-177**: the 50 ms cold-scan ceiling **does not defend the build configuration**. It
+  passes at Debug (46.98 ms), where every other number is 10× wrong. Only the 1 ms in-line
+  budget catches config drift, and it does so by 5%. **Sortie 30 should assert the
+  configuration directly rather than rely on a budget to notice.**
 
 ### 7.3 Bookkeeping errata
 
