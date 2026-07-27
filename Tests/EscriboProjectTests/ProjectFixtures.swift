@@ -24,7 +24,7 @@ import Testing
 ///
 /// ## Provenance
 ///
-/// All four are the user's own podcasts, copied once into this repository and never
+/// All six are the user's own podcasts, copied once into this repository and never
 /// referenced at their original location again — a fixture reached through an absolute
 /// path under a home directory does not exist on a CI runner. `Package.swift` declares
 /// `.copy("Fixtures")` on this target so the bytes reach the bundle unaltered, and both
@@ -32,7 +32,7 @@ import Testing
 ///
 /// What was copied is the **front matter region** of each file — the opening `---`
 /// through the closing `---`, byte for byte — and not the Markdown prose beneath it. Two
-/// reasons: the prose is not data this model has any opinion about, and one of the four
+/// reasons: the prose is not data this model has any opinion about, and one of the six
 /// bodies happens to quote a path under a developer's home directory, which the
 /// repository-wide guard against locally-anchored fixtures forbids anywhere under
 /// `Tests/`. The region that *is* committed is unmodified, and the JSON transcription is
@@ -55,6 +55,15 @@ struct ProjectFixture: Sendable, CustomTestStringConvertible {
   /// The number of cast members in the committed file, counted by hand.
   let expectedCastCount: Int
 
+  /// How many of those members declare at least one voice, counted by hand.
+  ///
+  /// Separate from ``expectedCastCount`` because it is the number that says the cast
+  /// comparison has something to lose. Derived from the decoded value it would agree with a
+  /// decoder that had thrown every voice away; written down here it does not. Five of
+  /// `lazarillo`'s members are background crowds with no dialogue and genuinely carry no
+  /// voice, which is why this is not simply the cast count everywhere.
+  let expectedVoicedMemberCount: Int
+
   var testDescription: String { name }
 }
 
@@ -66,7 +75,7 @@ enum ProjectFixtures {
   /// Every fixture, with the facts about it that were established by reading the file
   /// rather than by running this code over it.
   ///
-  /// The four were chosen to cover the shapes that behave differently on decode:
+  /// The six were chosen to cover the shapes that behave differently on decode:
   ///
   /// - `confessions` — carries an unknown top-level key (`episodes_index`, 69 entries)
   ///   *and* an unknown per-cast-member key (`bio`). This is the fixture the whole
@@ -77,26 +86,55 @@ enum ProjectFixtures {
   ///   round-trips with no version migration at all.
   /// - `daily-dao` — legacy v3 shape: `season` and `episodes` as top-level scalars, which
   ///   decode into a synthesized `seasons` array.
+  ///
+  /// Sortie 33 added two more, because the original four between them exercised only
+  /// `character`, `voicePrompt` and a single-provider `voices` — three of the seven fields
+  /// a cast member can carry. A gate over that corpus could not have seen a decoder that
+  /// dropped `gender`, and the vendored model's `Gender` enum was therefore never decoded
+  /// from a real file at all:
+  ///
+  /// - `yntswyd` — every one of its 49 members declares `gender`, eight also carry an
+  ///   unknown per-member key (`arc`), and the whole cast uses the *legacy*
+  ///   `voiceDescription` spelling rather than `voicePrompt`.
+  /// - `lazarillo` — carries two unknown per-member keys (`aliases`, `episodes`) and, on
+  ///   24 of its 29 members, **both** `voicePrompt` and `voiceDescription`. That last
+  ///   shape is the one the decoder silently loses data on; see DL-159.
   static let all: [ProjectFixture] = [
     ProjectFixture(
       name: "confessions",
       expectedUnknownTopLevelKeys: ["episodes_index"],
-      expectedCastCount: 3
+      expectedCastCount: 3,
+      expectedVoicedMemberCount: 3
     ),
     ProjectFixture(
       name: "aunt-stanley",
       expectedUnknownTopLevelKeys: ["episodeList"],
-      expectedCastCount: 42
+      expectedCastCount: 42,
+      expectedVoicedMemberCount: 42
     ),
     ProjectFixture(
       name: "granville",
       expectedUnknownTopLevelKeys: [],
-      expectedCastCount: 25
+      expectedCastCount: 25,
+      expectedVoicedMemberCount: 25
     ),
     ProjectFixture(
       name: "daily-dao",
       expectedUnknownTopLevelKeys: [],
-      expectedCastCount: 2
+      expectedCastCount: 2,
+      expectedVoicedMemberCount: 2
+    ),
+    ProjectFixture(
+      name: "yntswyd",
+      expectedUnknownTopLevelKeys: [],
+      expectedCastCount: 49,
+      expectedVoicedMemberCount: 49
+    ),
+    ProjectFixture(
+      name: "lazarillo",
+      expectedUnknownTopLevelKeys: [],
+      expectedCastCount: 29,
+      expectedVoicedMemberCount: 24
     ),
   ]
 

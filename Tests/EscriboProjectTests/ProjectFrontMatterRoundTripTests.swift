@@ -421,6 +421,96 @@ struct KnownDefectTests {
     #expect(FrontMatterKeyScan.topLevelKeys(in: markdown).contains("episodes"))
   }
 
+  /// The same defect, stated the way Sortie 33's byte oracle states things — and the proof
+  /// that the technique in ``FixtureByteOracleTests`` is what finds this class of bug.
+  ///
+  /// The expected value here is read out of the committed bytes by `JSONSerialization`,
+  /// which never touches `ProjectFrontMatter.init(from:)`. It disagrees with the model.
+  /// Had DL-151 not already been documented, an oracle of this shape extended from `cast`
+  /// to the top-level scalars would have reported it on its first run — which is the whole
+  /// argument for building the gate this way rather than as a second decode.
+  ///
+  /// Not extended to the top-level scalars in the shipped gate, because doing so would
+  /// turn it red for a defect this sortie is explicitly not authorized to fix.
+  @Test("DL-151 stated against the committed bytes rather than against a second decode")
+  func episodesLossIsVisibleInTheBytes() throws {
+    let raw = try RawFixture.topLevel("confessions")
+    #expect(raw["episodes"] as? Int == 69, "the committed bytes are supposed to carry 69")
+    #expect(raw["season"] == nil, "and no season, which is what triggers the loss")
+
+    let decoded = try decode("confessions")
+    #expect(
+      decoded.episodes == nil,
+      """
+      if this is now 69, DL-151 has been fixed — update this test and extend the byte \
+      oracle to the top-level scalars
+      """)
+
+    // Three of the six fixtures are in this shape. `yntswyd` loses 9 the same way.
+    let yntswyd = try RawFixture.topLevel("yntswyd")
+    let decodedYntswyd = try decode("yntswyd")
+    #expect(yntswyd["episodes"] as? Int == 9)
+    #expect(decodedYntswyd.episodes == nil)
+
+    // `lazarillo` carries the pair, so it does not lose anything — the contrast that makes
+    // this a gap rather than a policy.
+    let lazarillo = try RawFixture.topLevel("lazarillo")
+    let decodedLazarillo = try decode("lazarillo")
+    #expect(lazarillo["season"] as? Int == 1)
+    #expect(lazarillo["episodes"] as? Int == 8)
+    #expect(decodedLazarillo.episodes == 8)
+  }
+
+  /// **DL-159** — a cast member that carries **both** `voicePrompt` and the legacy
+  /// `voiceDescription` loses the `voiceDescription` text outright on decode.
+  ///
+  /// `init(from:)` reads `voicePrompt` and falls back to `voiceDescription`, storing one
+  /// string in one property. `voiceDescription` is a declared `CodingKey`, so it is *not*
+  /// swept into `extraKeys` either: the text is simply gone, and the next write-back
+  /// deletes it from the file. This is a second live instance of Fact 0 — a decode-side
+  /// loss that no decode/encode/decode round trip can see — and it was found by the byte
+  /// oracle in ``FixtureByteOracleTests`` on its first run against the `lazarillo` fixture,
+  /// where 24 of 29 members are in this shape.
+  ///
+  /// Recorded, not repaired: fixing it changes decode behaviour and the shape of the
+  /// model, which is a user decision this sortie has no authority to make.
+  @Test("DL-159: a member carrying both voice spellings loses the legacy one")
+  func bothVoiceSpellingsLosesTheLegacyOne() throws {
+    let json = """
+      {"character":"LAZARO","voicePrompt":"the prompt","voiceDescription":"the legacy text",
+       "voices":{"voxalta":"voices/lazaro.vox"}}
+      """
+    let decoded = try ProjectFixtures.makeDecoder().decode(CastMember.self, from: Data(json.utf8))
+
+    #expect(decoded.voiceDescription == "the prompt")
+    #expect(
+      decoded.extraKeys.isEmpty,
+      "if `voiceDescription` is now in extraKeys, DL-159 has been fixed — update this test")
+
+    let written = String(decoding: try ProjectFixtures.makeEncoder().encode(decoded), as: UTF8.self)
+    #expect(!written.contains("the legacy text"), "if this now round-trips, DL-159 is fixed")
+
+    // And it is not a synthetic shape: the committed `lazarillo` fixture is full of it.
+    let raw = try RawFixture.cast("lazarillo")
+    let topLevel = try RawFixture.topLevel("lazarillo")
+    let rawObjects = try #require(topLevel["cast"] as? [[String: Any]])
+    let carryingBoth = rawObjects.filter { $0["voicePrompt"] != nil && $0["voiceDescription"] != nil }
+    #expect(carryingBoth.count == 24, "the fixture no longer exercises DL-159")
+    #expect(raw.count == 29)
+
+    let first = try #require(carryingBoth.first)
+    #expect(
+      first["voiceDescription"] as? String
+        == "Adult Lazaro — narrator and protagonist across all episodes")
+    let lazarilloCast = try decode("lazarillo").cast
+    let decodedFirst = try #require(lazarilloCast?.first)
+    #expect(decodedFirst.character == "LAZARO")
+    #expect(decodedFirst.voiceDescription?.hasPrefix("A man in his early 40s") == true)
+    #expect(
+      decodedFirst.voiceDescription != (first["voiceDescription"] as? String),
+      "if these now agree, DL-159 has been fixed")
+  }
+
   /// The v3 pair *together* does migrate, which is what makes DL-151 a gap rather than a
   /// deliberate policy of ignoring the legacy keys.
   @Test("`season` and `episodes` together migrate into a seasons array")
