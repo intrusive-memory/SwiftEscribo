@@ -266,7 +266,13 @@ updated: 2026-07-26
 
 ### WU-8 Title-Page Repair & Metadata Model — ADDED BY USER AMENDMENT 2026-07-26
 - Work unit state: **RUNNING**
-- Current sortie: **33** of 33 — PENDING (criteria amended by DL-156 before dispatch)
+- Work unit state: **COMPLETED** (2026-07-26 — all 3 sorties, 31–33, verified)
+- Current sortie: 33 of 33 — all complete
+- Sortie 33: **COMPLETED — supervisor-verified**, commit `e263019`. All three re-run:
+  `make test-core` 0 (**276/20**), `make test` 0 (**179/28**), `make test-ios` 0
+  (**160/25**); `EscriboProjectTests` **26→44 tests, 6→10 suites**. Corpus grown 4→6 real
+  vendored fixtures. **The Fact 0 hole is closed and the supervisor measured it** (DL-161).
+  Found **DL-159**, a second live instance of the decode-side loss class.
 - Sortie 32: **COMPLETED — supervisor-verified**, commit `4c30480`. All four re-run by the
   supervisor: `make build` 0, `make test-core` 0 (**276/20**), `make test` 0 (**179/28** +
   **26/6** new) , `make test-ios` 0 (**160/25** + **26/6**). **The move is a true copy** —
@@ -494,6 +500,11 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-157 | 2026-07-26 | WU-8 | 32 | API gap flagged and correctly not folded into a move: unknown keys are round-trippable but **unreadable** | `AppFrontMatterSettings.swift` — the extension giving typed access to `appSections` — stayed in `SwiftProyecto` because the compiler never demanded it. Consequence: in `EscriboProject`, `appSections` and `CastMember.extraKeys` are `internal` with **no public accessor**. Consumers can round-trip unknown keys but cannot read or write them. The agent flagged it rather than widening the move, which was the right call. **→ user decision**, a small deliberate follow-up. |
 | DL-158 | 2026-07-26 | WU-8 | 32 | A real file in the org does not decode today | `lingua-matra/PROJECT.md` writes `languages: [es, fr, it, pt, de]` as bare strings, which `[LanguageDefinition]` cannot decode — that file **throws** on decode. Not vendored, not fixed, recorded so it is not rediscovered as a mystery. |
 
+| DL-160 | 2026-07-26 | — | 32 | **SUPERVISOR ERROR, RECURRENCE of DL-140: probed a sortie's code while that sortie's agent was still alive** | DL-140 established the rule "confirm the prior agent is finished by **process state**, not by its notification". The supervisor applied it correctly before *dispatching* Sortie 33 — found an orphaned `xcodebuild` (four processes, all 0.0% CPU, the DL-134 hang signature), killed it, and dispatched onto a quiet machine. But it did **not** apply the rule before *probing*: the `voices = [:]` decode probe (DL-156) ran, and was reverted and committed, while Sortie 32's agent still had an `xcodebuild` in flight. That agent's own re-measurement therefore compiled against a tree that changed underneath it, and it correctly **discarded the result as void rather than reporting a number it could not trust** — the right call, and the second time an agent here has refused to report an unreliable measurement. **The rule is broader than DL-140 stated: it governs any supervisor action that mutates the working tree, not just dispatch.** (Renumbered from DL-159 to DL-160: the supervisor handed Sortie 33 the number DL-159 and then consumed it itself — the same bookkeeping failure as DL-150, one round later. The agent's in-source DL-159 stands.) Consequence check: none. The supervisor's own probe measurement was taken before the revert and stands; the tree is clean; `git diff 4c30480 HEAD -- Sources/EscriboProject Tests/EscriboProjectTests Package.swift` is **empty**, so Sortie 32's delivery is intact exactly as committed. |
+
+| DL-161 | 2026-07-26 | WU-8 | 33 | **The decode-side blind spot is closed, and the supervisor measured the delta rather than accepting it** | Sortie 33 closed Fact 0 (DL-156) with three legs whose oracle is independent of `CastMember.init(from:)`: a `RawFixture` reader using **`JSONSerialization`** — Foundation's parser, not the model's — compared field-for-field against what the model decoded from the same bytes across 6 fixtures and 150 members; literals hand-typed from the committed files; and values constructed in code, encoded, decoded, compared. A `RawFixtureSelfTests` suite mutation-tests the reader so leg 1 cannot pass vacuously. **Supervisor probe, same mutation as DL-156** (`voices = [:]` in the decoder): **38 issues across 9 distinct tests / 20 parameterized cases**, including "Every cast member matches the committed file, field for field" and "Written-back cast bytes match the original bytes" on all six fixtures. **The agent reported its own honest baseline: before the change that identical probe fired only 3 issues in 2 tests, with zero corpus-driven failures.** So the measured improvement is 3→38 and 0→12 corpus failures. A claimed improvement in falsifiability is exactly the class of claim that needs its own falsification, and this one survived it. |
+| DL-162 | 2026-07-26 | WU-8 | 33 | Caveat the agent volunteered: the unknown-key gate rests on **two** fixtures, not six | `Written-back unknown top-level keys match the original bytes` has a per-key loop that only executes for the two fixtures carrying unknown top-level keys (`confessions`, `aunt-stanley`); for the other four the loop body is empty and only the key-set assertion runs. **Inherent to the data, not a defect in the test** — but it means the unknown-key half of the gate has a narrower base than the cast half, and nobody reading the test count would know. Reported unprompted. **→ Sortie 30** if broader coverage is wanted. |
+
 ---
 
 ## Overall Status
@@ -510,9 +521,9 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   necessity and is now behind us.
 ### Current position (2026-07-26, round 3 — Sorties 21 and 27 in flight)
 
-- Sorties completed: **26 / 33** (1–21, 25, 26, 27, 31, 32 — every one supervisor-verified,
-  none taken on report alone). **Total rose from 30 to 33** on the user's WU-8 amendment.
-- Sorties in flight: **0** — Sortie 33 is next, with criteria amended by DL-155 and DL-156
+- Sorties completed: **27 / 33** (1–21, 25, 26, 27, 31, 32, 33 — every one
+  supervisor-verified, none taken on report alone). **WU-8 is COMPLETE.**
+- Sorties in flight: **1** — Sortie 23 (WU-5, opus), the Fountain writer
 - Work units: **4 / 7 COMPLETE** (WU-1, WU-2, WU-3, **WU-6 closed this round**).
   WU-4 RUNNING at 22; WU-5 RUNNING at 23; WU-7 gated on 22.
 - **Concurrency is now 1.** Two-way parallelism cost a 42-minute hang this round and is
@@ -527,12 +538,13 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   reverted, tree clean after each. The gate stayed green through the one that mattered.
 - **Remaining critical chain**: `22 → 28 → 29 → 30`. Four sorties. Sortie 21 cleared the
   hardest link; WU-4 has one sortie left.
-- **Serial queue from here** (DL-134): **33** → 23 → 22 → 24 → 28 → 29 → 30. Seven left.
+- **Serial queue from here** (DL-134): **23 → 22 → 24 → 28 → 29 → 30.** Six left.
+- Work units: **5 / 8 COMPLETE** (WU-1, WU-2, WU-3, WU-6, **WU-8**).
 - **DL-130 IS FIXED** (`7ddfb16`, DL-147) — escalated twice, amended in by the user, closed
   by a one-line change, and the fix is probe-proven in both directions (DL-148).
-- **Tree is GREEN and clean** at `4c30480`: `make build` 0, core **276/20**, macOS
-  **179/28**, iOS **160/25**, plus the new `EscriboProjectTests` at **26/6** on both
-  platforms — all re-run by the supervisor on a quiet machine.
+- **Tree is GREEN and clean** at `e263019`: core **276/20**, macOS **179/28**, iOS
+  **160/25**, `EscriboProjectTests` **44/10** on both platforms — all re-run by the
+  supervisor on a quiet machine.
 - **`EscriboProject` is the package's third shipping target** (D-5), Foundation-only. Charter clean: no regex, `EscriboCore` imports
   **nothing at all**, no XCTest.
 - **A contaminated run was caught by counting, not by exit code.** The supervisor's first
