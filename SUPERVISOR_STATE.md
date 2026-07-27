@@ -335,8 +335,17 @@ updated: 2026-07-27
 
 ### WU-7 Verification & Hardening
 - Work unit state: **RUNNING** — unlocked 2026-07-27 when Sortie 22 completed.
-- Current sortie: **29** of 30 — **DISPATCHED 2026-07-27, opus, complexity 15, attempt 1/3**
-  (DL-181 records the model call)
+- Current sortie: **30** of 30 — **DISPATCHED 2026-07-27, opus, complexity 16, attempt 1/3**
+  (DL-186 records the model call). **The last sortie of the mission.**
+- Sortie 29: **COMPLETED — supervisor-verified**, commit `430ce12`. Re-run by the supervisor:
+  `make build` 0, `make lint` 0, `make test-core` 0 (**314/30**), `make test` 0 (**179/28**
+  + **44/10** + **314/30**), `make test-ios` 0 (**160/25** + **44/10** + **314/30**).
+  **DL-4 is resolved after 29 sorties** (DL-183). Workflow gating shape checked directly:
+  no `continue-on-error`, no `|| true`, no `if: always()` on the gating step;
+  `runs-on: macos-26`; `timeout-minutes` now present on **all three** jobs across two
+  workflows (15/30/45), closing DL-180. **Supervisor probe fired through the real chain**
+  (DL-184) and the `large_tuple` widening was independently confirmed and then improved on
+  (DL-185).
 - Sortie 28: **COMPLETED — supervisor-verified**, commit `ff7e8ce`. All four targets re-run
   by the supervisor: `make test-performance` 0 (**12/5**), `make test-core` 0 (**314/30**),
   `make test` 0 (**179/28** + **44/10** + **314/30**), `make test-ios` 0 (**160/25** +
@@ -358,6 +367,7 @@ updated: 2026-07-27
 | Sortie | State | Model | Attempts | Commit | Verified by supervisor |
 |--------|-------|-------|----------|--------|------------------------|
 | 28 | COMPLETED | opus | 1 | `ff7e8ce` | supervisor re-ran all four (12/5 + 314/30 + 179/28 + 160/25) and reproduced the measurements; every criterion re-checked per-invocation, not by grep count; **Debug-configuration probe fired 2 issues but exposed that the 50 ms ceiling does not defend the config (DL-177)**; the 4.4 linearity tolerance ruled correct on the supervisor's own two data points (DL-178) |
+| 29 | COMPLETED | opus | 1 | `430ce12` | supervisor re-ran build/lint/all three suites (314/30 + 179/28 + 160/25); **DL-4 resolved after 29 sorties (DL-183)**; charter-rule probe run through `make lint` in an isolated worktree, exit **2** (DL-184); `large_tuple` disable independently confirmed accurate and replaced with a **verified** threshold form (DL-185); DL-180 closed — `timeout-minutes` on all three jobs |
 - Notes: All three entry criteria (Sorties 27, 17, 22) are now met, so Sortie 28 is
   **eligible**. It is held one round only because concurrency is 1 (DL-134), not because
   anything gates it — Sortie 28 does **not** depend on Sortie 24. It carries DL-138
@@ -369,7 +379,7 @@ updated: 2026-07-27
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------------|-----------------|---------|-------------|---------------|
-| WU-7 | 29 | DISPATCHED | 1/3 | **opus** | 15 | (round 7, agent A) | — | 2026-07-27 |
+| WU-7 | 30 | DISPATCHED | 1/3 | **opus** | 16 | (round 8, agent A) | — | 2026-07-27 |
 
 **Concurrency 1** (DL-134). Sortie 28 runs alone — and from here there is nothing left to
 run beside it: 28 → 29 → 30 is serial by construction. It owns
@@ -598,13 +608,33 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-179 | 2026-07-27 | WU-7 | 28 | **DL-75 measured, and it is the most consequential performance finding of the mission: the scanner is not the editor's bottleneck** | The per-change `NSAttributedString.string` bridge over the same 128 KB document costs **0.522 ms per keystroke — 52% of the entire in-line-edit budget, and 21× the incremental scan it accompanies** (0.025 ms). Every optimization this mission spent effort on lives in the 5% of the budget the scanner occupies; the other half of the budget is a Foundation bridge mandated by REQUIREMENTS.md's `@Binding var text: String`. Correctly **reported, not asserted** — it is in `SwiftEscribo`, not `EscriboCore`, and this sortie measures rather than repairs. **DL-56 also measured: 4.99 ms per committed IME composition**, i.e. a full cold scan, ~200× an incremental edit — within the 50 ms ceiling, so the DL-56 concern is answered rather than merely acknowledged. **→ the binding push is the thing to fix if 1.0 needs headroom, and it is an architecture question, not a scanner one.** |
 | DL-180 | 2026-07-27 | WU-7 | 28/29 | **DL-61 escalated from a risk to an observed fact, three times over — and `tests.yml` still has no `timeout-minutes`** | The agent reproduced the font-resolution hang **twice** during this sortie, both times on the first `make test` against fresh DerivedData, wedged >10 minutes inside `SwiftEscriboTests` font tests, green in 14 s on the immediate re-run. **The supervisor then hit it a third time during this very verification**: `make test` timed out at 10 minutes and had to be killed, and the re-run after `pkill` passed in seconds. `grep -c timeout-minutes .github/workflows/tests.yml` = **0**, on both jobs. So the six-hour-stall class is live in this repo's gating workflow *today*, on the cold-run font path, and it is now reproduced by three independent parties. **Sortie 29 must add `timeout-minutes` to both `tests.yml` jobs** — this is no longer a nice-to-have carried from DL-61. |
 | DL-181 | 2026-07-27 | WU-7 | 29 | Model: **opus**, complexity 15 | Sortie 29 is not the mechanical CI sortie it looks like. It must resolve **DL-4**, open since Sortie 1: its own exit criteria require the CI lint job to invoke `make lint`, but `make lint` runs `swift format -i -r .` — **a formatter that rewrites the repository in place**, not SwiftLint. A CI job invoking it as written would either reformat the checkout or fail for the wrong reason, and the three custom rules would still never run. Reconciling that is a repo-convention decision, not a config edit. It must also **prove all three custom rules can fail** (task 2), which is the mission's own falsifiability standard applied to the lint layer — and the `no_markdown_import_in_sources` rule is currently the **only** thing keeping `swift-markdown` out of every consumer's dependency graph (D-2), so a rule that cannot fail is a charter hole. Plus DL-180. |
-| DL-182 | — | — | — | *(reserved — handed to Sortie 29 as its first free defect number)* | Per DL-150. |
+| DL-182 | — | — | — | *(reserved — handed to Sortie 29 as its first free defect number; unused, no new defect found)* | Per DL-150. |
+| DL-183 | 2026-07-27 | WU-7 | 29 | **DL-4 is RESOLVED after standing open for 29 sorties, and the resolution is a repo-convention change stated loudly rather than a config edit made quietly** | `make lint` was `swift format -i -r .` — an in-place formatter that ran **no linter at all**, while this sortie's criteria required CI to gate on `make lint`. The split: **`make lint` → `swiftlint lint --quiet`** (read-only, gating, what CI runs) and **`make format` → `swift format -i -r .`** (the old target, verbatim, renamed). A developer's muscle memory changes — the pre-commit incantation is now `make format && make lint` — and that is said in the commit message and in `make help`, not buried. Two details that make this better than the minimum: `make lint` **fails loudly if `swiftlint` is absent** rather than skipping, because an uninstalled linter must not read as a clean tree; and the workflow carries a **"fail if linting modified the checkout"** step, proven to fire (running the old formatter in a clean worktree produces an **18-file diff**), which is a standing assertion that `lint` can never silently revert to being a formatter. `--strict` was deliberately declined: it would promote 50 pre-existing style warnings to errors, which are Sortie 30's. The three structural rules declare `severity: error` and gate without it. |
+| DL-184 | 2026-07-27 | WU-7 | 29 | **Supervisor probe: the gate works through the REAL chain, not just through `swiftlint`** | The agent proved all three custom rules fire by invoking `swiftlint` directly. That is one link short of what CI actually does: CI runs `make lint`, and a Makefile recipe can mask an exit code in half a dozen ways. The supervisor therefore probed the full chain in an **isolated worktree at the committed SHA**, choosing the charter-critical rule of the three — `no_markdown_import_in_sources`, which per D-2 is the **only** mechanism keeping `swift-markdown` out of every downstream consumer's dependency graph, since SwiftPM prunes a test-only dependency as a graph property and would give no build error. Clean tree: `make lint` exit **0**. With `import Markdown` prepended to a **shipping** target: `make lint` exit **2**, one `error:` naming the rule and the file. Probe verified present with `grep -qF` before linting (per DL-53). Worktree removed; main tree never touched. **The charter now has a guard rail that has been proven to fire end to end.** |
+| DL-185 | 2026-07-27 | WU-7 | 29 | **The `large_tuple` widening is accurate as reported — and the supervisor found and VERIFIED a strictly better form of it. Ruled: accept now, replace in Sortie 30.** | To keep the gate green the agent added `large_tuple` to `disabled_rules`, flagged it as a deliberate widening in the config, the commit message and its report — the right way to do a thing like this. The supervisor re-enabled the rule and measured: **17 violations, all 17 under `Tests/`, zero in `Sources/`, 16 warnings and exactly 1 error** at `FountainInMarkdownTests.swift:81`, the 4-member expectation table. Every number the agent reported is correct, and it was forbidden from touching `Tests/` by the supervisor's own dispatch, so disabling was the only lever it had. **But `disabled_rules` deletes the signal**, and this mission's own standard (Sortie 22's oracle: "a documented divergence that stops occurring must fail") is that you narrow a gate, never blank it. **The supervisor's first proposed alternative — `large_tuple: severity: warning` — was measured and DOES NOT WORK**: `large_tuple` is a *threshold* rule, not a severity rule, and the run still exited 2. The form that does work was then verified: **`large_tuple: {warning: 2, error: 5}` → exit 0, all 17 findings still reported, 0 errors.** Same green gate, signal fully preserved. **→ Sortie 30 replaces the disable with the threshold.** Recorded in full because the supervisor's first suggestion was wrong and measuring it is the only reason a wrong suggestion did not become a dispatch order. |
+| DL-186 | 2026-07-27 | WU-7 | 30 | Model: **opus**, complexity 16 — the last sortie, and the one carrying the most inherited weight | Its own three tasks are moderate, but Sortie 30 is the named catcher for **fourteen** accumulated obligations, and its central task is **source-breaking**: demoting public declarations to `internal` in a package whose semver commitments make a post-1.0 rename a major release. It must also distinguish three categories that look alike and are not — pre-authorized public exceptions that must be *confirmed, not re-litigated* (DL-9, DL-41); structures it must **not** "simplify" because the simplification is the bug (DL-35's two-level cache, DL-12's internal inits); and genuine 1.0 limitation decisions it must document rather than fix (DL-107, DL-131, DL-149). |
+| DL-187 | — | — | — | *(reserved — handed to Sortie 30 as its first free defect number)* | Per DL-150. |
+| DL-188 | 2026-07-27 | — | 29 | **ERRATUM for the user, outside every agent's file boundary: branch protection does not yet require the new lint job** | The `Lint / SwiftLint` check runs and gates *its own workflow*, but it is not in `required_status_checks.contexts`, so GitHub will not block a merge on it. Same for the performance workflow, which is deliberately not PR-triggered and should **not** be added. Fixing this is a repo-settings change (`gh api --method PUT repos/OWNER/REPO/branches/BRANCH/protection`), not a file edit, so no sortie can do it. **→ user.** |
 
 ---
 
 ## Overall Status
 
-### Current position (2026-07-27, round 7 — Sortie 29 in flight) — NEWEST
+### Current position (2026-07-27, round 8 — Sortie 30 in flight, THE LAST) — NEWEST
+
+- Sorties completed: **32 / 33**. **Sortie 30 is the final one.**
+- Work units: **7 / 8 COMPLETE**; WU-7 RUNNING at 30.
+- **Tree is GREEN and clean** at `430ce12`: `make build` 0, `make lint` 0, core **314/30**,
+  macOS **179/28 + 44/10 + 314/30**, iOS **160/25 + 44/10 + 314/30**.
+- **The charter is enforced for the first time in this mission.** `make lint` runs SwiftLint
+  rather than a formatter (DL-183), a CI job gates on it, and the supervisor proved the
+  chain end to end: `import Markdown` in a shipping target makes `make lint` exit 2
+  (DL-184). Until this round, D-2's containment rested on a rule nothing ran.
+- **`timeout-minutes` now on all three CI jobs** (15/30/45) — DL-180 closed.
+- **Two things only the user can do**: DL-188 (add the lint context to branch protection)
+  and the four 1.0 decisions listed below.
+
+### Position (2026-07-27, round 7 — Sortie 29 complete)
 
 - Sorties completed: **32 / 33** (all but 29 and 30 — every one supervisor-verified).
 - Sorties in flight: **1** — Sortie 29 (WU-7, opus), SwiftLint enforcement in CI.
