@@ -1,13 +1,22 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-// SwiftEscribo has no dependencies, by charter. It is the org's canonical
-// Fountain parser as well as a Markdown/Fountain editor, so anything that can
-// parse must be reachable without linking a UI framework.
+// SwiftEscribo has no *shipping* dependencies, by charter. It is the org's
+// canonical Fountain parser as well as a Markdown/Fountain editor, so anything
+// that can parse must be reachable without linking a UI framework.
 //
 // `EscriboCore` is pure Foundation: scanners, tokens, line index. `SwiftEscribo`
 // adds the SwiftUI/TextKit editor on top. A CLI, a server, or SwiftCompartido
 // can depend on the former alone.
+//
+// The single entry in `dependencies:` below is `swift-markdown`, and it is
+// reachable from **`EscriboCoreTests` only** — see the comment on that target and
+// on the `no_markdown_import_in_sources` rule in `.swiftlint.yml`. SwiftPM prunes
+// a test-only dependency out of every downstream consumer's graph, but it does so
+// as a *graph* property rather than a declaration: nothing here marks the
+// dependency test-only, and nothing errors the day a shipping target imports it
+// (swiftlang/swift-package-manager#7007). The charter therefore holds only as long
+// as no target under `Sources/` says `import Markdown`.
 let package = Package(
   name: "SwiftEscribo",
   platforms: [
@@ -31,6 +40,14 @@ let package = Package(
       name: "EscriboProject",
       targets: ["EscriboProject"]
     ),
+  ],
+  dependencies: [
+    // The CommonMark/GFM differential oracle for `MarkdownGrammar`. Version floor
+    // resolved from the package's GitHub releases on 2026-07-26: 0.8.0 is the
+    // latest published release (`gh release list --repo swiftlang/swift-markdown`).
+    //
+    // TEST-ONLY. Referenced by `EscriboCoreTests` and by nothing else, ever.
+    .package(url: "https://github.com/swiftlang/swift-markdown.git", .upToNextMajor(from: "0.8.0"))
   ],
   targets: [
     .target(
@@ -63,14 +80,31 @@ let package = Package(
     ),
     .testTarget(
       name: "EscriboCoreTests",
-      dependencies: ["EscriboCore"],
+      dependencies: [
+        "EscriboCore",
+        // The differential oracle, and the **only** place in this package graph that
+        // may name it. `EscriboCore`, `SwiftEscribo`, and `EscriboProject` are
+        // shipping targets and list nothing here; a single `import Markdown` under
+        // `Sources/` would make CommonMark a transitive dependency of every consumer
+        // of the Fountain parser, silently and with no build error. The
+        // `no_markdown_import_in_sources` SwiftLint rule is what catches that.
+        .product(name: "Markdown", package: "swift-markdown"),
+      ],
       // The Fountain fixture corpus — three vendored screenplays and the hostile
       // documents authored alongside them — plus their golden snapshots. `.copy` rather
       // than `.process` so the bytes reach the bundle **unaltered**: several fixtures
       // exist precisely to carry CRLF, a lone CR, or a missing final terminator, and a
       // resource rule entitled to transform them would launder away the thing under test.
+      //
+      // `Fixtures/Markdown` holds the differential-oracle corpus and is `.markdown`
+      // rather than `.md` on purpose — a repo-wide policy hook requires every `.md` file
+      // to open with a YAML `type:` frontmatter block, and prefixing every fixture with
+      // the same five lines would make line 0 of the whole corpus uniform. Line 0 is
+      // where frontmatter, setext underlines, and thematic breaks are decided.
+      //
       // The directory structure is preserved, so the loader reaches them at
-      // `Fixtures/Fountain` and `Fixtures/Golden` through `Bundle.module`. No test may
+      // `Fixtures/Fountain`, `Fixtures/Golden`, and `Fixtures/Markdown` through
+      // `Bundle.module`. No test may
       // name a path outside the package.
       resources: [.copy("Fixtures")],
       swiftSettings: [
