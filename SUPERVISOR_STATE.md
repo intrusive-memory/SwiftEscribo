@@ -1,7 +1,7 @@
 ---
 type: supervisor-state
 title: OPERATION FOUNTAIN SURGEON — Supervisor State
-updated: 2026-07-26
+updated: 2026-07-27
 ---
 
 # SUPERVISOR_STATE.md — OPERATION FOUNTAIN SURGEON
@@ -200,9 +200,21 @@ updated: 2026-07-26
 | 17 | COMPLETED | opus | 1 | `6f4b1ba` | supervisor re-ran all three at tip (260/19 + 167/27 + 148/24); 10 fixtures; boneyard-state probe fired 8 issues, gate green (DL-129); **found DL-130 and refined DL-120 → DL-131** |
 
 ### WU-4 Markdown Breadth
-- Work unit state: **RUNNING** — Sortie 21 COMPLETED; **Sortie 22 is the last one**.
-- Current sortie: **22** of 30 — PENDING (terminal for WU-4; gates Sortie 28)
-- Sortie 21: **COMPLETED — supervisor-verified**, commit `6b28dad`. Verified in an isolated
+- Work unit state: **COMPLETED** (2026-07-27 — all 5 sorties, 18–22, verified)
+- Current sortie: 22 of 22 — all complete
+- Sortie 22: **COMPLETED — supervisor-verified**, commit `1d02839`. All three re-run by the
+  supervisor on a quiet machine (no `xcodebuild`/`xctest` alive before starting, per
+  DL-140/DL-160): `make test-core` 0 (**298/27**), `make test` 0 (**179/28** + **44/10** +
+  **298/27**), `make test-ios` 0 (**160/25** + **44/10** + **298/27**) — every count matches
+  the agent's report exactly. All five exit criteria re-checked by the supervisor:
+  `grep -rn 'import Markdown' Sources/` exit 1; `no_markdown_import_in_sources` present at
+  `.swiftlint.yml:86`; `Package.swift` names `swift-markdown` in exactly one target's
+  `dependencies:` — `EscriboCoreTests` at line 91 — and the three shipping targets list
+  nothing; **9** Markdown fixtures (≥6 required). Charter clean: no regex under `Sources/`,
+  `EscriboCore` imports **nothing at all**, no XCTest under `Tests/`.
+  **Supervisor probe fired — the oracle detects an undocumented divergence by name**
+  (DL-168). Sortie 22 also recorded DL-166 and DL-167.
+- Sortie 21 (previous): **COMPLETED — supervisor-verified**, commit `6b28dad`. Verified in an isolated
   worktree at the tip (the shared tree is dirty with Sortie 27's partial work and reported
   a false macOS 179/28): `make test-core` 0 (**271/20**), `make test` 0 (**167/27**),
   `make test-ios` 0 (**148/24**). Editor counts **identical to baseline** — zero
@@ -219,11 +231,17 @@ updated: 2026-07-26
 | 18 | COMPLETED | opus | 1 | `c1c5b1d` | test-core 0 (143/13), UTF-16 column probe fired (DL-85), emoji criterion ruled met in substance (DL-86) |
 | 19 | COMPLETED | opus | 1 | `fd34bed` + `0aecb21` | all three 0 (181/14 + 92/18 + 95/18), 51 new tests; two unfailable criteria flagged and given real assertions (DL-100) |
 | 21 | COMPLETED | opus | 1 | `6b28dad` | supervisor worktree-verified (271/20 + 167/27 + 148/24); DL-112 discharged with a real second field; equality probe fired 22 issues (DL-137); lookahead 0→1 (DL-138) |
+| 22 | COMPLETED | opus | 1 | `1d02839` | supervisor re-ran all three on a quiet tree (298/27 + 179/28 + 160/25, plus 44/10 both platforms); all 5 exit criteria re-checked incl. containment in `Package.swift`; 9 fixtures; **nested-blockquote-depth probe fired 5 issues / 3 tests, the oracle naming the divergence and the source line (DL-168)** |
 | 20 | COMPLETED | opus | 1 | `e911cad` | all three 0 (235/16), **worktree-verified** (DL-104); 3 mutations fired, gate green 235/235 (DL-105); 7th unfailable criterion flagged; autolinks deferred to Sortie 22 (DL-107) |
 
 ### WU-5 Writer
 - Work unit state: **RUNNING**
-- Current sortie: **24** of 33 — PENDING (criteria amended by DL-165 before dispatch)
+- Current sortie: **24** of 33 — **DISPATCHED 2026-07-27, opus, complexity 13, attempt 1/3**
+  (criteria amended by DL-165 before dispatch; DL-169 records the dispatch reasoning)
+- Sortie type: code
+- Model: opus
+- Complexity score: 13
+- Attempt: 1 of 3
 - Sortie 23: **COMPLETED — supervisor-verified**, commit `5c899f2`. All three re-run:
   `make test-core` 0 (**293/26**, +17/+6), `make test` 0 (**179/28**), `make test-ios` 0
   (**160/25**), `EscriboProjectTests` **44/10** — two new files, nothing else touched.
@@ -298,10 +316,13 @@ updated: 2026-07-26
   title page encodes the misreading into the writer. See DL-144.
 
 ### WU-7 Verification & Hardening
-- Work unit state: NOT_STARTED
+- Work unit state: **RUNNING** — unlocked 2026-07-27 when Sortie 22 completed.
 - Current sortie: 28 of 30
 - Sortie state: PENDING
-- Notes: Gated on Sorties 27, 17, 22.
+- Notes: All three entry criteria (Sorties 27, 17, 22) are now met, so Sortie 28 is
+  **eligible**. It is held one round only because concurrency is 1 (DL-134), not because
+  anything gates it — Sortie 28 does **not** depend on Sortie 24. It carries DL-138
+  (the Markdown lookahead 0→1 forward-window cost), DL-75, DL-56, and DL-61.
 
 ---
 
@@ -309,10 +330,18 @@ updated: 2026-07-26
 
 | Work Unit | Sortie | Sortie State | Attempt | Model | Complexity Score | Task ID | Output File | Dispatched At |
 |-----------|--------|-------------|---------|-------------|-----------------|---------|-------------|---------------|
-| WU-4 | 21 | DISPATCHED — **committed `6b28dad`**, agent still verifying | 1/3 | **opus** | 16 | (session `fa1c4c1d`, agent C) | — | 2026-07-26 round 3 |
-| WU-6 | 27 | **PARTIAL** — agent returned early, work uncommitted | 1/3 (no increment) | **sonnet** | 11 | (session `fa1c4c1d`, agent D) | — | 2026-07-26 round 3 |
+| WU-5 | 24 | DISPATCHED | 1/3 | **opus** | 13 | (round 5, agent A) | — | 2026-07-27 |
 
-Concurrency **2**, per DL-103 and now DL-132. File ownership is disjoint and was stated in
+**Concurrency 1** (DL-134). Sortie 24 runs alone. Sortie 28 is eligible and held one round
+purely on that cap. Sortie 24 owns `Sources/EscriboCore/Writer/**` +
+`Tests/EscriboCoreTests/**`; it was forbidden `make lint` (DL-123), forbidden from reading
+or writing `SUPERVISOR_STATE.md`, ordered to verify from a throwaway worktree at its own
+commit (DL-98, DL-132), and handed **DL-170** as its first free defect number (DL-150).
+
+Round 4 (closed): Sortie 22 → `1d02839` COMPLETED; Sortie 23 → `5c899f2` COMPLETED.
+
+Historical (round 3, closed): Sortie 21 → `6b28dad`; Sortie 27 → `57df2a1` + `26eafc8`.
+Concurrency at that time was **2**, per DL-103 and DL-132. File ownership is disjoint and was stated in
 both dispatch orders: Sortie 21 owns `Sources/EscriboCore/**` + `Tests/EscriboCoreTests/**`;
 Sortie 27 owns `Sources/SwiftEscribo/**` + `Tests/SwiftEscriboTests/**`. Both were forbidden
 `make lint` (DL-123), both were forbidden from reading or writing `SUPERVISOR_STATE.md`, and
@@ -511,9 +540,40 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-164 | 2026-07-26 | WU-5 | 23 | **The 13th unfalsifiable criterion — and this one was in the PLAN's exit criteria, proven by building the degenerate implementation** | Sortie 23 observed that all three of its exit criteria as worded are satisfied by **the identity function**: a writer that returns its input preserves `\r\n`, preserves `.HOUSE`, and preserves the dual-dialogue caret. It did not merely argue this — it **implemented the copy-the-source writer and ran it**, which is the strongest available form of the claim. It then bundled a normalization into each exit-criterion document (`#   ACT ONE`→`# ACT ONE`, `=====`→`===`, `BOB   ^`→`BOB ^`) so identity now fails all three, and probe 5 (**23 issues across 8 tests**) is the proof. Six probes fired in total, all six successfully. **Supervisor probe, on a claim none of its six tested** — truncating every terminator to a single code unit, so `\r\n` becomes `\r`: **5 issues across 3 tests**, including "Mixed terminators are each preserved, and a missing final terminator is not invented". Reverted; tree clean. **DL-163** (new, fixed in-sortie): de-indenting speech is not unconditionally safe — `  ~la la la` inside a dialogue block is dialogue, and writing it flush left promotes it to a lyric. |
 | DL-165 | 2026-07-26 | WU-5 | 24 | **Sortie 24's stated idempotence criterion was itself unsatisfiable — amended before dispatch** | The plan said `parse(write(parse(x))) == parse(x)`. Sortie 23 established this **cannot hold for a normalizing writer** compared as `LineRecord`s or `ScanResult`s: normalization (`=====`→`===`, `#   ACT`→`# ACT`) **shifts every subsequent `range`**, so record equality fails on any non-canonical document for reasons that have nothing to do with data loss. Taking it literally would look like a writer bug and would not be one. **Amended**: idempotence is now stated as a **fixed point of the writer** — `y = write(parse(x))`, then `write(parse(y)) == y`, compared as text. Two criteria Sortie 24 lacked were also added: a title-page key with an **empty value** must write back as key *and* value line rather than collapsing into an absent key (Sortie 31 made these distinct records; Sortie 23 confirmed the writer skips nothing for an empty content range and guards it with `emptyTitlePageValueSurvives`), and **at least one idempotence fixture must be non-canonical** so the identity function fails there too — the DL-164 lesson applied forward. |
 
+| DL-166 | 2026-07-26 | WU-4 | 22 | Recorded from Sortie 22: **the oracle structurally cannot surface DL-107**, and the agent asserted that rather than assuming it | `swift-markdown` 0.8.0 attaches exactly three cmark-gfm extensions — table, strikethrough, tasklist — and **not** `autolink`, so it leaves a bare URL as plain text too. DL-107 predicted the differential oracle would surface GFM extended autolinks as a diff; it cannot, because **two implementations that share a gap agree across it**. The agent pinned this with a test that goes red if a future `swift-markdown` gains the extension, which converts a silent blind spot into a dated one. **DL-107 therefore remains open and is carried to Sortie 30.** |
+| DL-167 | 2026-07-26 | WU-4 | 22 | Recorded from Sortie 22: **DL-122's unordered half is narrower than this log has been claiming** | An independent parser confirms the ordered half exactly — a tight ordered list's second and third items classify as `paragraph` (`lists:5`, `:6`). But a tight **bullet** list of ordinary items classifies correctly; the unordered defect needs an item with **no content**, where a lone `-` becomes a setext heading (`lists:18`). DL-122's shape was inferred from two examples and one of them generalized further than the evidence supported. **The owner is unchanged** (whoever raises Markdown's lookahead, else Sortie 30), but the repro is now smaller and exact. |
+| DL-168 | 2026-07-27 | WU-4 | 22 | **Supervisor probe on Sortie 22: direction 1 of the oracle is real, and it names the divergence rather than merely failing** | The agent's commit claims the oracle "fails in both directions". Direction 2 (a documented divergence that stops occurring) is self-evidently testable by editing the table; direction 1 — an *undocumented* divergence — is the one that matters and the one no table edit can prove. The supervisor collapsed nested blockquote depth in `MarkdownGrammar.swift:732` (`depth: markers - 1` → `depth: 0`), a mutation aimed at `quotes_and_rules`, whose divergence table is **empty**. Result: **5 issues across 3 tests**, including `Block structure agrees with swift-markdown, or diverges exactly as documented` failing on `quotes_and_rules` with the exact reading of both sides, the source line `"> > nested quote"`, and a copy-pasteable table literal; and `The scanner finds every block class the corpus contains`, the degeneracy guard, which caught that `.blockquote(depth: 1)` had vanished from the corpus entirely. Reverted; tree clean; core back to **298/27**. **Note the second failure is the more interesting one**: the anti-degeneracy test exists precisely so that a scanner which stops producing a block class cannot pass by producing nothing, and it fired without being aimed at. |
+| DL-169 | 2026-07-27 | WU-5 | 24 | Model: **opus**, complexity 13 — and the reason is the mission's own history, not the task's size | On raw scoring this sortie sits at the sonnet/opus boundary: ~30 turns, 3–5 files, machine-verifiable criteria, no dependents. What pushes it over is that **Sortie 24 is the sortie most likely to be handed criteria that cannot fail.** Its original idempotence formulation was unsatisfiable (DL-165); its predecessor found all three of *its own* criteria satisfiable by the identity function (DL-164); the mission has now found **13** unfalsifiable criteria, and the two most recent were both in the writer's neighbourhood. This sortie must therefore *design falsifiability*, not just implement a writer — and it carries DL-111 (does the title-page **span** route round-trip byte-identically, or does `LineRecord` need `keyRange`?) on top of its own tasks. Cheap-first would be false economy on the last correctness sortie of the mission. |
+| DL-170 | — | — | — | *(reserved — handed to Sortie 24 as its first free defect number)* | Per DL-150, every dispatch order now states the next free DL number so agents cannot collide with the supervisor's bookkeeping. |
+
 ---
 
 ## Overall Status
+
+### Current position (2026-07-27, round 5 — Sortie 24 in flight) — NEWEST, everything below is history
+
+- Sorties completed: **30 / 33** (1–23, 25, 26, 27, 31, 32, 33 — every one
+  supervisor-verified, none taken on report alone).
+- Sorties in flight: **1** — Sortie 24 (WU-5, opus), title-page writing and the
+  idempotence gate.
+- Work units: **6 / 8 COMPLETE** (WU-1, WU-2, WU-3, **WU-4 closed this round**, WU-6, WU-8).
+  WU-5 RUNNING at 24; WU-7 **RUNNING and eligible at 28**, held one round by the
+  concurrency cap alone.
+- **Tree is GREEN and clean** at `1d02839`, all three re-run by the supervisor on a quiet
+  machine rather than reported: `make test-core` 0 (**298/27**), `make test` 0 (**179/28**
+  + **44/10** + **298/27**), `make test-ios` 0 (**160/25** + **44/10** + **298/27**).
+  Charter clean: no regex under `Sources/`, `EscriboCore` imports **nothing at all**, no
+  XCTest under `Tests/`.
+- **The package now has exactly one external dependency, and it is unreachable from every
+  shipping target.** `swift-markdown` 0.8.0 is declared on `EscriboCoreTests` only, guarded
+  by `no_markdown_import_in_sources` (defined; **Sortie 29/30 must build the CI job that
+  runs it**, or the guard is decorative) plus `grep -rn 'import Markdown' Sources/`.
+- **Remaining: 3 sorties — 24, then 28 → 29 → 30**, serial (DL-134). Sortie 28 does not
+  depend on Sortie 24, so if the cap is ever raised those two can run together; nothing
+  else can.
+- **One supervisor probe fired this round** (DL-168), reverted, tree clean after it.
+
+### Historical position (2026-07-26, round 1)
 
 - Sorties completed: **13 / 30** (Sorties 1–12 and 18 — all supervisor-verified)
 - Sorties in flight: **1** (Sortie 13 continuation, WU-3)
@@ -602,8 +662,21 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 - **DL-122 → whoever raises Markdown's lookahead (else Sortie 30)**: tight lists
   misclassify (`1. one`⏎`2. two`). Sortie 25 works around it correctly; the workaround
   self-retires when the scanner is fixed.
-- **DL-107 → Sortie 22**: GFM extended autolinks are unimplemented; the differential
-  oracle will surface them as a diff.
+- **DL-107 → Sortie 30** (was Sortie 22, which could not discharge it): GFM extended
+  autolinks are unimplemented. The differential oracle **cannot** surface them — DL-166:
+  `swift-markdown` 0.8.0 does not attach the `autolink` extension either, so both sides
+  share the gap and agree across it. Still open; now a documented 1.0 limitation decision.
+- **DL-167 → same owner as DL-122**: DL-122's unordered half needs an *empty* item to
+  reproduce; a tight bullet list of ordinary items is classified correctly.
+- **DL-111 → Sortie 24, in flight**: confirm the title-page span route round-trips
+  byte-identically, or add `keyRange` to `LineRecord`.
+- **DL-149, DL-151, DL-157 → user decisions, default catcher Sortie 30**: (a) a document
+  whose *first* title-page key is empty opens no title page at all; (b) a top-level
+  `episodes:` with no `season:` is silently discarded on decode, in live code; (c)
+  `appSections` / `CastMember.extraKeys` are round-trippable but have no public accessor.
+- **DL-162 → Sortie 30**: the unknown-key half of the WU-8 gate rests on 2 of 6 fixtures.
+- **DL-139, DL-150 → Sortie 30**: `MarkdownGrammar`'s type-level doc still says lookahead
+  is zero; and Sortie 31's in-source defect label reads `DL-136`, a number already taken.
 - **DL-75 → Sortie 28**: measure the per-change `NSTextStorage.string` → Swift `String`
   bridge in the binding push — the last per-keystroke O(document) cost.
 - **DL-56 → Sortie 28**: measure the post-IME-composition full rescan.
