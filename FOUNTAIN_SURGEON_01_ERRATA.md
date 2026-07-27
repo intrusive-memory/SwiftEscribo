@@ -38,9 +38,10 @@ what was true, how it was settled, and what a re-implementation should do instea
 `SUPERVISOR_STATE.md` remains the authoritative Decisions Log; every `DL-n` here points
 into it. This file is the *index of conflicts* and the errata, nothing else.
 
-**Status when last updated**: 32 of 33 sorties complete, all supervisor-verified. Sortie 29
-in flight; 30 remains. Tree green at `ff7e8ce`: performance **12/5**, core **314/30**, macOS
-**179/28 + 44/10 + 314/30**, iOS **160/25 + 44/10 + 314/30**.
+**Status when last updated**: 32 of 33 sorties complete, all supervisor-verified. **Sortie 30,
+the last, is in flight.** Tree green at `430ce12`: `make build` 0, `make lint` 0, performance
+**12/5**, core **314/30**, macOS **179/28 + 44/10 + 314/30**, iOS **160/25 + 44/10 +
+314/30**.
 
 ---
 
@@ -274,11 +275,26 @@ Recorded against the supervisor, not the agents. Three cost real budget.
 | DL-160 | Applied DL-140's rule before *dispatch* but not before *probing* — mutated the tree while an agent's build was in flight. That agent correctly **discarded its measurement as void**. | One wasted measurement | The rule governs **any supervisor action that mutates the working tree**, not just dispatch. |
 | DL-172 | DL-149 was recorded, given a catcher, and then **left out of the dispatch order**. An opus agent spent part of its budget rediscovering it as DL-170. | Partial budget; offset by gaining a pinned test DL-149 never had | **Before dispatching, grep the open-obligations list for the sortie's subject and paste every hit into the order.** |
 | DL-142 | Piped a probe's output through `head -8` and read "2 tests fired" as a weak assertion. The true figure was **143 issues across 11 tests**. | Nearly a false finding | **Never truncate a probe's output — a probe measures how much fired.** |
+| DL-185 | Proposed a specific alternative to an agent's config widening — `large_tuple: severity: warning` — **which does not work.** `large_tuple` is a *threshold* rule, not a severity rule; the run still exited 2. | None, because it was measured before it was ordered | **Measure your own suggestion before it becomes a dispatch order.** The form that does work (`warning: 2, error: 5` → exit 0, all 17 findings still reported) was verified before being handed to Sortie 30. A supervisor suggestion carries authority an agent's does not; that is exactly why it needs the same falsification. |
 | DL-53 | A probe applied with `sed` **silently failed to substitute**, producing an all-green run that read as a weak test. | Nearly a false finding | **A probe that reports no failures must be checked for having actually landed** before any conclusion is drawn. |
 
-**The meta-lesson**: of eleven supervisor errors, **four were caused by rules the supervisor
-itself invented** (DL-82, DL-98, DL-123, DL-172). Process changes are changes. They need the
-same falsification discipline as code.
+**The meta-lesson**: of twelve supervisor errors, **four were caused by rules the supervisor
+itself invented** (DL-82, DL-98, DL-123, DL-172) and one by a suggestion it had not measured
+(DL-185). Process changes are changes. They need the same falsification discipline as code —
+and a supervisor's suggestion carries authority an agent's does not, which raises the bar
+rather than lowering it.
+
+### A rule the supervisor imposed that cost the mission something (DL-185)
+
+Worth separating from the errors above, because it was not a mistake — it was a correct rule
+with a cost. Sortie 29 was forbidden from touching `Tests/`, which was right (Sortie 30 owns
+source cleanups). The consequence was that when a single default SwiftLint rule fired one
+`error` at one test site, the agent's **only available lever** was to disable the rule
+repo-wide. It did so and flagged it loudly, which is the best available behavior — but the
+gate was widened because of a boundary the supervisor drew, not because of anything in the
+code. **A file boundary narrow enough to keep sorties disjoint can be narrow enough to force
+the wrong fix.** When a boundary blocks the proportionate remedy, the dispatch should say
+what to do instead — "report it and stop" is usually better than "work around it."
 
 ---
 
@@ -391,11 +407,26 @@ These are **not resolved**. They are the actionable residue of this mission.
 - **DL-162**: the unknown-key half of the WU-8 gate has a per-key loop that executes for
   only **2 of 6** fixtures. Inherent to the data, not a test defect — but nobody reading the
   test count would know.
-- **DL-4**: `make lint` runs `swift format -i -r .`, **not SwiftLint**, while Sortie 29's
-  criteria require the CI lint job to invoke `make lint` to enforce three custom SwiftLint
-  rules. **Unreconciled; Sortie 29 owns it.** Until then all three custom rules — including
-  the `no_markdown_import_in_sources` rule that is the *only* thing keeping `swift-markdown`
-  out of the shipping graph — **are documentation, not enforcement.**
+- **DL-4 — RESOLVED at Sortie 29 (DL-183), after standing open for 29 sorties.** `make lint`
+  ran `swift format -i -r .` — an in-place formatter that ran no linter at all — while the
+  plan required CI to gate on `make lint`. Split into **`make lint`** (`swiftlint lint
+  --quiet`, read-only, gating, what CI runs) and **`make format`** (the old formatter,
+  renamed). **A developer's muscle memory changed**: the pre-commit incantation is now
+  `make format && make lint`. Until this landed, all three custom rules — including the one
+  keeping `swift-markdown` out of every consumer's dependency graph — were documentation.
+  **The lesson for a re-implementation is the duration, not the fix**: this was flagged in
+  the Decisions Log at *Sortie 1* and nothing forced it to be resolved until the sortie whose
+  criteria could not be met without it. **A flagged-but-unowned blocker will be resolved at
+  the last possible moment, or not at all.** Give every flag an owning sortie the day it is
+  raised — the same failure produced DL-130, which shipped a real defect for 17 sorties.
+- **`--strict` is deliberately off**: it would promote **50 pre-existing style warnings** to
+  errors. Non-gating today. Clearing them is prerequisite to turning it on.
+- **`swift format lint` reports 68 findings across 18 files** — the tree has never been
+  formatted. Not gating; `make format` is available and unrun.
+- **DL-188 — the lint job gates its workflow but not a merge.** The `Lint / SwiftLint` check
+  is not in branch protection's `required_status_checks.contexts`. This is a repo-settings
+  change (`gh api --method PUT .../branches/BRANCH/protection`), not a file edit, so **no
+  sortie can do it. → user.**
 
 ---
 
