@@ -222,11 +222,14 @@ updated: 2026-07-26
 | 20 | COMPLETED | opus | 1 | `e911cad` | all three 0 (235/16), **worktree-verified** (DL-104); 3 mutations fired, gate green 235/235 (DL-105); 7th unfailable criterion flagged; autolinks deferred to Sortie 22 (DL-107) |
 
 ### WU-5 Writer
-- Work unit state: **RUNNING** (unlocked 2026-07-26 by Sortie 17) — **eligible, not
-  dispatched this round.** Concurrency held at 2, not the plan's theoretical 3, on the
-  evidence in DL-132.
-- Current sortie: 23 of 30
-- Sortie state: PENDING — first in the queue for the next round
+- Work unit state: **RUNNING**
+- Current sortie: **24** of 33 — PENDING (criteria amended by DL-165 before dispatch)
+- Sortie 23: **COMPLETED — supervisor-verified**, commit `5c899f2`. All three re-run:
+  `make test-core` 0 (**293/26**, +17/+6), `make test` 0 (**179/28**), `make test-ios` 0
+  (**160/25**), `EscriboProjectTests` **44/10** — two new files, nothing else touched.
+  Supervisor probe fired **5 issues / 3 tests** (DL-164). **Found that all three of its own
+  exit criteria were satisfiable by the identity function** and fixed them (DL-164), and
+  that **Sortie 24's stated criterion was unsatisfiable** (DL-165).
 - Notes: Gated on Sortie 17 (now met). Carries **DL-111** — Sortie 24 must confirm the
   title-page span route round-trips byte-identically, or add `keyRange` to `LineRecord`.
   **Now also carries DL-130**, which lands squarely on the writer: two of nine title-page
@@ -505,6 +508,9 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
 | DL-161 | 2026-07-26 | WU-8 | 33 | **The decode-side blind spot is closed, and the supervisor measured the delta rather than accepting it** | Sortie 33 closed Fact 0 (DL-156) with three legs whose oracle is independent of `CastMember.init(from:)`: a `RawFixture` reader using **`JSONSerialization`** — Foundation's parser, not the model's — compared field-for-field against what the model decoded from the same bytes across 6 fixtures and 150 members; literals hand-typed from the committed files; and values constructed in code, encoded, decoded, compared. A `RawFixtureSelfTests` suite mutation-tests the reader so leg 1 cannot pass vacuously. **Supervisor probe, same mutation as DL-156** (`voices = [:]` in the decoder): **38 issues across 9 distinct tests / 20 parameterized cases**, including "Every cast member matches the committed file, field for field" and "Written-back cast bytes match the original bytes" on all six fixtures. **The agent reported its own honest baseline: before the change that identical probe fired only 3 issues in 2 tests, with zero corpus-driven failures.** So the measured improvement is 3→38 and 0→12 corpus failures. A claimed improvement in falsifiability is exactly the class of claim that needs its own falsification, and this one survived it. |
 | DL-162 | 2026-07-26 | WU-8 | 33 | Caveat the agent volunteered: the unknown-key gate rests on **two** fixtures, not six | `Written-back unknown top-level keys match the original bytes` has a per-key loop that only executes for the two fixtures carrying unknown top-level keys (`confessions`, `aunt-stanley`); for the other four the loop body is empty and only the key-set assertion runs. **Inherent to the data, not a defect in the test** — but it means the unknown-key half of the gate has a narrower base than the cast half, and nobody reading the test count would know. Reported unprompted. **→ Sortie 30** if broader coverage is wanted. |
 
+| DL-164 | 2026-07-26 | WU-5 | 23 | **The 13th unfalsifiable criterion — and this one was in the PLAN's exit criteria, proven by building the degenerate implementation** | Sortie 23 observed that all three of its exit criteria as worded are satisfied by **the identity function**: a writer that returns its input preserves `\r\n`, preserves `.HOUSE`, and preserves the dual-dialogue caret. It did not merely argue this — it **implemented the copy-the-source writer and ran it**, which is the strongest available form of the claim. It then bundled a normalization into each exit-criterion document (`#   ACT ONE`→`# ACT ONE`, `=====`→`===`, `BOB   ^`→`BOB ^`) so identity now fails all three, and probe 5 (**23 issues across 8 tests**) is the proof. Six probes fired in total, all six successfully. **Supervisor probe, on a claim none of its six tested** — truncating every terminator to a single code unit, so `\r\n` becomes `\r`: **5 issues across 3 tests**, including "Mixed terminators are each preserved, and a missing final terminator is not invented". Reverted; tree clean. **DL-163** (new, fixed in-sortie): de-indenting speech is not unconditionally safe — `  ~la la la` inside a dialogue block is dialogue, and writing it flush left promotes it to a lyric. |
+| DL-165 | 2026-07-26 | WU-5 | 24 | **Sortie 24's stated idempotence criterion was itself unsatisfiable — amended before dispatch** | The plan said `parse(write(parse(x))) == parse(x)`. Sortie 23 established this **cannot hold for a normalizing writer** compared as `LineRecord`s or `ScanResult`s: normalization (`=====`→`===`, `#   ACT`→`# ACT`) **shifts every subsequent `range`**, so record equality fails on any non-canonical document for reasons that have nothing to do with data loss. Taking it literally would look like a writer bug and would not be one. **Amended**: idempotence is now stated as a **fixed point of the writer** — `y = write(parse(x))`, then `write(parse(y)) == y`, compared as text. Two criteria Sortie 24 lacked were also added: a title-page key with an **empty value** must write back as key *and* value line rather than collapsing into an absent key (Sortie 31 made these distinct records; Sortie 23 confirmed the writer skips nothing for an empty content range and guards it with `emptyTitlePageValueSurvives`), and **at least one idempotence fixture must be non-canonical** so the identity function fails there too — the DL-164 lesson applied forward. |
+
 ---
 
 ## Overall Status
@@ -521,9 +527,9 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   necessity and is now behind us.
 ### Current position (2026-07-26, round 3 — Sorties 21 and 27 in flight)
 
-- Sorties completed: **27 / 33** (1–21, 25, 26, 27, 31, 32, 33 — every one
+- Sorties completed: **28 / 33** (1–21, 23, 25, 26, 27, 31, 32, 33 — every one
   supervisor-verified, none taken on report alone). **WU-8 is COMPLETE.**
-- Sorties in flight: **1** — Sortie 23 (WU-5, opus), the Fountain writer
+- Sorties in flight: **1** — Sortie 22 (WU-4, opus), the `swift-markdown` differential oracle
 - Work units: **4 / 7 COMPLETE** (WU-1, WU-2, WU-3, **WU-6 closed this round**).
   WU-4 RUNNING at 22; WU-5 RUNNING at 23; WU-7 gated on 22.
 - **Concurrency is now 1.** Two-way parallelism cost a 42-minute hang this round and is
@@ -538,11 +544,11 @@ Round 2 (closed): Sortie 17 → `6f4b1ba` COMPLETED; Sortie 26 → `6478d8e` COM
   reverted, tree clean after each. The gate stayed green through the one that mattered.
 - **Remaining critical chain**: `22 → 28 → 29 → 30`. Four sorties. Sortie 21 cleared the
   hardest link; WU-4 has one sortie left.
-- **Serial queue from here** (DL-134): **23 → 22 → 24 → 28 → 29 → 30.** Six left.
+- **Serial queue from here** (DL-134): **22 → 24 → 28 → 29 → 30.** Five left.
 - Work units: **5 / 8 COMPLETE** (WU-1, WU-2, WU-3, WU-6, **WU-8**).
 - **DL-130 IS FIXED** (`7ddfb16`, DL-147) — escalated twice, amended in by the user, closed
   by a one-line change, and the fix is probe-proven in both directions (DL-148).
-- **Tree is GREEN and clean** at `e263019`: core **276/20**, macOS **179/28**, iOS
+- **Tree is GREEN and clean** at `5c899f2`: core **293/26**, macOS **179/28**, iOS
   **160/25**, `EscriboProjectTests` **44/10** on both platforms — all re-run by the
   supervisor on a quiet machine.
 - **`EscriboProject` is the package's third shipping target** (D-5), Foundation-only. Charter clean: no regex, `EscriboCore` imports

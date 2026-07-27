@@ -930,22 +930,40 @@ records) has held since Sortie 13.
 - [ ] Sortie 23 exit criteria met
 
 **Tasks**:
+<!-- AMENDED 2026-07-26 after Sortie 23. The original task 2 was itself unsatisfiable for a
+     normalizing writer; taking it literally would look like a writer bug and would not be
+     one. Corrected below. -->
+
 1. Write the title page with **arbitrary keys preserved verbatim** — spelling, casing,
    and original order.
-2. Implement the idempotence test: `parse(write(parse(x))) == parse(x)`.
+2. Implement idempotence as a **fixed point of the writer**:
+   let `y = write(parse(x))`, then assert **`write(parse(y)) == y`**, compared as text.
+   Applying the writer a second time must change nothing.
 3. Do **not** assert `write(parse(x)) == x` — writing normalizes, so that assertion
    fails on any non-canonical input and is the wrong formulation.
+3a. **Do not assert `parse(write(parse(x))) == parse(x)` compared as `LineRecord`s or
+   `ScanResult`s either** — the original wording of this plan, and it is also wrong.
+   Sortie 23 established why: the writer normalizes (`=====` → `===`, `#   ACT` → `# ACT`),
+   which **shifts every subsequent `range`**, so record equality fails on any non-canonical
+   document for reasons that have nothing to do with data loss. If you want a
+   parse-level comparison, compare **element classifications**, not raw records.
 4. Run idempotence across the full Sortie 17 fixture corpus, hostile fixtures included.
 
 **Exit criteria**:
-- [ ] `make test-core` exits 0
-- [ ] The idempotence assertion passes on **every** fixture in the corpus
+- [ ] `make test-core` exits 0, `make test` exits 0, `make test-ios` exits 0
+- [ ] The fixed-point assertion `write(parse(write(parse(x)))) == write(parse(x))` passes
+      on **every** fixture in the corpus
 - [ ] A test asserts `verbsCovered:` writes back with that exact casing and in its
       original position relative to other keys
-- [ ] `grep -rn 'write(parse(' Tests/ | grep -v 'parse(write(parse('` returns no
-      matches — the wrong formulation is not present anywhere
-- [ ] A test asserts idempotence holds for a document whose title page has a duplicate
-      key
+- [ ] A test asserts idempotence holds for a document whose title page has a duplicate key
+- [ ] **A title-page key whose value is empty writes back as key **and** value line — it
+      must not collapse into an absent key.** Sortie 31 made these distinct records with an
+      empty `contentRange` and preserved bytes; Sortie 23 confirmed nothing in the writer
+      skips a record for an empty content range, and `emptyTitlePageValueSurvives` guards it
+- [ ] The identity function must **fail** these tests. At least one fixture used by the
+      idempotence gate must be non-canonical (e.g. `=====`, over-spaced section marker), so
+      a writer that returns its input cannot pass — see the Sortie 23 finding that all three
+      of *its* exit criteria were identity-satisfiable as originally worded
 
 ---
 
