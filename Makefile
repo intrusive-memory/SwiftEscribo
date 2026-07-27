@@ -40,10 +40,20 @@ test-ios:
 
 # Budgets are arm64 budgets. Never read a number from this suite that was not
 # produced by a native arm64 build.
+#
+# And never one that was not produced by an **optimized** build. The other targets
+# here run Debug, which is `-Onone`: measured on this machine, the same cold scan
+# costs 48 ms at -Onone and 3 ms at -O, so a Debug run of this suite reports a
+# 16x pessimism that has nothing to do with what ships and would either fail the
+# budgets outright or force them to be set sixteen times too loose. `-configuration
+# Release` with `ENABLE_TESTABILITY=YES` is the combination that gives an optimized
+# build the `@testable import` the LineIndex linearity case needs.
 test-performance:
 	xcodebuild test -scheme $(SCHEME) \
 	  -destination $(DESTINATION) \
 	  -only-testing:EscriboPerformanceTests \
+	  -configuration Release \
+	  ENABLE_TESTABILITY=YES \
 	  $(ARCH)
 
 clean:

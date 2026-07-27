@@ -133,9 +133,22 @@ let package = Package(
     ),
     // Kept out of the PR-blocking job; timing assertions are too machine
     // dependent to gate a merge on.
+    //
+    // `EscriboCore` only, deliberately. Every budget in here is a *scan-time* budget
+    // measured with no UI in the process: linking `SwiftEscribo` would put AppKit, a font
+    // server, and a text-layout system behind numbers that are supposed to describe a
+    // scanner. The two costs that do live in the editor — the per-change `NSString` →
+    // `String` bridge and the post-IME full rescan — are observed through their Foundation
+    // twins and reported, never asserted.
     .testTarget(
       name: "EscriboPerformanceTests",
       dependencies: ["EscriboCore"],
+      // The assembled ~128 KB screenplay (D-3): `episode_10` + `spanish` + `episode_01`
+      // concatenated three times, committed rather than generated at test time so that a
+      // number from this suite always describes the same bytes. `.copy` for the same
+      // reason as the other two test targets — a resource rule entitled to transform the
+      // file could change the line count the throughput number is divided by.
+      resources: [.copy("Fixtures")],
       swiftSettings: [
         .enableUpcomingFeature("StrictConcurrency")
       ]
