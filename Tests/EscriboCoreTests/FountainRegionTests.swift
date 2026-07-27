@@ -403,6 +403,175 @@ struct FountainRegionTests {
       ])
   }
 
+  // MARK: - The title page — empty values (DL-130)
+
+  /// Grammar deviation 10a, stated as the two shapes Highland and a hand-editor produce.
+  ///
+  /// A lone tab and a lone space are both **empty values** for the key above them, and the
+  /// keys below them are still title page. Every element here was written out by hand from
+  /// the source string above it.
+  @Test("A whitespace-only value line is an empty value, not the end of the title page")
+  func whitespaceOnlyValueIsAnEmptyValue() {
+    // Line 0 carries its value inline, so deviation 11's corroboration is satisfied without
+    // depending on the whitespace-only lines below — this test is about the region's
+    // interior, which is where the rule lives.
+    let source = "Title: A\nEpisode:\n\t\nCredit:\n \nAuthor: STOVAK\n\nINT. HOUSE - DAY"
+    let result = FountainGrammarTests.fullScan(source)
+
+    #expect(
+      result.lineRecords.map(\.element) == [
+        .titlePageKey,  // Title: A
+        .titlePageKey,  // Episode:
+        .titlePageValue,  // \t   <- lone tab
+        .titlePageKey,  // Credit:
+        .titlePageValue,  // " "  <- lone space
+        .titlePageKey,  // Author: STOVAK
+        .blank,  // ""            <- genuinely empty: this is the terminator
+        .sceneHeading,  // INT. HOUSE - DAY
+      ])
+
+    // The keys are all there, in order, and none was swallowed.
+    #expect(
+      Self.texts(.titlePageKey, in: result, of: source) == [
+        "Title", "Episode", "Credit", "Author",
+      ])
+    // Only the two keys that were given values contribute value text. The tab and the
+    // space contribute none — an empty value is empty.
+    #expect(Self.texts(.titlePageValue, in: result, of: source) == ["A", "STOVAK"])
+
+    // The empty values are still *records*, with empty content and the bytes they were
+    // written with. Sortie 24's writer reads exactly this to tell an empty value from an
+    // absent key.
+    let tabLine = result.lineRecords[2]
+    #expect(tabLine.element == .titlePageValue)
+    #expect(tabLine.contentRange.isEmpty)
+    #expect(Self.text(tabLine.range, of: source) == "\t\n")
+    let spaceLine = result.lineRecords[4]
+    #expect(spaceLine.element == .titlePageValue)
+    #expect(spaceLine.contentRange.isEmpty)
+    #expect(Self.text(spaceLine.range, of: source) == " \n")
+
+    // And the whitespace is still spanned — the marker span every continuation line gets,
+    // here covering the whole line because there is nothing else on it.
+    #expect(
+      Self.texts(.titlePageValue, role: .marker, in: result, of: source) == ["\t", " "])
+  }
+
+  /// The narrowness of the fix, asserted directly: only the *empty* line terminates.
+  ///
+  /// This is the assertion that would have to be deleted, not merely edited, to widen
+  /// deviation 10a into "whitespace-only lines are never blank".
+  @Test("A genuinely empty line still ends the title page, whitespace lines and all")
+  func genuinelyEmptyLineStillTerminatesTheTitlePage() {
+    // The document is deliberately built so that the *only* difference between the line
+    // that terminates and the two that do not is whether it carries a space or a tab.
+    let source = "Title: A\n\t\n \n\nBOB\nHello there.\n"
+    let result = FountainGrammarTests.fullScan(source)
+
+    #expect(
+      result.lineRecords.map(\.element) == [
+        .titlePageKey,  // Title: A
+        .titlePageValue,  // \t
+        .titlePageValue,  // " "
+        .blank,  // ""      <- the terminator, and the only one
+        .character,  // BOB — a cue, which it could only be outside the region
+        .dialogue,  // Hello there.
+        .blank,
+      ])
+    #expect(Self.texts(.titlePageKey, in: result, of: source) == ["Title"])
+  }
+
+  /// A whitespace-only line outside the title page is **still blank**, exactly as it was.
+  ///
+  /// The other half of the narrowness. A widened rule would change the dialogue-block
+  /// boundary here — `BOB` under a whitespace-only line would stop being a cue — and would
+  /// do the same to scene headings and every other rule that reads
+  /// `followsNonBlankLine`. Nothing below the title page changed in Sortie 31, and this is
+  /// what says so.
+  @Test("Outside the title page a whitespace-only line is still blank")
+  func whitespaceOnlyLineOutsideTheRegionIsStillBlank() {
+    // No title page at all: line 0 is a slug line.
+    let source = "INT. HOUSE - DAY\n\t \nBOB\nHello there.\n \nINT. YARD - DAY\n"
+    let result = FountainGrammarTests.fullScan(source)
+
+    #expect(
+      result.lineRecords.map(\.element) == [
+        .sceneHeading,  // INT. HOUSE - DAY
+        .blank,  // "\t "        <- whitespace only, and blank
+        .character,  // BOB      <- a cue, which needs a blank line above it
+        .dialogue,  // Hello there.
+        .blank,  // " "          <- whitespace only, and blank
+        .sceneHeading,  // INT. YARD - DAY   <- needs a blank line above it too
+        .blank,
+      ])
+  }
+
+  /// An empty value is distinguishable from an absent key, in the line records alone.
+  ///
+  /// Three documents that a writer must be able to tell apart, and the property that tells
+  /// them apart: whether a `titlePageValue` record exists under the key, and whether its
+  /// content range is empty.
+  @Test("An empty value, a present value, and an absent key are three different records")
+  func emptyValueIsDistinguishableFromAnAbsentKey() {
+    let withEmptyValue = FountainGrammarTests.fullScan("Title: A\nNotes:\n\t\n\nINT. HOUSE - DAY")
+    let withNoValueLine = FountainGrammarTests.fullScan("Title: A\nNotes:\n\nINT. HOUSE - DAY")
+    let withoutTheKey = FountainGrammarTests.fullScan("Title: A\n\nINT. HOUSE - DAY")
+
+    // All three carry the `Notes` key or not, unambiguously.
+    #expect(
+      Self.texts(.titlePageKey, in: withEmptyValue, of: "Title: A\nNotes:\n\t\n\nINT. HOUSE - DAY")
+        == ["Title", "Notes"])
+    #expect(
+      Self.texts(.titlePageKey, in: withoutTheKey, of: "Title: A\n\nINT. HOUSE - DAY") == ["Title"])
+
+    // `Notes:` with a lone-tab value has a value record under it; `Notes:` with nothing
+    // under it has none. That is the difference the writer round-trips on — one re-emits
+    // the tab, the other re-emits a bare key.
+    #expect(withEmptyValue.lineRecords.map(\.element) == [
+      .titlePageKey, .titlePageKey, .titlePageValue, .blank, .sceneHeading,
+    ])
+    #expect(withNoValueLine.lineRecords.map(\.element) == [
+      .titlePageKey, .titlePageKey, .blank, .sceneHeading,
+    ])
+    #expect(withoutTheKey.lineRecords.map(\.element) == [
+      .titlePageKey, .blank, .sceneHeading,
+    ])
+
+    // Both `Notes` records have an empty content range — the key line always does, because
+    // its value is below it — so emptiness of the *key* record is not the discriminator.
+    // The presence of the value record is.
+    #expect(withEmptyValue.lineRecords[1].contentRange.isEmpty)
+    #expect(withNoValueLine.lineRecords[1].contentRange.isEmpty)
+    #expect(withEmptyValue.lineRecords[2].contentRange.isEmpty)
+  }
+
+  /// **DL-136, found in Sortie 31 and deliberately not fixed there.**
+  ///
+  /// Deviation 11's corroboration still reads a whitespace-only second line as no
+  /// corroboration at all, so a document whose **first** key is the empty one opens no
+  /// title page. `Title:` over a lone tab is indistinguishable, on one line of lookahead,
+  /// from `CUT TO:` over a lone tab — there is genuinely no information to decide it — so
+  /// widening the corroboration rule would turn an ordinary transition-led screenplay into
+  /// a title page. Sortie 31's brief is the region's interior and this is its boundary.
+  ///
+  /// Descriptive, like the DL-130 test was: if a later sortie decides the ambiguity, this
+  /// goes red and names itself.
+  @Test("Known defect DL-136: a whitespace-only line does not corroborate a bare first key")
+  func whitespaceOnlyLineDoesNotCorroborateABareFirstKey() {
+    let source = "Title:\n\t\nCredit: Written by\n\nINT. HOUSE - DAY"
+    let result = FountainGrammarTests.fullScan(source)
+
+    // No title page at all — `Title:` is a transition, because it is uppercase-insensitive
+    // only in the region it never opened.
+    #expect(Self.texts(.titlePageKey, in: result, of: source).isEmpty)
+    #expect(result.lineRecords[0].element != .titlePageKey)
+
+    // The same document with any non-whitespace on the second line does open one, which is
+    // what isolates the defect to the corroboration rule rather than to the region.
+    let corroborated = FountainGrammarTests.fullScan("Title:\n\tA\n\nINT. HOUSE - DAY")
+    #expect(corroborated.lineRecords[0].element == .titlePageKey)
+  }
+
   @Test("A title-page value may contain a colon without becoming two keys")
   func onlyTheFirstColonEndsAKey() {
     let source = "Notes: see 3:15 for the reprise\n\nINT. HOUSE - DAY"

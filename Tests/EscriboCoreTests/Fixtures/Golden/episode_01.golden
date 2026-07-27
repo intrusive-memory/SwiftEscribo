@@ -1,20 +1,26 @@
 fixture episode_01
 utf16 27190
 lines 886
-spans 1490
-digest 41661eb44ea25026
+spans 1497
+digest db78ff8460ea5e63
 --- records (count element depth) ---
 1 titlePageKey 0
 1 titlePageValue 0
 1 titlePageKey 0
-1 blank 0
-1 character 0
-6 dialogue 0
-1 blank 0
-1 character 0
-2 dialogue 0
-1 blank 0
-1 action 0
+1 titlePageValue 0
+1 titlePageKey 0
+1 titlePageValue 0
+1 titlePageKey 0
+1 titlePageValue 0
+1 titlePageKey 0
+1 titlePageValue 0
+1 titlePageKey 0
+1 titlePageValue 0
+1 titlePageKey 0
+1 titlePageValue 0
+1 titlePageKey 0
+1 titlePageValue 0
+1 titlePageKey 0
 1 blank 0
 1 pageBreak 0
 1 blank 0
@@ -882,21 +888,20 @@ digest 41661eb44ea25026
 1 blank 0
 1 sceneHeading 0
 --- span kinds (kind/role/style count) ---
-action/content/0 141
+action/content/0 140
 centered/content/0 5
 centered/marker/0 10
-character/content/0 145
+character/content/0 143
 characterExtension/content/0 15
-dialogue/content/0 181
-dialogue/marker/0 4
+dialogue/content/0 173
 pageBreak/marker/0 1
 parenthetical/content/0 59
 sceneHeading/content/0 26
 sceneHeading/marker/0 5
 section/content/0 2
 section/marker/0 2
-text/content/0 888
-titlePageKey/content/0 2
-titlePageKey/marker/0 2
-titlePageValue/content/0 1
-titlePageValue/marker/0 1
+text/content/0 885
+titlePageKey/content/0 9
+titlePageKey/marker/0 9
+titlePageValue/content/0 5
+titlePageValue/marker/0 8

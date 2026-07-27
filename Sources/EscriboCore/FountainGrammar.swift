@@ -140,7 +140,9 @@ private let scenePrefixes: [[UInt16]] = [
 /// 2. **A whitespace-only line is blank**, and therefore opens a block. Fountain's
 ///    "two trailing spaces preserve the line" convention is a *writing* affordance the
 ///    scanner does not need to honor to classify the line, and a writer's stray space
-///    should not silently demote the scene heading below it to action.
+///    should not silently demote the scene heading below it to action. The **one**
+///    exception is the interior of the title page — see deviation 10a, which states why it
+///    is an exception and why it is not widened to here.
 /// 3. **A natural scene heading requires only a preceding blank line, not a following
 ///    one**, and a natural transition likewise. The spec's "…and has a blank line
 ///    following it" is a one-line lookahead, and this grammar now has one — so this is a
@@ -192,10 +194,18 @@ private let scenePrefixes: [[UInt16]] = [
 ///    region: Fountain gives neither construct a blank-line rule, and inventing one would
 ///    make `/*` mean something different from `*/` being absent.
 /// 10. **The title page is a leading region and may begin only on line 0.** It runs to the
-///    first blank line. Keys are **arbitrary** — `verbsCovered:` and `Abstract:` are real
-///    keys in this org's documents (REQUIREMENTS.md § Fountain 2) — and are preserved
-///    verbatim, as a ``SpanKind/titlePageKey`` span covering the key text exactly, with
-///    nothing trimmed, folded, or normalized.
+///    first **genuinely empty** line. Keys are **arbitrary** — `verbsCovered:` and
+///    `Abstract:` are real keys in this org's documents (REQUIREMENTS.md § Fountain 2) —
+///    and are preserved verbatim, as a ``SpanKind/titlePageKey`` span covering the key text
+///    exactly, with nothing trimmed, folded, or normalized.
+/// 10a. **Inside the title page — and only there — a whitespace-only line is an empty value,
+///    not the terminator.** Highland 2 writes an empty title-page value as a line containing
+///    a lone tab, so `EPISODE:` followed by `"\t"` is a key with no value and the keys under
+///    it are still title page (DL-130). Everywhere else in a screenplay a whitespace-only
+///    line is still blank — a widened rule would change dialogue-block boundaries, page
+///    breaks, and cue detection throughout the body — so the two definitions are
+///    deliberately different and the difference is confined to the branch below.
+///    ``GrammarLine/isEmpty`` is the region's terminator test; ``isBlank(_:)`` is the body's.
 /// 11. **A line that could be a title-page key needs corroboration to open one.** `Key:`
 ///    with nothing after it is a title page only if the line below it is an indented
 ///    continuation or another key; otherwise a document opening on the transition `CUT TO:`
@@ -225,8 +235,14 @@ struct FountainGrammar: LineGrammar {
     // title-page value, not a slug line. It can only be open — or opened — here, so this
     // costs one comparison on every other line of every screenplay.
     if state.titlePage == .open || (state.titlePage == .documentStart && opensTitlePage(window)) {
-      if isBlank(line.units) {
-        // The blank line ends the region and is not part of it.
+      // Deviation 10a. The terminator here is `isEmpty` — nothing at all on the line — and
+      // **not** `isBlank`, which also answers true to spaces and tabs. A line of whitespace
+      // under a key is that key's empty value, which is how Highland 2 writes one, and
+      // reading it as the terminator drops every key below it out of the region (DL-130).
+      // This is the one place the two tests are allowed to disagree: outside this branch a
+      // whitespace-only line is blank, exactly as it always was.
+      if line.isEmpty {
+        // The empty line ends the region and is not part of it.
         return withState(blank(line), after: line, state: state, region: 0, titlePage: .closed)
       }
       return withState(titlePageLine(line), after: line, state: state, region: 0, titlePage: .open)
@@ -1049,12 +1065,19 @@ struct FountainGrammar: LineGrammar {
     return offset
   }
 
-  /// One non-blank line inside the title page: a key with its value, or a continuation.
+  /// One non-empty line inside the title page: a key with its value, or a continuation.
+  ///
+  /// A whitespace-only line reaches here rather than being blank (deviation 10a) and falls
+  /// into the continuation branch, where it becomes a ``ElementKind/titlePageValue`` record
+  /// whose content range is **empty** and whose `range` still covers the whitespace it was
+  /// written with. That distinction is the one the writer (Sortie 24) reads: a key with an
+  /// empty value has a record, a key that was never written has none, and the bytes of the
+  /// value line survive either way so a round trip re-emits what Highland wrote.
   private func titlePageLine(_ line: GrammarLine) -> LineScan {
     guard let colonAt = titlePageKeyEnd(line.units) else {
       // Indented, or carrying no colon at all: a continuation of whatever key is above it.
       // The leading indent becomes the line's one marker span, exactly as a parenthetical's
-      // does, and the value is what is left.
+      // does, and the value is what is left — which, for a lone tab, is nothing.
       return markedLine(line, markerEnd: 0, kind: .titlePageValue, element: .titlePageValue)
     }
 

@@ -466,7 +466,8 @@ struct FountainFixtureCorpusTests {
     #expect(sections.map(\.depth) == [1, 2])
   }
 
-  /// **A defect this corpus found, asserted as it actually behaves. Not fixed here.**
+  /// **DL-130, found by this corpus in Sortie 17 and fixed in Sortie 31. This is the
+  /// regression test.**
   ///
   /// `episode_01.fountain` is a real Highland 2 export, and Highland writes a title page
   /// as a key on one line with its value indented on the next — writing an **empty**
@@ -481,51 +482,90 @@ struct FountainFixtureCorpusTests {
   /// \tAct I — The Road
   /// ```
   ///
-  /// `FountainGrammar` reads that whitespace-only line as **blank**, a blank line ends the
-  /// title page, and the seven keys below it fall out of the region. `CREDIT:` is then an
-  /// ALL-CAPS line with a non-blank line under it — a **character cue** — and the author,
-  /// source, contact, draft date, and notes become its **dialogue**. Of nine title-page
-  /// keys in the file, two are recognized.
+  /// Until Sortie 31 `FountainGrammar` read that whitespace-only line as **blank**, a blank
+  /// line ended the title page, and the seven keys below it fell out of the region:
+  /// `CREDIT:` became an ALL-CAPS line with a non-blank line under it — a **character
+  /// cue** — and the author, source, contact, draft date, and notes became its
+  /// **dialogue**. Two of nine keys were recognized. The first embed of this parser is
+  /// Produciesta, whose own fixtures are Highland exports in exactly this shape, so the
+  /// canonical parser was reading a screenplay's author as a line of spoken dialogue.
   ///
-  /// Whether a lone tab should terminate a title page is a real question — the Fountain
-  /// spec says the page ends at a blank line and says nothing about whitespace-only lines
-  /// — but the consequence is not ambiguous: the first embed of this parser is
-  /// Produciesta, whose own fixtures are Highland exports in exactly this shape, and it
-  /// would read a screenplay's author as a line of spoken dialogue.
-  ///
-  /// This test is deliberately **descriptive**, exactly like the DL-120 test in
-  /// `FountainHostileFixtureTests`. Sortie 17 is a fixture sortie and touches no grammar.
-  /// When this is fixed, this test goes red and should be rewritten to assert nine
-  /// `titlePageKey` records — not deleted, and not weakened now to be true either way.
-  @Test("Known defect: a whitespace-only title-page value ends the title page early")
-  func highlandStyleEmptyTitlePageValueTruncatesTheTitlePage() {
+  /// Grammar deviation 10a is the fix: inside the title-page region, and nowhere else, the
+  /// terminator is a **genuinely empty** line. The nine key names below were read off the
+  /// committed bytes by hand, not produced by running the scanner.
+  @Test("The nine Highland title-page keys survive a lone-tab empty value")
+  func highlandStyleEmptyTitlePageValueKeepsTheTitlePageOpen() {
     guard let fixture = fountainCorpus.first(where: { $0.name == "episode_01" }) else {
       Issue.record("episode_01 missing from the corpus")
       return
     }
     let result = FountainFixtures.fullScan(fixture)
 
-    // Nine keys are written in the file — TITLE, EPISODE, CREDIT, AUTHOR, SOURCE,
-    // CONTACT INFO, DRAFT DATE, NOTES, REVISION — counted by reading it.
+    // Nine keys are written in the file, and nine are recognized.
     let keys = result.lineRecords.filter { $0.element == .titlePageKey }
-    #expect(keys.count == 2, "\(keys.count) title-page keys recognized of the nine written")
+    #expect(keys.count == 9, "\(keys.count) title-page keys recognized of the nine written")
 
-    // The exact shape of the truncation, line by line, hand-derived from the bytes above.
+    // Named, and in source order. Read off the file, not off the scanner.
+    #expect(
+      FountainRegionTests.texts(.titlePageKey, in: result, of: fixture.text) == [
+        "TITLE", "EPISODE", "CREDIT", "AUTHOR", "SOURCE",
+        "CONTACT INFO", "DRAFT DATE", "NOTES", "REVISION",
+      ])
+
+    // The exact shape of the region, line by line, hand-derived from the bytes above.
+    // Line 17 (`REVISION:`) is the last key; line 18 is the genuinely empty line that
+    // still ends the region, and `===` under it is a page break in the body again.
     ScanInvariants.expectSameElements(
-      Array(result.lineRecords.prefix(11).map(\.element)),
+      Array(result.lineRecords.prefix(19).map(\.element)),
       [
         .titlePageKey,  // TITLE:
         .titlePageValue,  // \tEVERYBODY WANTS THE SAME THING — EPISODE 1
         .titlePageKey,  // EPISODE:
-        .blank,  // \t  <- the lone tab that ends the region
-        .character,  // CREDIT:      <- should be a title-page key
-        .dialogue,  // \tAct I — The Road
-        .dialogue,  // AUTHOR:      <- should be a title-page key
-        .dialogue,  // \tSTOVAK
-        .dialogue,  // SOURCE:      <- should be a title-page key
-        .dialogue,  // \tadapted from Shakespeare's THE TEMPEST
-        .dialogue,  // CONTACT INFO:  <- should be a title-page key
+        .titlePageValue,  // \t            <- the lone tab: an EMPTY VALUE, not the terminator
+        .titlePageKey,  // CREDIT:         <- a key, not a character cue
+        .titlePageValue,  // \tAct I — The Road
+        .titlePageKey,  // AUTHOR:
+        .titlePageValue,  // \tSTOVAK
+        .titlePageKey,  // SOURCE:
+        .titlePageValue,  // \tadapted from Shakespeare's THE TEMPEST
+        .titlePageKey,  // CONTACT INFO:
+        .titlePageValue,  // \t            <- empty value
+        .titlePageKey,  // DRAFT DATE:
+        .titlePageValue,  // \tJune 3, 2026
+        .titlePageKey,  // NOTES:
+        .titlePageValue,  // \t            <- empty value
+        .titlePageKey,  // REVISION:
+        .blank,  // ""                     <- the genuinely empty line that DOES end it
+        .pageBreak,  // ===
       ],
       "elements", "episode_01 title page")
+
+    // The regression in the form it did the damage: `CREDIT:` is a key and the line under
+    // it is that key's value. The four expectations below are **implied** by the element
+    // list above and cannot fail independently of it — they are here so that a
+    // reintroduction of DL-130 names itself in the failure output rather than showing up
+    // only as a nineteen-element array mismatch. Read them as diagnostics, not evidence.
+    let credit = result.lineRecords[4]
+    #expect(credit.element == .titlePageKey)
+    #expect(credit.element != .character, "CREDIT: must not be a character cue")
+    #expect(result.lineRecords[5].element == .titlePageValue)
+    #expect(result.lineRecords[5].element != .dialogue, "the line under CREDIT: is not speech")
+    // Nothing in the region is dialogue or a cue at all any more.
+    let region = result.lineRecords.prefix(17)
+    #expect(region.allSatisfy { $0.element != .character && $0.element != .dialogue })
+
+    // The three empty values are records, with the bytes they were written with, and are
+    // therefore distinguishable from a key that was never written: `EPISODE`, `CONTACT
+    // INFO`, and `NOTES` each have a value line whose content is empty and whose `range`
+    // still covers the tab. `TITLE` has a value with text; a tenth key has no record at all.
+    for index in [3, 11, 15] {
+      let value = result.lineRecords[index]
+      #expect(value.element == .titlePageValue)
+      #expect(value.contentRange.isEmpty, "line \(index) is an empty value")
+      #expect(
+        FountainRegionTests.text(value.range, of: fixture.text) == "\t\n",
+        "line \(index) keeps the tab it was written with")
+    }
+    #expect(result.lineRecords[1].contentRange.isEmpty == false, "TITLE's value is not empty")
   }
 }
