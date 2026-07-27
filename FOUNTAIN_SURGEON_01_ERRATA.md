@@ -5,7 +5,7 @@ operation: OPERATION FOUNTAIN SURGEON
 iteration: 1
 mission_branch: mission/fountain-surgeon/01
 starting_point_commit: 6b8c3ee3d07ad15afe5d6f44fe7c218db334585e
-state: in-progress
+state: completed
 updated: 2026-07-27
 ---
 
@@ -38,10 +38,12 @@ what was true, how it was settled, and what a re-implementation should do instea
 `SUPERVISOR_STATE.md` remains the authoritative Decisions Log; every `DL-n` here points
 into it. This file is the *index of conflicts* and the errata, nothing else.
 
-**Status when last updated**: 32 of 33 sorties complete, all supervisor-verified. **Sortie 30,
-the last, is in flight.** Tree green at `430ce12`: `make build` 0, `make lint` 0, performance
-**12/5**, core **314/30**, macOS **179/28 + 44/10 + 314/30**, iOS **160/25 + 44/10 +
-314/30**.
+**Status: MISSION COMPLETE.** 33 of 33 sorties, 8 of 8 work units, every one
+supervisor-verified. Tree green at `8c85565`: `make build` 0, `make lint` 0 (66 findings, 0
+errors), performance **13/6**, core **318/31**, macOS **179/28 + 48/11 + 318/31**, iOS
+**160/25 + 48/11 + 318/31**. Verdict rendered in
+`OPERATION_FOUNTAIN_SURGEON_01_BRIEF.md`: **`KEEP`** — see § "On the rollback question"
+below, which is this document's direct answer to the premise it was written under.
 
 ---
 
@@ -136,6 +138,7 @@ This is the largest class by count and the most portable lesson. Each row is a p
 | 13 | DL-164 | 23 | All three of Sortie 23's exit criteria | **Satisfied by the identity function.** The agent did not argue this — it *implemented the copy-the-source writer and ran it*. | Normalization bundled into each gate document so identity now fails all three; probe fired 23 issues across 8 tests. |
 | 14 | DL-165 | 24 | `parse(write(parse(x))) == parse(x)` | **Unsatisfiable.** A normalizing writer shifts every subsequent `range`, so record equality fails on any non-canonical document for reasons that have nothing to do with data loss. Taking it literally looks like a writer bug and is not one. | Amended **before dispatch** to a fixed point of the writer, compared as text. Two missing criteria added at the same time. |
 | 15 | Sortie 24 report | 24 | Four of its own six criteria, as worded | Identity-satisfiable — including the fixed point itself, since **identity is trivially a fixed point and no formulation of that property can exclude it.** | Each test carries a companion assertion identity fails (`once != source`, byte-for-byte non-canonical inputs). The *pairing*, not the property, is what makes the gate able to fail. |
+| 17 | DL-189 | 30 | "A test file importing `EscriboCore` **without** `@testable` still compiles and exercises every documented 1.0 entry point" | **The most expensive one the mission nearly shipped.** It was satisfied by a `PublicSurfaceTests.swift` that *already existed* and never named `FountainWriter` — which REQUIREMENTS.md lists in the same sentence as the scanner entry points. All ~90 writer tests are `@testable`, so **the package would have shipped with its second public entry point marked `internal`, and every gate green.** | Agent found it in its own criteria. Added `PublicWriterTests`; demoting `FountainWriter` now yields **12 compile errors**. |
 | 16 | DL-178 | 28 | "A 1 MB single line indexes within **4×** the time of a 250 KB single line" | **The first criterion in this mission that was too TIGHT rather than too loose.** Over exactly 4× the data a perfectly linear algorithm sits at exactly 4.000, so a bare 4.0 threshold is a coin flip on measurement noise. The agent measured five unmodified runs straddling it (4.005, 4.033, 3.997, 3.948, 3.927); **the supervisor's own two runs read 3.986 and 4.022**, so the literal criterion would have failed a healthy build on the second try. | Widened to 4.0 × 1.10 = 4.4, **loudly** — reasoning in the suite doc comment and the commit message. Sensitivity unharmed: the quadratic mutation reads **15.46×**. |
 
 ### What a re-implementation should do differently
@@ -234,6 +237,25 @@ measurement, not by seniority.
 - **Generalized**: *"a later test will catch this" is itself a claim requiring verification.*
   Two of this mission's named catchers could not catch (this one, and DL-120→DL-131 where
   the wrapped-GLOSA gap turned out worse than described, not merely unfixed).
+
+### 3.35 DL-190 — an agent corrected the supervisor's own probe, and was right — **SETTLED by re-measurement**
+
+- **The supervisor (DL-173)** reported that the one-word DL-170 fix makes
+  `"FADE OUT:\n\t\nThe end.\n"` scan as a title page, and called that "a transition-led
+  screenplay."
+- **Sortie 30** pointed out that **`FADE OUT:` is not a transition in this grammar at all** —
+  Fountain 1.1 recognizes a transition by a literal `TO:` ending, so that document is
+  `.action`. The supervisor had named the wrong hazard class. It pinned the sharp case
+  instead: **`CUT TO:\n\t\nThe end.\n`**, a real transition at document start over a lone
+  tab.
+- **The supervisor re-measured rather than accepting either version.** Under the one-word fix,
+  **both** documents scan as `[titlePageKey, titlePageValue, titlePageValue, blank]` — so the
+  fix eats a genuine `CUT TO:` transition **and swallows the line below it as a title-page
+  value**.
+- **Verdict: DL-173's conclusion stood and was understated; its example was wrong.** Recorded
+  prominently because an agent correcting the supervisor *on the supervisor's own probe* is
+  the strongest evidence in this mission that the falsification standard ran in both
+  directions.
 
 ### 3.4 DL-33 — the agent contradicted the plan and was right
 
@@ -487,5 +509,43 @@ A rollback should not throw away the process findings that worked.
 
 ---
 
-*Maintained by the Mission Supervisor. Updated as later sorties land; superseded by nothing.
-`SUPERVISOR_STATE.md` remains the authoritative Decisions Log.*
+---
+
+## 10. On the rollback question — this document's direct answer
+
+This file was written under the premise that the branch **may be rolled back to zero and
+re-implemented with these learnings**. Now that the mission is complete, the honest answer to
+that premise is: **you do not need the rollback to get the learnings, and the evidence does
+not support paying for one.**
+
+**The case for rolling back**, stated fairly and at its strongest: seventeen exit criteria
+could not fail — roughly one per two sorties — which means the plan was, for much of the
+mission, grading work against tests that certified nothing. That is a serious authoring
+defect, and if it had gone undetected it would be the textbook argument for starting over.
+
+**Why it does not carry.** Every one of the seventeen was **caught inside this mission**, and
+in each case the *shipped code was strengthened by the catch* — the criterion was replaced
+with one that has teeth, and the replacement was mutation-proven. The defect was in the
+plan's wording, not in what was built. Meanwhile the built artifact was falsified
+adversarially at every gate: roughly **35 supervisor probes** and dozens of agent mutations,
+each reverted with a clean tree, three of which fired against work the supervisor had already
+been told was fine. A rollback discards 33 verified sorties in order to re-derive knowledge
+that is written down **in this file** — and §§ 0 and 8 are precisely the inputs a fresh
+`breakdown` would need.
+
+**What a hypothetical iteration 02 should change** — none of which requires discarding
+iteration 01:
+
+1. **Pair every exit criterion with the degenerate implementation that would also satisfy
+   it.** If the author cannot name one, the criterion is unfinished. This single rule
+   addresses the mission's dominant defect.
+2. **Vendor real files from the real downstream consumer in work unit one.** DL-130 shipped
+   undetected for 17 sorties and was found the day a real Highland export entered the repo.
+3. **Give every flagged blocker an owning sortie the day it is raised.** DL-4 waited 29
+   sorties; DL-130 waited 17 and needed a user amendment to get an owner.
+4. **Start at concurrency 1**, and pair every green claim with a test count.
+5. **Wire enforcement in the same sortie that declares the rule** — a lint rule nothing runs
+   is not a guarantee.
+
+*Maintained by the Mission Supervisor. `SUPERVISOR_STATE.md` remains the authoritative
+Decisions Log; `OPERATION_FOUNTAIN_SURGEON_01_BRIEF.md` renders the verdict.*
