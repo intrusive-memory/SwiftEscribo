@@ -1,13 +1,32 @@
 ---
 type: doc
 title: SwiftEscribo — Agent Instructions
-updated: 2026-07-25
+updated: 2026-07-28
 ---
 
 # AGENTS.md
 
 Canonical project context for AI agents (Claude, Gemini, Codex) working in
 SwiftEscribo.
+
+## Mission record
+
+The initial implementation shipped as OPERATION FOUNTAIN SURGEON (33 sorties), released
+as **0.1.0**. Its record is
+archived and worth reading before changing the scanners:
+
+- [Disagreement register and errata](docs/complete/fountain-surgeon-01/FOUNTAIN_SURGEON_01_ERRATA.md)
+  — what the plan got wrong, what the gates cannot see, and every open decision. **Start here.**
+- [Mission brief](docs/complete/fountain-surgeon-01/OPERATION_FOUNTAIN_SURGEON_01_BRIEF.md)
+  — hard discoveries and the `KEEP` verdict.
+- [Requirements](docs/complete/fountain-surgeon-01/REQUIREMENTS.md) ·
+  [Execution plan](docs/complete/fountain-surgeon-01/EXECUTION_PLAN.md) ·
+  [Decisions log](docs/complete/fountain-surgeon-01/SUPERVISOR_STATE.md) (190 entries) ·
+  [Test cleanup report](docs/complete/fountain-surgeon-01/TEST_CLEANUP_REPORT.md)
+
+**The one thing to know before touching a grammar**: the `incrementalScan == fullScan`
+gate is blind to grammar state *omission* — it passed 288/288 against a Fountain grammar
+that recognized no character cues at all. No grammar claim may rest on a green gate.
 
 ## What this package is
 
@@ -18,7 +37,7 @@ Two things, in one repo, deliberately:
    a new one exists rather than a fix to an old one.
 2. **A stylized Markdown/Fountain editor** for SwiftUI.
 
-**1.0 is standalone.** No dependency on, coordination with, or API accommodation for
+**This package is standalone.** No dependency on, coordination with, or API accommodation for
 `SwiftCompartido` or any other package in the collection. If a task seems to call for
 one, it is out of scope — say so rather than building a seam for it.
 
@@ -29,13 +48,15 @@ one, it is out of scope — say so rather than building a seam for it.
   old parser's regexes are what this package exists to replace; reintroducing them
   defeats the purpose and cannot meet the per-keystroke performance budget.
 - **Never `swift build` / `swift test`.** Use `make` targets (XcodeBuildMCP locally,
-  `xcodebuild` in CI). Run `make help`.
+  `xcodebuild` in CI). Run `make help`. **`make lint` runs SwiftLint and is read-only;
+  `make format` is the in-place formatter.** Pre-commit is `make format && make lint`.
 - **Apple Silicon only — always pass the arch.** Every `xcodebuild` invocation pins
   `arch=arm64` in the destination *and* `ARCHS=arm64`; never let it infer. Intel and
   Rosetta are out of scope. The `Makefile` exposes this as `$(ARCH)` — append it to
   any new target you add. Performance numbers from a non-native build are worthless.
-- **`EscriboCore` must not import SwiftUI, AppKit, or UIKit.** Foundation and
-  CoreText only. This is enforced by review; breaking it breaks CLI consumers.
+- **`EscriboCore` must not import SwiftUI, AppKit, or UIKit.** Foundation only — and as
+  shipped it imports **nothing at all**. This is enforced by the `no_ui_imports_in_core`
+  SwiftLint rule in CI, not by review; breaking it breaks CLI consumers.
 - **macOS and iOS are peers; visionOS and watchOS are out of scope.** Produciesta
   (macOS) is the first embed, but the coordinator, styler, and geometry layer stay
   platform-neutral and both Representables are built together. `NSTextView` and
@@ -45,8 +66,14 @@ one, it is out of scope — say so rather than building a seam for it.
   differential oracle. SwiftPM prunes it from downstream consumers *only* because no
   shipping target references it — verified 2026-07-25 on Xcode 27.0 / Swift 6.4. Add
   one `import Markdown` to `EscriboCore` or `SwiftEscribo` and the zero-dependency
-  charter breaks silently, with no error. A CI guard resolves a throwaway consumer
-  package and fails if the pin appears. Never move it out of the test target.
+  charter breaks silently, with no error. **The guard is the `no_markdown_import_in_sources`
+  SwiftLint rule**, run by the `Lint` CI job via `make lint` — not a throwaway consumer
+  package, which had no published version to resolve against when the rule was written
+  (see the execution plan's D-2). Proven to fire: `import Markdown` in a shipping target
+  makes `make lint` exit 2. Never move it out of the test target.
+  **Now that 0.1.0 is published, the consumer-package check is buildable** and would
+  catch the charter breaking as a *resolution* fact rather than a lint rule. Worth
+  adding as a second, independent guard — the lint rule stays either way.
 - **Undo does not work on iOS yet** — deliberate, deferred. macOS has it. Do not
   solve macOS undo with an AppKit-shaped seam UIKit cannot later adopt.
 - **Line records must be lossless for the writer.** Never discard forced-element
@@ -185,7 +212,7 @@ PR-blocking job because wall-clock budgets are machine dependent.
 
 ## Scope
 
-1.0 is a standalone package: the two scanners, the writer, and the editor. Adoption by
+SwiftEscribo is a standalone package: the two scanners, the writer, and the editor. Adoption by
 anything else in the collection is a later decision made against a shipped API, and
 must not influence the design now. Design the public API for its own users.
 

@@ -1,0 +1,97 @@
+name: Performance
+
+# **Never on a pull request.** Wall-clock budgets are machine dependent, and a shared
+# runner is exactly the machine that makes them so: a gate that goes red because GitHub
+# handed out a busy host is a gate that gets ignored and then deleted. The PR-blocking
+# job (`tests.yml`) runs with `-skip-testing:EscriboPerformanceTests` for the same reason.
+#
+# This workflow exists so the numbers still get *taken* — on every push to a long-lived
+# branch, nightly, and on demand — and land in a log a human can read. The suite prints a
+# `cold-scan: <N> ms` line on every run; a regression is meant to be visible there long
+# before it reaches the 50 ms ceiling that is actually asserted.
+on:
+  push:
+    branches: [main, development]
+  schedule:
+    # 07:00 UTC daily. Timing drift shows up as a trend across runs, which needs runs on
+    # a fixed cadence rather than only when someone happens to push.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  performance-macos:
+    name: Scan-time budgets on macOS
+    runs-on: macos-26
+
+    # DL-61. A `fontd` hang on a macOS runner produces a six-hour stall, not a failure —
+    # the job never reports, and nothing distinguishes "wedged" from "slow" without a
+    # deadline. The suite itself runs in under two seconds; the build is what takes the
+    # time, and 30 minutes is several times the worst observed cold build.
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Show Swift version
+        run: swift --version
+
+      # `SwiftEscribo-Package` — not `SwiftEscribo`. SwiftPM's per-product scheme has no
+      # test action.
+      #
+      # arm64 is pinned twice on purpose and both spellings are load-bearing:
+      # `arch=arm64` selects the destination, `ARCHS=arm64` selects what is compiled. A
+      # universal or x86_64 build produces numbers for a machine nobody ships on, and it
+      # produces them silently.
+      #
+      # `-configuration Release` is not optional here either. Debug is `-Onone`: the same
+      # cold scan measures 48 ms unoptimized and 5 ms optimized on the same hardware, so a
+      # Debug run of this suite would report a 10x pessimism that describes the compiler
+      # rather than the scanner. `ENABLE_TESTABILITY=YES` is what lets an optimized build
+      # still satisfy the `@testable import` the LineIndex linearity case needs.
+      - name: Build (Release, arm64)
+        run: |
+          xcodebuild build \
+            -scheme SwiftEscribo-Package \
+            -destination 'platform=macOS,arch=arm64' \
+            -configuration Release \
+            ENABLE_TESTABILITY=YES \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES
+
+      - name: Performance suite
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -scheme SwiftEscribo-Package \
+            -destination 'platform=macOS,arch=arm64' \
+            -only-testing:EscriboPerformanceTests \
+            -configuration Release \
+            ENABLE_TESTABILITY=YES \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            | tee performance.log
+
+      # Every measured number in one block at the end of the log, so reading a run does
+      # not mean scrolling through a build transcript. The `grep` is anchored on the
+      # `name: <N> ms` shape the suite prints; if the suite ever stops printing, this step
+      # fails rather than reporting an empty table.
+      - name: Report the numbers
+        run: |
+          echo '### Scan-time measurements' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^(fixture-|cold-scan|inline-edit|edit-|paste-|markdown-|lookahead-|dl[0-9]|lineindex)' \
+            performance.log | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the raw log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: performance-log
+          path: performance.log
+          retention-days: 30

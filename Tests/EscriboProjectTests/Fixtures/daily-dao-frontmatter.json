@@ -1,0 +1,41 @@
+{
+  "audioDir": "audio",
+  "author": "Tom Stovall",
+  "cast": [
+    {
+      "character": "NARRATOR",
+      "voicePrompt": "Deep authoritative British baritone. Warm, commanding documentary narrator. Rich resonance, measured pacing.",
+      "voices": {
+        "voxalta": "voices/NARRATOR.vox"
+      }
+    },
+    {
+      "character": "UNCLE FU",
+      "voicePrompt": "Seasoned Chinese male voice with low, mellow timbre. Reads classical Chinese source text.",
+      "voices": {
+        "voxalta": "uncle_fu"
+      }
+    }
+  ],
+  "created": "2025-11-21T20:06:59Z",
+  "description": "Daily readings from the Tao De Jing, the ancient Chinese philosophical text attributed to Lao Tsi, exploring the nature of the Tao and the art of living in harmony.",
+  "episodes": 81,
+  "episodesDir": "episodes",
+  "exportFormat": "m4a",
+  "filePattern": "*.fountain",
+  "genre": "Philosophy",
+  "season": 1,
+  "tags": [
+    "taoism",
+    "philosophy",
+    "meditation",
+    "chinese-philosophy",
+    "wisdom",
+    "spirituality"
+  ],
+  "title": "Daily Dao - Tao De Jing Podcast",
+  "tts": {
+    "model": "1.7b"
+  },
+  "type": "project"
+}

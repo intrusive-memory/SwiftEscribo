@@ -1,0 +1,34 @@
+fixture malformed_glosa
+utf16 194
+lines 17
+spans 50
+digest 93dfa96239d06a95
+--- records (count element depth) ---
+1 sceneHeading 0
+1 blank 0
+1 note 0
+1 blank 0
+1 note 0
+1 blank 0
+1 note 0
+1 blank 0
+1 note 0
+1 blank 0
+1 note 0
+1 blank 0
+1 note 0
+1 blank 0
+1 character 0
+1 dialogue 0
+1 blank 0
+--- span kinds (kind/role/style count) ---
+character/content/0 1
+dialogue/content/0 1
+glosaAttributeName/content/0 1
+glosaAttributeValue/content/0 1
+glosaPunctuation/marker/0 9
+glosaTag/content/0 3
+note/content/0 3
+note/marker/0 12
+sceneHeading/content/0 1
+text/content/0 18

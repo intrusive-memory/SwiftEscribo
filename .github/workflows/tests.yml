@@ -13,6 +13,23 @@ jobs:
     name: Test on macOS
     runs-on: macos-26
 
+    # DL-180 / DL-61. Neither job here declared a deadline, so a hang consumed the
+    # GitHub Actions default of six hours per job instead of failing.
+    #
+    # The hang is not hypothetical. Font resolution has wedged `make test` three times
+    # during this mission — the run sits past ten minutes with an orphaned `xctest`
+    # process and then completes in seconds once that process is killed. In a gating
+    # job a hang is strictly worse than a failure: a failure reports, a hang holds the
+    # PR open and tells nobody anything.
+    #
+    # 30 minutes, matching `performance.yml`, which set that bound against the worst
+    # cold build observed on this runner image. These numbers are deliberately loose:
+    # a timeout is a deadlock detector, not a performance budget, and the cost of
+    # setting one too tight (flaky red on a busy shared runner) is worse than the cost
+    # of setting it too loose (a wedge caught in 30 minutes instead of 15). The tests
+    # themselves run in seconds; the build is the whole of the elapsed time.
+    timeout-minutes: 30
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -20,13 +37,18 @@ jobs:
       - name: Show Swift version
         run: swift --version
 
+      # `SwiftEscribo-Package` — not `SwiftEscribo`. SwiftPM's per-product
+      # scheme has no test action, so `xcodebuild test -scheme SwiftEscribo`
+      # fails with "not currently configured for the test action". Both steps
+      # use the same scheme so build and test cannot drift.
+      #
       # arm64 is pinned explicitly on every invocation. Apple Silicon is the
       # only supported arch; an unpinned destination can pick up x86_64 and
       # build something nobody ships.
       - name: Build
         run: |
           xcodebuild build \
-            -scheme SwiftEscribo \
+            -scheme SwiftEscribo-Package \
             -destination 'platform=macOS,arch=arm64' \
             ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=YES
@@ -36,7 +58,7 @@ jobs:
       - name: Test
         run: |
           xcodebuild test \
-            -scheme SwiftEscribo \
+            -scheme SwiftEscribo-Package \
             -destination 'platform=macOS,arch=arm64' \
             -skip-testing:EscriboPerformanceTests \
             ARCHS=arm64 \
@@ -46,17 +68,21 @@ jobs:
     name: Test on iOS Simulator
     runs-on: macos-26
 
+    # DL-180 / DL-61, as above. Longer than the macOS job because this one also boots
+    # an iPhone 17 simulator before it can run anything, and a cold first boot on a
+    # shared runner can take minutes of the budget on its own — and DL-61's font
+    # resolution hang is a *simulator-adjacent* failure, so this is the job most likely
+    # to be the one that wedges. 45 for the same reason 30 is used above: far above any
+    # healthy run, far below the six-hour default that makes a hang invisible.
+    timeout-minutes: 45
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # `make test-ios`, not a spelled-out xcodebuild, for the same reason the lint job
+      # invokes `make lint`: a duplicated destination string drifts. This job failed on its
+      # very first run because the workflow pinned OS=26.1 in one place and the Makefile
+      # pinned it in another, and only one of them was ever run locally. One definition now.
       - name: Test
-        run: |
-          xcodebuild test \
-            -scheme SwiftEscribo \
-            -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.1' \
-            -skip-testing:EscriboPerformanceTests \
-            -skipPackagePluginValidation \
-            ARCHS=arm64 \
-            ONLY_ACTIVE_ARCH=YES \
-            COMPILER_INDEX_STORE_ENABLE=NO
+        run: make test-ios

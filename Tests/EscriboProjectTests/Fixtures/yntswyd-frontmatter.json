@@ -1,0 +1,428 @@
+{
+  "audioDir": "audio",
+  "author": "Tom Stovall",
+  "cast": [
+    {
+      "character": "NARRATOR",
+      "gender": "M",
+      "voiceDescription": "Warm, mid-range male voice. Steady pacing with an engaging storytelling tone. Hint of dark humor and irony beneath a smooth, audiobook-quality delivery.",
+      "voices": {
+        "voxalta": "voices/NARRATOR.vox"
+      }
+    },
+    {
+      "arc": "Begins the chapter as someone deeply broken by past trauma — a victim of sexual assault orchestrated by his own mother — and ends it having crossed an emotional line into deliberate, resolved killer, conspiring with Killian to murder Sylvia.",
+      "character": "BERNARD",
+      "gender": "M",
+      "voiceDescription": "40s male. Nervous, self-conscious tenor with repressed anger underneath forced pleasantness. Tentative and vulnerable in normal speech, shifts to bitter and sharp when sarcastic. Slightly higher pitch that drops when sardonic. Capable of quiet intensity and emotional breakdowns.",
+      "voices": {
+        "voxalta": "voices/BERNARD.vox"
+      }
+    },
+    {
+      "arc": "Starts running a marriage advice empire while his actual marriage quietly implodes, and ends it in a bathroom conspiring with Bernard to murder both Mason and Sylvia — having strategically maneuvered Bernard into becoming his accomplice.",
+      "character": "KILLIAN",
+      "gender": "M",
+      "voiceDescription": "40s male. Smooth, controlled baritone with performative charm masking cold calculation. Deliberate pacing, polished diction like a media personality who is always on camera. Confident, persuasive, slightly slick. Can shift to panicked desperation when plans unravel.",
+      "voices": {
+        "voxalta": "voices/KILLIAN.vox"
+      }
+    },
+    {
+      "arc": "Begins believing she is protecting Bernard through surveillance born from past trauma, and ends imprisoned by her own son in psychiatric care — her control inverted into victimhood — finally learning she unknowingly facilitated his sexual assault years ago.",
+      "character": "SYLVIA",
+      "gender": "F",
+      "voiceDescription": "70s female. Commanding, imperious alto that fills a room. Loud and declarative when she wants something, clipped and dismissive otherwise. Sharp tongue with no filter. Domineering mother energy. Wears excessive jewelry, speaks with the authority of someone who controls everything around her.",
+      "voices": {
+        "voxalta": "voices/SYLVIA.vox"
+      }
+    },
+    {
+      "arc": "Starts as a weight-loss success story struggling against the hollow celebrity his husband demands of him, and ends physically deteriorating, financially trapped, and ready to debase himself publicly for money he doesn't actually control.",
+      "character": "MASON",
+      "gender": "M",
+      "voiceDescription": "40s male. Earnest, slightly tired tenor. Warm and friendly when relaxed, monotone and disinterested when forced to perform. Increasingly desperate as his situation deteriorates. A defeated optimist clinging to dignity.",
+      "voices": {
+        "voxalta": "voices/MASON.vox"
+      }
+    },
+    {
+      "arc": "Begins as a conniving con man being hunted by ruthless creditors, and ends unexpectedly moved by Bernard's raw musical confession — his defenses stripped away — before being violently captured by the Pussy Posse.",
+      "character": "MICKEY BLAZE",
+      "gender": "M",
+      "voiceDescription": "40s male. Fast-talking, energetic mid-range con artist voice. Rapid pacing, enthusiastic, slightly breathless pitch-man energy. Used car salesman meets tech startup founder. Drops the bravado when cornered, voice gets smaller, more genuine, almost pathetic.",
+      "voices": {
+        "voxalta": "voices/MICKEY_BLAZE.vox"
+      }
+    },
+    {
+      "arc": "Begins as a shrewd businesswoman teaching Sylvia gentleness through ceramics, and ends the chapter ruthlessly leveraging Mickey's debt and Mason's desperation to orchestrate her desired business outcomes — then abandoning Mickey to rescue Sylvia from psychiatric commitment.",
+      "character": "MEAN JEAN",
+      "gender": "F",
+      "voiceDescription": "50s female. Low, authoritative contralto. Deliberate, measured speech where every word is intentional. Dry, cutting wit. Runs the room without raising her voice. Think a woman who has foreclosed on dreams and buildings alike without losing sleep.",
+      "voices": {
+        "voxalta": "voices/MEAN_JEAN.vox"
+      }
+    },
+    {
+      "arc": "Begins auditing the tangled financial wreckage left by every other character, and ends as the revealed architect of justice — having weaponized legal mechanisms to solve the murders, secure assets, and build a real incubator for vulnerable women while putting Bernard in prison.",
+      "character": "PATRICIA",
+      "gender": "F",
+      "voiceDescription": "40s Latina female. Precise, clipped professional diction. Cool and controlled with almost no wasted words. Elite attorney efficiency. Severe 'Baptist mom' bob energy in vocal delivery. Occasional flash of warmth beneath the clinical exterior. Almost smiles.",
+      "voices": {
+        "voxalta": "voices/PATRICIA.vox"
+      }
+    },
+    {
+      "arc": "Begins as an idealistic defense lawyer uncomfortable with his morally compromised client Killian, and ends having struck a pragmatic deal with opposing counsel Patricia — constructing a self-serving narrative that protects his client at the cost of his own ethical lines.",
+      "character": "DONNIE",
+      "gender": "M",
+      "voiceDescription": "50s male. Same voice as DONNIE LANIER. Relaxed Southern-tinged delivery masking a razor-sharp legal mind. Folksy warmth, unhurried pacing. Country lawyer who has seen everything. Prone to tangential storytelling that turns out to be strategically deliberate.",
+      "voices": {
+        "voxalta": "voices/DONNIE.vox"
+      }
+    },
+    {
+      "character": "EDDIE",
+      "gender": "M",
+      "voiceDescription": "20s male. Eager, fast-talking, slightly anxious energy. Young and trying to prove himself. Latino inflection. Rapid-fire note-taking speech pattern. Enthusiastic but hasn't learned to play it cool yet. Eats while talking.",
+      "voices": {
+        "voxalta": "voices/EDDIE.vox"
+      }
+    },
+    {
+      "character": "AUDITOR CHEN",
+      "gender": "M",
+      "voiceDescription": "40s Asian-American male. Deadpan, methodical government professional voice. Starts composed and clinical, becomes increasingly incredulous as the audit gets stranger. Dry delivery that occasionally cracks with disbelief. Ends with genuine moral outrage.",
+      "voices": {
+        "voxalta": "voices/AUDITOR_CHEN.vox"
+      }
+    },
+    {
+      "character": "MARGARET",
+      "gender": "F",
+      "voiceDescription": "40s-50s female. Professional hospital social worker. Clinical but not cold. Direct medical-legal vocabulary delivered with practiced neutrality. Efficient, compassionate in a detached institutional way.",
+      "voices": {
+        "voxalta": "voices/MARGARET.vox"
+      }
+    },
+    {
+      "character": "MADISSYN",
+      "gender": "F",
+      "voiceDescription": "20s female. Excitable TikTok influencer energy. High-pitched, fast-talking with dramatic reactions. Valley girl inflection with performative concern. Films everything, narrates her life to an invisible audience.",
+      "voices": {
+        "voxalta": "voices/MADISSYN.vox"
+      }
+    },
+    {
+      "character": "THE PROMOTER",
+      "gender": "M",
+      "voiceDescription": "50s male. Deep, smooth, predatory voice with quiet authority and unsettling calm. Expensive taste in every syllable. Speaks softly because he doesn't need to be loud. Menacing undertone beneath surface charm.",
+      "voices": {
+        "voxalta": "voices/THE_PROMOTER.vox"
+      }
+    },
+    {
+      "character": "VIOLET",
+      "gender": "F",
+      "voiceDescription": "30s-40s female. Tough, low-pitched, commanding. Leader of the Pussy Posse enforcers. Intimidating presence in voice alone. Few words, each one a veiled threat. Sleeveless, tattooed energy in vocal delivery.",
+      "voices": {
+        "voxalta": "voices/VIOLET.vox"
+      }
+    },
+    {
+      "character": "DAISY",
+      "gender": "F",
+      "voiceDescription": "30s female. Firm, matter-of-fact enforcer energy without unnecessary drama. Pussy Posse member. Professional muscle. Polite but unmistakably dangerous.",
+      "voices": {
+        "voxalta": "voices/DAISY.vox"
+      }
+    },
+    {
+      "character": "ROSIE",
+      "gender": "F",
+      "voiceDescription": "30s female. Direct, minimal words. Tough Pussy Posse enforcer. Speaks only when necessary, lets actions do the talking.",
+      "voices": {
+        "voxalta": "voices/ROSIE.vox"
+      }
+    },
+    {
+      "character": "DOG WALKER",
+      "gender": "M",
+      "voiceDescription": "50s male. Ordinary, pleasant voice that shifts to panicked urgency when discovering a body on a jogging trail. Average suburban male voice, slightly out of breath.",
+      "voices": {
+        "voxalta": "voices/DOG_WALKER.vox"
+      }
+    },
+    {
+      "character": "THERAPIST",
+      "gender": "F",
+      "voiceDescription": "40s-50s female. Calm, professional, warm. Measured pacing with gentle probing tone. Therapeutic voice that creates space for disclosure. Never pushes too hard.",
+      "voices": {
+        "voxalta": "voices/THERAPIST.vox"
+      }
+    },
+    {
+      "character": "DEALER",
+      "gender": "M",
+      "voiceDescription": "30s male. Casual, street-smart, low-key. Matter-of-fact about his trade. Recognizes a returning customer with a mix of familiarity and mild concern. Speaks from a parked car.",
+      "voices": {
+        "voxalta": "voices/DEALER.vox"
+      }
+    },
+    {
+      "character": "ANNOUNCER",
+      "gender": "M",
+      "voiceDescription": "50s male. Classic cabaret MC voice. Warm, projecting baritone with theatrical flair. Old-school showman who commands the spotlight and knows how to work a crowd.",
+      "voices": {
+        "voxalta": "voices/ANNOUNCER.vox"
+      }
+    },
+    {
+      "character": "TROLLING MOURNER",
+      "gender": "M",
+      "voiceDescription": "40s-50s male. Gossipy, inappropriately oversharing tone. Completely oblivious to how his words land. Earnest sincerity while saying the most tactless things at a funeral.",
+      "voices": {
+        "voxalta": "voices/TROLLING_MOURNER.vox"
+      }
+    },
+    {
+      "character": "EDITOR",
+      "gender": "M",
+      "voiceDescription": "40s male. Tired, pragmatic, dry delivery. Post-production professional who has seen too many bad videos. Sighs deeply before speaking. Blunt but not unkind.",
+      "voices": {
+        "voxalta": "voices/EDITOR.vox"
+      }
+    },
+    {
+      "character": "FRONT DESK ASSISTANT",
+      "gender": "F",
+      "voiceDescription": "20s female. Perky, rehearsed receptionist voice with slightly fake cheerfulness. Playing a role in Mickey's staged office. Breaks character to reveal a bored actor underneath.",
+      "voices": {
+        "voxalta": "voices/FRONT_DESK_ASSISTANT.vox"
+      }
+    },
+    {
+      "character": "ASSISTANT #2",
+      "gender": "M",
+      "voiceDescription": "20s-30s male. Bored actor playing the role of a busy office assistant in Mickey's fake office. Can break character to be sarcastic and cutting. Has done this bit for Mickey too many times.",
+      "voices": {
+        "voxalta": "voices/ASSISTANT_2.vox"
+      }
+    },
+    {
+      "character": "STEVE",
+      "gender": "M",
+      "voiceDescription": "30s-40s male. Flirtatious, casual gay male voice. Playful and teasing tone. Part of a couple but has obvious chemistry with Mason.",
+      "voices": {
+        "voxalta": "voices/STEVE.vox"
+      }
+    },
+    {
+      "character": "JEDI MASTER",
+      "gender": "M",
+      "voiceDescription": "20s-30s male. Earnest, naive, slightly breathy with wonder. Guileless and trusting. Chubby guy in a robe at a convention who believes everything he hears. Easily amazed.",
+      "voices": {
+        "voxalta": "voices/JEDI_MASTER.vox"
+      }
+    },
+    {
+      "character": "DANNY XHING",
+      "gender": "M",
+      "voiceDescription": "40s male. Stoic, measured, deliberate delivery. Few words, each one precise. Poker player composure. Unflappable.",
+      "voices": {
+        "voxalta": "voices/DANNY_XHING.vox"
+      }
+    },
+    {
+      "character": "DALE WATSON",
+      "gender": "M",
+      "voiceDescription": "40s-50s male. Gruff, impatient, direct. No-nonsense blue collar energy. Beer-drinking card player who doesn't suffer fools. Occasional profanity delivered flatly.",
+      "voices": {
+        "voxalta": "voices/DALE_WATSON.vox"
+      }
+    },
+    {
+      "character": "DESERT COUGAR",
+      "gender": "F",
+      "voiceDescription": "50s-60s female. Warm, husky voice with a slight Southern drawl. Flirtatious, uses pet names like sugar bear and honey. Seasoned bar regular who has seen it all and comments on everything.",
+      "voices": {
+        "voxalta": "voices/DESERT_COUGAR.vox"
+      }
+    },
+    {
+      "character": "WAITER",
+      "gender": "M",
+      "voiceDescription": "20s male. Young, flirtatious, service-industry polished. Smooth delivery with a hint of performance. Works at a gay restaurant in Palm Springs.",
+      "voices": {
+        "voxalta": "voices/WAITER.vox"
+      }
+    },
+    {
+      "character": "HOSTESS",
+      "gender": "F",
+      "voiceDescription": "40s-50s female. Casual, world-weary nightclub hostess. Uses hon freely. Seen a thousand acts come and go. Two-drink-minimum enforcement energy.",
+      "voices": {
+        "voxalta": "voices/HOSTESS.vox"
+      }
+    },
+    {
+      "character": "COMIC",
+      "gender": "M",
+      "voiceDescription": "30s male. Nervous, bombing comedian voice. Shaky confidence with bad timing. Desperate for laughs. Named Derek.",
+      "voices": {
+        "voxalta": "voices/COMIC.vox"
+      }
+    },
+    {
+      "character": "SIRI VOICE",
+      "gender": "F",
+      "voiceDescription": "Digital voice assistant. Flat, robotic, synthesized phone assistant tone. Emotionless automated responses. Misinterprets voice commands.",
+      "voices": {
+        "voxalta": "voices/SIRI_VOICE.vox"
+      }
+    },
+    {
+      "character": "TRAINER",
+      "gender": "M",
+      "voiceDescription": "30s-40s male. Drill-sergeant energy. Loud, aggressive, motivational barking. High energy reality TV fitness trainer. Yells HEALTH IS WEALTH on repeat.",
+      "voices": {
+        "voxalta": "voices/TRAINER.vox"
+      }
+    },
+    {
+      "character": "TJ",
+      "gender": "M",
+      "voiceDescription": "50s male. Kind but direct doctor voice. Calm, clinical, compassionate. Delivers bad medical news with practiced gentleness. Reality TV show physician named Trapper John MD.",
+      "voices": {
+        "voxalta": "voices/TJ.vox"
+      }
+    },
+    {
+      "character": "LOAN OFFICER",
+      "gender": "F",
+      "voiceDescription": "50s female. Professional, sympathetic but by-the-book banking voice. Measured tone delivering bad financial news. Uncomfortable but procedurally correct.",
+      "voices": {
+        "voxalta": "voices/LOAN_OFFICER.vox"
+      }
+    },
+    {
+      "character": "DR. KRISHNAN",
+      "gender": "M",
+      "voiceDescription": "40s-50s male. Calm, professional therapist or psychiatrist voice. Slightly concerned but clinical. Tries to redirect paranoid thinking with gentle authority. Phone-only presence.",
+      "voices": {
+        "voxalta": "voices/DR._KRISHNAN.vox"
+      }
+    },
+    {
+      "character": "OFFICER MARTINEZ",
+      "gender": "M",
+      "voiceDescription": "30s-40s male. Professional law enforcement voice. Clipped, factual, cop-on-the-radio tone. Delivers information without editorializing.",
+      "voices": {
+        "voxalta": "voices/OFFICER_MARTINEZ.vox"
+      }
+    },
+    {
+      "character": "REPORTER",
+      "gender": "M",
+      "voiceDescription": "30s-40s male. Persistent, professional journalist voice. Quick and probing. Politely aggressive in pursuit of a quote. Desert Sun newspaper energy.",
+      "voices": {
+        "voxalta": "voices/REPORTER.vox"
+      }
+    },
+    {
+      "character": "YOLANDA",
+      "gender": "F",
+      "voiceDescription": "40s female. Loud, passionate Latina voice. Hot sauce entrepreneur with a fiery temper. Yells across rooms. Competitive, combative, unapologetically intense.",
+      "voices": {
+        "voxalta": "voices/YOLANDA.vox"
+      }
+    },
+    {
+      "character": "JESSICA",
+      "gender": "F",
+      "voiceDescription": "30s female. Combative, defensive voice. Salsa entrepreneur and Yolanda's rival. Accusatory and quick to escalate. Matches Yolanda's intensity.",
+      "voices": {
+        "voxalta": "voices/JESSICA.vox"
+      }
+    },
+    {
+      "character": "INFLUENCER #1",
+      "gender": "F",
+      "voiceDescription": "20s female. Social media influencer energy. Upbeat, performative, perpetually recording content. Asks surface-level questions with practiced enthusiasm.",
+      "voices": {
+        "voxalta": "voices/INFLUENCER_1.vox"
+      }
+    },
+    {
+      "character": "ASSISTANT",
+      "gender": "F",
+      "voiceDescription": "20s female. Neutral, professional, brief and efficient. Patricia's assistant in Chapter 8. Delivers information without emotion.",
+      "voices": {
+        "voxalta": "voices/ASSISTANT.vox"
+      }
+    },
+    {
+      "character": "OLDER WOMAN #1",
+      "gender": "F",
+      "voiceDescription": "60s-70s female. Skeptical, dry wit. Crafting class regular at Mean Jean's ceramics shop. One-liner delivery.",
+      "voices": {
+        "voxalta": "voices/OLDER_WOMAN_1.vox"
+      }
+    },
+    {
+      "character": "GAY MAN #1",
+      "gender": "M",
+      "voiceDescription": "40s-50s male. Warm, encouraging, slightly campy. Uses terms of endearment like honey and sweet pea. Ceramics class regular. Supportive community energy.",
+      "voices": {
+        "voxalta": "voices/GAY_MAN_1.vox"
+      }
+    },
+    {
+      "character": "BYSTANDER",
+      "gender": "M",
+      "voiceDescription": "30s-40s male. Frustrated, trying to help during a street emergency. Generic concerned citizen. Single urgent line.",
+      "voices": {
+        "voxalta": "voices/BYSTANDER.vox"
+      }
+    },
+    {
+      "character": "PHOTOGRAPHER",
+      "gender": "M",
+      "voiceDescription": "30s male. Rushed, apologetic, late to the event. Brief, harried energy. One line and done.",
+      "voices": {
+        "voxalta": "voices/PHOTOGRAPHER.vox"
+      }
+    },
+    {
+      "character": "WOMAN'S VOICE",
+      "gender": "F",
+      "voiceDescription": "40s female. Angry, yelling off-screen. Likely Yolanda. Should match Yolanda's vocal quality. Single furious outburst about hot sauce vs salsa.",
+      "voices": {
+        "voxalta": "voices/WOMAN'S_VOICE.vox"
+      }
+    }
+  ],
+  "created": "2025-11-20T01:19:07Z",
+  "description": "A dark comedy thriller set in Palm Springs following an intricate murder-swap plot between Bernard and Killian, spiraling through the interconnected gay community involving con artists, toxic relationships, and ruthless enforcers.",
+  "episodes": 9,
+  "episodesDir": "episodes",
+  "exportFormat": "m4a",
+  "filePattern": [
+    "*.fountain",
+    "*.fdx",
+    "*.highland",
+    "*.textbundle",
+    "*.pdf",
+    "*.md",
+    "*.docx",
+    "*.odt",
+    "*.rtf"
+  ],
+  "genre": "Fiction",
+  "title": "You're Nobody til Somebody Wants You Dead",
+  "tts": {
+    "model": "0.6b"
+  },
+  "type": "project"
+}
