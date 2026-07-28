@@ -9,6 +9,26 @@ updated: 2026-07-28
 Canonical project context for AI agents (Claude, Gemini, Codex) working in
 SwiftEscribo.
 
+## Current version
+
+**`0.2.0`** — released. The working tree sits on a tagged release, so this line and
+README's install snippet name the same version. Between releases this marker carries a
+developmental suffix and the two deliberately differ.
+
+The marker lives here rather than in a `Sources/` constant on purpose. Sortie 30
+audited every public declaration in `EscriboCore` against the requirements, and a new
+`public let version` would enlarge that surface for no consumer's benefit. It is also
+*not* in README.md's install snippet: that snippet tells a consumer what to pin, and a
+developmental marker is not a resolvable release.
+
+So: **docs that address a consumer name the released version; this line names the
+working state.** When the two differ, do not "fix" the apparent mismatch by aligning
+them.
+
+The release flow greps this file for a developmental suffix before tagging and refuses
+to tag if it finds one, so nothing in this section may spell that suffix out
+literally — describe it, do not quote it.
+
 ## Mission record
 
 The initial implementation shipped as OPERATION FOUNTAIN SURGEON (33 sorties), released

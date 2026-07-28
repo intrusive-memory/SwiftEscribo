@@ -211,6 +211,27 @@ private let scenePrefixes: [[UInt16]] = [
 ///    continuation or another key; otherwise a document opening on the transition `CUT TO:`
 ///    would be a title page whose key is `CUT TO`. That corroboration is the *same* one
 ///    line of lookahead the cue rule already declared (see above), not a second one.
+/// 12. **A screenplay may open with a `---` YAML frontmatter region**, which Fountain 1.1
+///    does not describe at all. This is an addition rather than a deviation, and it is here
+///    because the org's screenplays carry one: episode metadata that is not a title page and
+///    must not be typeset as one. The region opens on the same line the title page may open
+///    on — ``TitlePageRegion/documentStart``, which is line 0 of a screenplay and the first
+///    line of a ```` ```fountain ```` fence — runs to the next `---`, and inside it nothing
+///    is Fountain. The line rules are ``FrontmatterScanning``'s, shared verbatim with
+///    ``MarkdownGrammar`` so `key: value` splits at the same colon in both languages.
+/// 12a. **The opening `---` needs corroboration, which the Markdown one does not.** The line
+///    below it must look like a frontmatter entry — a `key:` or a `#` comment. Without that,
+///    `---` is action, exactly as it was before this rule existed. The asymmetry is
+///    deliberate and the reason is the cost of being wrong: an unterminated region runs to
+///    the end of the document (the same rule notes and boneyards get, deviation 9), so a
+///    `---` a screenwriter typed as a scene separator would turn an entire screenplay into
+///    YAML. In Markdown the same mistake costs a paragraph and every static-site generator
+///    already reads the bare rule, so that grammar keeps the unconditional form.
+///    The corroboration is, again, the one line of lookahead already declared.
+/// 12b. **A title page may still open after the region closes**, across any number of blank
+///    lines (``TitlePageRegion/afterFrontmatter``). A file that writes `---` metadata and
+///    then `Title:` has written both leading regions, and reading the second as action
+///    because the first existed would be a worse answer than either region alone.
 struct FountainGrammar: LineGrammar {
 
   var lookahead: Int { 1 }
@@ -227,14 +248,38 @@ struct FountainGrammar: LineGrammar {
   /// The ``LineState/openConstruct`` tag meaning "a `/*` boneyard is open".
   static let boneyardTag: UInt16 = 0x11
 
+  /// The ``LineState/openConstruct`` tag meaning "a `---` YAML frontmatter region is open".
+  ///
+  /// Distinct from ``MarkdownGrammar/frontmatterTag`` even though the two mean the same
+  /// thing, for the reason ``noteTag`` is not `1`: a `fountain` fence puts one grammar's
+  /// state inside the other's, and a tag that means two things is exactly the ambiguity that
+  /// would be discovered late. The *rules* are shared (``FrontmatterScanning``); the tag that
+  /// says which grammar's region is open is not.
+  static let frontmatterTag: UInt16 = 0x12
+
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan {
     let line = window.current
 
-    // The title page comes first and answers for the whole line, because inside it no
+    // A YAML frontmatter region comes before everything, for the reason the title page does:
+    // inside one, no Fountain element exists. A `#` is a YAML comment and not a section, and
+    // an ALL-CAPS value is a value and not a character cue.
+    if state.openConstruct == Self.frontmatterTag {
+      return insideFrontmatter(line, state: state)
+    }
+    if state.titlePage == .documentStart, let scan = frontmatterOpening(window, state: state) {
+      return scan
+    }
+
+    // The title page next, and it answers for the whole line, because inside it no
     // other Fountain element exists: `INT. HOUSE` under `Title:` is a continuation of a
     // title-page value, not a slug line. It can only be open — or opened — here, so this
     // costs one comparison on every other line of every screenplay.
-    if state.titlePage == .open || (state.titlePage == .documentStart && opensTitlePage(window)) {
+    //
+    // `.afterFrontmatter` opens one as readily as `.documentStart` does (deviation 12b);
+    // `.closed` opens nothing, ever.
+    let mayOpenTitlePage =
+      state.titlePage == .documentStart || state.titlePage == .afterFrontmatter
+    if state.titlePage == .open || (mayOpenTitlePage && opensTitlePage(window)) {
       // Deviation 10a. The terminator here is `isEmpty` — nothing at all on the line — and
       // **not** `isBlank`, which also answers true to spaces and tabs. A line of whitespace
       // under a key is that key's empty value, which is how Highland 2 writes one, and
@@ -248,6 +293,14 @@ struct FountainGrammar: LineGrammar {
       return withState(titlePageLine(line), after: line, state: state, region: 0, titlePage: .open)
     }
 
+    // The leading region, for every line below this point: over. The one exception is a
+    // blank line under a closed frontmatter region, which re-asserts `.afterFrontmatter` so
+    // that the `Title:` a writer put a blank line beneath the `---` still opens a title page
+    // (deviation 12b). `isBlank` and not `isEmpty`: a line of stray spaces in that gap is
+    // still a gap, and this is outside the one branch where the two tests disagree.
+    let leading: TitlePageRegion =
+      state.titlePage == .afterFrontmatter && isBlank(line.units) ? .afterFrontmatter : .closed
+
     // Notes and boneyard next, and before any block rule, because they are the only
     // constructs here that can be open *across* lines: what a line means depends on
     // whether it began inside one. The walk is a single left-to-right pass that carries
@@ -260,7 +313,7 @@ struct FountainGrammar: LineGrammar {
     if regions.coversWholeLine {
       return withState(
         regionLine(line, regions), after: line, state: state, region: regions.endRegion,
-        titlePage: .closed)
+        titlePage: leading)
     }
 
     // Order matters in exactly four places, and all four are load-bearing:
@@ -297,7 +350,56 @@ struct FountainGrammar: LineGrammar {
 
     return withState(
       overlaid(scan, with: regions), after: line, state: state, region: regions.endRegion,
-      titlePage: .closed)
+      titlePage: leading)
+  }
+
+  // MARK: - YAML frontmatter
+
+  /// Scans the `---` that opens a screenplay's YAML frontmatter region, or returns `nil`.
+  ///
+  /// Only ever called with ``TitlePageRegion/documentStart``, which is the whole of *when*
+  /// this construct may open: line 0 of a screenplay, or the first line of a `fountain`
+  /// fence, and nowhere else. `---` two hundred lines down is action, because this method is
+  /// never reached there rather than because it declines the line.
+  ///
+  /// The corroboration is deviation 12a, and it is the only thing here the Markdown grammar
+  /// does not also do: the line below must look like a frontmatter entry. Read through the
+  /// declared lookahead, so a `---` on the last line of a document corroborates nothing and
+  /// stays action.
+  private func frontmatterOpening(_ window: LineWindow, state: LineState) -> LineScan? {
+    let line = window.current
+    guard let runEnd = FrontmatterScanning.delimiterEnd(line.units),
+      let below = window.line(ahead: 1),
+      FrontmatterScanning.looksLikeEntry(below.units)
+    else {
+      return nil
+    }
+    return withState(
+      FrontmatterScanning.delimiterScan(line, runEnd: runEnd, endState: state),
+      after: line, state: state, region: Self.frontmatterTag, titlePage: .afterFrontmatter)
+  }
+
+  /// Scans a line that begins **inside** an open frontmatter region.
+  ///
+  /// Two outcomes and no third, exactly as inside a note or a boneyard: the line closes the
+  /// region, or it is an entry. There is no failure case, which is what makes an
+  /// unterminated region scan to the end of the document and return normally (deviation 9's
+  /// rule, applied to a third region).
+  ///
+  /// Every line here — the closing `---` included — leaves the title page at
+  /// ``TitlePageRegion/afterFrontmatter``, so the region ends with a title page still
+  /// openable beneath it. That is deviation 12b, and it is one assignment rather than a
+  /// special case on the closing line because the value means "a title page may still open",
+  /// which is as true inside the region as below it.
+  private func insideFrontmatter(_ line: GrammarLine, state: LineState) -> LineScan {
+    if let runEnd = FrontmatterScanning.delimiterEnd(line.units) {
+      return withState(
+        FrontmatterScanning.delimiterScan(line, runEnd: runEnd, endState: state),
+        after: line, state: state, region: 0, titlePage: .afterFrontmatter)
+    }
+    return withState(
+      FrontmatterScanning.entryScan(line, endState: state),
+      after: line, state: state, region: Self.frontmatterTag, titlePage: .afterFrontmatter)
   }
 
   // MARK: - State
@@ -910,7 +1012,8 @@ struct FountainGrammar: LineGrammar {
       }
       if textEnd > textStart {
         if kind == .note {
-          out.spans.append(contentsOf: GlosaScanner.scan(units, in: textStart..<textEnd, base: base))
+          out.spans.append(
+            contentsOf: GlosaScanner.scan(units, in: textStart..<textEnd, base: base))
         } else {
           out.spans.append(EscriboSpan(range: (base + textStart)..<(base + textEnd), kind: kind))
         }
@@ -1027,11 +1130,14 @@ struct FountainGrammar: LineGrammar {
 
   // MARK: - The title page
 
-  /// Whether the document's first line opens a title page.
+  /// Whether this line opens a title page.
   ///
-  /// Asked **only** on line 0 — ``TitlePageRegion/documentStart`` is reachable nowhere else
-  /// in a Fountain scan — which is what keeps a `Draft date:` in the middle of a line of
-  /// action from reopening a title page two hundred lines down.
+  /// Asked **only in the leading region** — on line 0, where
+  /// ``TitlePageRegion/documentStart`` is the state, and on the first non-blank line under a
+  /// closed YAML frontmatter region, where ``TitlePageRegion/afterFrontmatter`` is
+  /// (deviation 12b). Both values are unreachable anywhere else in a Fountain scan, which is
+  /// what keeps a `Draft date:` in the middle of a line of action from reopening a title
+  /// page two hundred lines down.
   ///
   /// Two ways to qualify, and the second one is deviation 11's whole point. A key with a
   /// value on the same line settles it by itself. A key with nothing after the colon needs

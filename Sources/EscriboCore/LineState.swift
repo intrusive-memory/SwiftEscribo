@@ -190,6 +190,13 @@ public struct LineState: Equatable, Sendable {
 /// Where a line sits with respect to a Fountain title page — the leading `Key: Value`
 /// region a screenplay may open with.
 ///
+/// It also answers, by way of ``afterFrontmatter``, where the line sits with respect to a
+/// **YAML frontmatter region**. One enum for both because the two are the same question
+/// asked once: *is the leading metadata region of this screenplay still open, still
+/// openable, or over?* A second field would have to be kept consistent with this one on
+/// every line of every document, and two fields that must agree are one field written
+/// twice.
+///
 /// Declared **here**, in `LineState.swift`, rather than beside the grammar that reads it,
 /// for the reason ``LineState/inDialogueBlock`` is a `Bool` and not a grammar type: a
 /// stored property whose type lives in a grammar file makes this file uncompilable on its
@@ -215,6 +222,25 @@ enum TitlePageRegion: UInt8, Equatable, Sendable {
 
   /// The title page is over — or there never was one. Terminal: nothing reopens it.
   case closed = 2
+
+  /// A YAML frontmatter region has **closed**, and a title page may still open below it.
+  ///
+  /// The state that lets one screenplay carry both leading regions. `---` metadata and a
+  /// Fountain title page are two registers of the same thing — what this document is, said
+  /// before the document starts — and a file that opens with YAML and then writes
+  /// `Title:` under it has written both, not one and then a line of action.
+  ///
+  /// It survives blank lines and nothing else: every blank line under a closed frontmatter
+  /// region re-asserts it, and the first non-blank line either opens a title page or moves
+  /// to ``closed``. That is what makes the gap between the two regions writable — nobody
+  /// writes `---` and `Title:` on adjacent lines — without making the title page openable
+  /// at any later point in the screenplay, which is the property deviation 10 exists to
+  /// guarantee.
+  ///
+  /// Unreachable unless a frontmatter region actually opened, so a screenplay with no
+  /// leading `---` never sees this value and its title-page behavior is bit-for-bit what it
+  /// was before the case existed.
+  case afterFrontmatter = 3
 }
 
 /// Every field of a ``LineState`` that the Fountain grammar reads or writes, as one value —
