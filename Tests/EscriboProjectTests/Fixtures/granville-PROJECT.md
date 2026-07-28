@@ -1,0 +1,119 @@
+---
+type: project
+title: "Granville, USA"
+author: Tom Stovall
+created: 2026-07-07T00:00:00Z
+description: A dramatic pilot about the intersecting lives of gay men in small-town America.
+genre: Drama
+tags: [podcast, drama, romance, gay, small-town, ensemble, pilot]
+schemaVersion: 4
+episodesDir: episodes
+audioDir: audio
+filePattern: ["*.fountain", "*.highland"]
+exportFormat: m4a
+introFile: episodes/intro.m4a
+outroFile: episodes/outro.m4a
+cast:
+  - character: ARCHER
+    voicePrompt: "Male. 20's. Younger but deep. Low, gravelly rasp—tense, clipped, and weary—each syllable dragged through clenched jaws; breath rasps like gravel; pitch tight, rising only when desperation cracks the surface; pace measured, halting, like a man already halfway gone."
+    voices:
+      voxalta: voices/ARCHER.vox
+  - character: BECKETT
+    voicePrompt: "Male. 20's. Younger and higher pitched.  brittle baritone cracked with quiet steel edges—flat, impatient pitch threading through tight, clipped syllables; worn edges betraying a life measured in rigid rules; every pause heavy with brittle irony and suppressed longing."
+    voices:
+      voxalta: voices/BECKETT.vox
+  - character: CLARK
+    voicePrompt: "A light, clipped tenor threaded with brittle resignation—slow, deliberate pacing, low-slung pitch, and brittle edges—carrying the weight of unspoken fatigue, edged with quiet irritation and the hollow echo of a man who’s worn too many defenses."
+    voices:
+      voxalta: voices/CLARK.vox
+  - character: CYRUS
+    voicePrompt: "Male, 30s to 40s. Archer's older brother, who took him in when the shop went under and cannot stop trying to fix him. Warm, earnest, relentlessly well-meaning — every kindness arrives with advice stapled to it. A caring, slightly overbearing tenor; means every word, and can't feel how it lands as pressure. The literal big brother whose lecturing sets Archer off."
+    voices:
+      voxalta: voices/CYRUS.vox
+  - character: DONNA
+    voicePrompt: "Female, 50s to 60s. Owns Glazed Holes, the donut-and-coffee shop. Brassy, bawdy, and built entirely out of eye contact and bad intentions — runs her counter like a burlesque and treats every order as a straight line. A big, smoky, delighted alto; the town's shameless comic engine."
+    voices:
+      voxalta: voices/DONNA.vox
+  - character: DUKE
+    voicePrompt: "Female, 50's. The voice crackles like dry oak underfoot, rising and falling like brittle autumn leaves stirred by restless wind. Half the town chorus (see Town Chorus): the dry, reasonable one who sets the argument up and always rails about something INCIDENTAL to Granville — never the scene's real subject; lets Leroy knock it flat; his creed is that you don't chase the news, you sit still and it comes by for a donut. Insults are the affection, never mean. Economical — two lines and out."
+    voices:
+      voxalta: voices/DUKE.vox
+  - character: GARETH
+    voicePrompt: "Male, 40's. Gruff baritone barrel-chested humming beneath tense breath—sluggish, gravelly, with a lopsided rasp that hints at creased patience and a brittle smirk, rising just enough in weary resolve to edge toward something almost mischievous."
+    voices:
+      voxalta: voices/GARETH.vox
+  - character: HUNTER
+    voicePrompt: "A measured bass laced with weary calm—steady pitch, clipped enunciation, and a brittle edge—echoes like worn linoleum underfoot; every pause stretches like regret, smoothed by practiced, brittle smiles masking a brittle undercurrent of fatigue."
+    voices:
+      voxalta: voices/HUNTER.vox
+  - character: IOLA
+    voicePrompt: "Female, 70+ elderly woman contralto measured cadence crackles with clipped precision—steady pitch, measured pauses, brittle edges—each word sharp and bracing, carrying the weight of lived experience; voice taut with quiet steel, edged with weary resolve, unmistakably seasoned, unflinching."
+    voices:
+      voxalta: voices/IOLA.vox
+  - character: JOANN
+    voicePrompt: "A older lilting contralto crackling with maternal urgency but with the wisdom of age. Sharp, clipped edges in urgent, looping phrases; measured, exasperated pacing; crackles of age beneath a brittle, knowing warmth, layered with simmering irritation and quiet pride."
+    voices:
+      voxalta: voices/JOANN.vox
+  - character: KEVIN
+    voicePrompt: "Male 20's. Lilting tenor. Voice sharp with restless urgency—high-pitched edges sharpen every clipped syllable, rising like impatience; quick, brittle cadence mirrors frantic, brittle truths; worn rasp hints at weariness; edges catch—sharp, brittle, edged with brittle pride—carrying the weight of unspoken pressure."
+    voices:
+      voxalta: voices/KEVIN.vox
+  - character: KIERAN
+    voicePrompt: "A gravelly, weary baritone dragging low and cracked, edged with brittle impatience—flat, clipped phrasing stretched thin over rust-colored breath, betraying decades of stubborn grit and quiet exhaustion."
+    voices:
+      voxalta: voices/KIERAN.vox
+  - character: LEROY
+    voicePrompt: "The voice crackles like dry gravel beneath heavy boots, rasping with the weight of forgotten rust, rising and falling like distant thunder through cracked earth. The contrarian half of the town chorus (see Town Chorus): a grudge-collecting pet-peeve railer from a porch rocker; always on some INCIDENTAL Granville gripe (the pool, the beavers, anything 'online'), never the scene's real subject; the spike to Duke's set. Running grudge: the Rhodes boy who threw up in his pool thirty years ago. The insults are how these two say they love each other. Economical — two lines and out."
+    voices:
+      voxalta: voices/LEROY.vox
+  - character: LINC
+    voicePrompt: "Male, 30s to 40s. Runs the online paper 'Deeper Inside Granville.' An eager, faintly nasal small-town-reporter tenor that talks in headlines; earnest and self-serious, forever fishing for a scoop and the WHY behind it; the young newshound foil the old men of the town chorus (see Town Chorus) needle with affection. Pitch bright and quick when he smells a story, deflating a little when they rib him."
+    voices:
+      voxalta: voices/LINC.vox
+  - character: MARSHALL
+    voicePrompt: "Low, gravelly rasp—softly gravelled, barely above a whisper—with a tremor in the low notes that hints at worn patience; measured, not forceful; edged with weary calm and quiet insistence, like someone who’s seen enough tension to know the truth hums beneath the noise."
+    voices:
+      voxalta: voices/MARSHALL.vox
+  - character: NARRATOR
+    voicePrompt: "Low, gravelly baritone threaded with the rasp of cicadas and cooling metal—slow, deliberate, carrying the weight of unspoken reckonings; edged with weary patience, each sentence stretching like creaking porch boards under the weight of history."
+    voices:
+      voxalta: voices/NARRATOR.vox
+  - character: PREDATOR MOM
+    voicePrompt: "The voice scrapes like gravel underfoot, trembling with the weight of sudden urgency, rising and falling like a cracked autumn branch caught in a restless breeze."
+    voices:
+      voxalta: voices/PREDATOR_MOM.vox
+  - character: PREDATOR MOM 1
+    voicePrompt: "Female, A gravelly, brittle voice crackling with brittle impatience, rising sharply on every laugh—half-hearted, self-conscious—each syllable clipped like brittle glass, layered with the rustle of worn opinions and the tremor of a nervous, decades-old thrill."
+    voices:
+      voxalta: voices/PREDATOR_MOM_1.vox
+  - character: PREDATOR MOM 2
+    voicePrompt: "Female, A brittle voice crackling with accusation with every sentence."
+    voices:
+      voxalta: voices/PREDATOR_MOM_2.vox
+  - character: PRINCIPAL
+    voicePrompt: "Female, A gravelly, lilting baritone crackles with authority, rising and falling in a theatrical sing-song that rattles like a tin roof—sharp, clipped, and layered with the weight of decades, masking a brittle edge of worn pragmatism."
+    voices:
+      voxalta: voices/PRINCIPAL.vox
+  - character: RAY
+    voicePrompt: "A gravelly, clipped baritone crackles with impatience—sharp rises in pitch for accusations, slow, deliberate pacing for lists, gravelly pauses that echo worn authority, edges roughened by decades of stubbornness, layered with the brittle edge of practicality and hidden weariness."
+    voices:
+      voxalta: voices/RAY.vox
+  - character: SHANE
+    voicePrompt: "A gravelly, mid-30s baritone threaded with nervous undercurrents—steady but tight, rising slightly when hedging or grinning, slipping into low, self-aware grunts when cornered, carrying the clipped weight of decades spent balancing chaos with wry composure."
+    voices:
+      voxalta: voices/SHANE.vox
+  - character: SPENCER
+    voicePrompt: "Low, gravelly baritone coiled tight—each syllable stretched thin, haunted by a brittle edge; pitch drifts downward in quiet resignation; cadence slows like a man weighing truth under a weight; rough, cracked texture echoes weary pride; voice lingers, edged with suppressed laughter, worn by solitude."
+    voices:
+      voxalta: voices/SPENCER.vox
+  - character: TOBY
+    voicePrompt: "Male child, 10 years old — Hunter's son. A bright, clear boyish treble: high and light, unbroken, quick and a little breathy; open, curious, and easily delighted, words tumbling out with the guileless directness of a kid who hasn't learned to hide anything. Unmistakably a young boy — sweet, tentative, wholly ten years old — never adult."
+    voices:
+      voxalta: voices/TOBY.vox
+  - character: TUCKER
+    voicePrompt: "Male, 40s to early 50s. Granville's city manager and Hunter's coworker; his family owns THE MEAT MARKET. Hearty, backslapping small-town-official warmth with a shrewd political operator underneath. Confident, carrying baritone — the man who runs the town and whose family feeds it. Knows every name and every favor owed."
+    voices:
+      voxalta: voices/TUCKER.vox
+tts:
+  model: 1.7b
+---

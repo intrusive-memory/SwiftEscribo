@@ -1,0 +1,17 @@
+fixture unterminated_boneyard
+utf16 108
+lines 10
+spans 16
+digest cf59b63eab42a57e
+--- records (count element depth) ---
+1 sceneHeading 0
+1 blank 0
+1 action 0
+1 blank 0
+6 boneyard 0
+--- span kinds (kind/role/style count) ---
+action/content/0 1
+boneyard/content/0 4
+boneyard/marker/0 1
+sceneHeading/content/0 1
+text/content/0 9

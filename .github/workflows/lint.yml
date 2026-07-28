@@ -1,0 +1,82 @@
+name: Lint
+
+# The three custom rules in `.swiftlint.yml` that this package's charter rests on —
+# `no_regex_in_scanners`, `no_ui_imports_in_core`, `no_markdown_import_in_sources` —
+# were documentation until this workflow existed. Nothing ran them: `make lint` was an
+# in-place formatter (DL-4) and no CI job invoked SwiftLint at all.
+#
+# `no_markdown_import_in_sources` is the load-bearing one. Per EXECUTION_PLAN.md § D-2,
+# SwiftPM keeps `swift-markdown` out of a downstream consumer's dependency graph as a
+# *graph property* — it is pruned because no shipping target happens to import it, not
+# because anything declares it test-only. The day a target under `Sources/` says
+# `import Markdown`, the zero-dependency charter breaks and the build stays green. This
+# job is the only thing that notices.
+on:
+  pull_request:
+    branches: [main, development]
+  push:
+    branches: [main, development]
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swiftlint:
+    name: SwiftLint
+    runs-on: macos-26
+
+    # DL-180. Every gating job in this repo declares a deadline. A hung job burns the
+    # GitHub Actions default of six hours and never reports, which is strictly worse
+    # than a failure — a red gate is information, a wedged gate is not. SwiftLint over
+    # ~104 files finishes in seconds; the only step here that can plausibly take
+    # minutes is a `brew install` on a cold image, so 15 is many times the worst
+    # realistic run.
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # `make lint` fails loudly when swiftlint is absent rather than skipping — a
+      # linter that is not installed must not read as a clean tree. This step is what
+      # makes sure that failure never happens for an avoidable reason, and it prints
+      # the version so a rule that starts or stops firing can be attributed to a
+      # SwiftLint upgrade rather than to the source.
+      - name: Ensure SwiftLint is installed
+        run: |
+          if ! command -v swiftlint >/dev/null 2>&1; then
+            brew install swiftlint
+          fi
+          swiftlint version
+
+      # `make lint`, not `swiftlint` spelled out here. The point is that a developer's
+      # local run and this gate cannot diverge: change the rules, the flags, or the
+      # strictness in the Makefile and both move together. Spelling the tool out here
+      # would recreate exactly the drift that let `.swiftlint.yml` sit unexecuted.
+      #
+      # No `continue-on-error`, no `|| true`, no `if: always()` on this step. Its exit
+      # status is the job's, and the job's is the workflow's.
+      - name: Lint
+        run: make lint
+
+      # `make lint` used to be `swift format -i -r .`. Had that gone into CI unchanged
+      # it would have rewritten 18 files in the checkout and then passed, because it
+      # was linting whatever it had just written — measured, not assumed: running it
+      # in a clean worktree at this commit produces exactly that diff, and this step
+      # exits 1 on it. This step is the standing assertion
+      # that the lint target is read-only: if anyone ever points `lint` back at a
+      # formatter or any other in-place tool, this fails and says why. It is cheap and
+      # it guards a mistake this repo has already made once.
+      - name: Fail if linting modified the checkout
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::The lint step modified tracked files. A lint gate must be read-only — see the Makefile's lint/format split (DL-4)."
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --porcelain
+            echo "::error::The lint step left untracked files in the checkout."
+            exit 1
+          fi

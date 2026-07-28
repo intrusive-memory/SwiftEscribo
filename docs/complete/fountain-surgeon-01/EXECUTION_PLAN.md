@@ -1,7 +1,12 @@
 ---
 type: execution-plan
 title: SwiftEscribo — Execution Plan
-updated: 2026-07-25
+updated: 2026-07-27
+feature_name: OPERATION FOUNTAIN SURGEON
+starting_point_commit: 6b8c3ee3d07ad15afe5d6f44fe7c218db334585e
+mission_branch: mission/fountain-surgeon/01
+iteration: 1
+state: completed
 ---
 
 # EXECUTION_PLAN.md — SwiftEscribo
@@ -43,7 +48,8 @@ then Markdown breadth, then the writer. The layer assignments below encode that.
 | WU-4 Markdown Breadth | `Sources/EscriboCore/Markdown` | 5 | 18–22 | 2 | WU-1, WU-2 (S21 also WU-3) |
 | WU-5 Writer | `Sources/EscriboCore/Writer` | 2 | 23–24 | 3 | WU-3 |
 | WU-6 Editor Behavior | `Sources/SwiftEscribo` | 3 | 25–27 | 3 | WU-2, WU-3, WU-4 |
-| WU-7 Verification & Hardening | repo root, `.github/` | 3 | 28–30 | 4 | WU-1…WU-6 |
+| WU-7 Verification & Hardening | repo root, `.github/` | 3 | 28–30 | 4 | WU-1…WU-6, WU-8 |
+| WU-8 Title-Page Repair & Metadata Model | `Sources/EscriboCore`, new target | 3 | 31–33 | 2.5 | WU-3 (S17) |
 
 ---
 
@@ -730,6 +736,161 @@ coordinator shaped around AppKit does not retrofit to UIKit cheaply.
 
 ---
 
+## WU-8 — Title-Page Repair and the Project Metadata Model
+
+<!-- AMENDMENT, 2026-07-26, authorized by the user during execution. Sorties 31–33 were
+     added after Sortie 27 completed, in response to DL-130 — a defect found by Sortie 17
+     when it vendored a real Highland 2 export. All three run BEFORE Sortie 23, because
+     the writer must not be built against a scanner that misreads the region it writes. -->
+
+**Layer**: 2.5 — after Sortie 17, strictly before Sortie 23.
+
+### Sortie 31: The title page survives a whitespace-only value
+
+**Priority**: 95 — Blocks the writer. The canonical parser currently misreads this org's
+own screenplays; every sortie built on top of that inherits the misreading.
+
+**The defect (DL-130)**: Highland 2 writes an empty title-page value as a line containing
+**a lone tab**. `FountainGrammar` treats a whitespace-only line as blank, and a blank ends
+the title page. In `Tests/EscriboCoreTests/Fixtures/Fountain/episode_01.fountain` — a real
+export — lines 4, 12 and 16 are each exactly `"\t"`, so **only 2 of 9 title-page keys are
+recognized as title page at all**. `CREDIT:` then scans as a **character cue**, and author,
+source, contact info, draft date and notes become its **dialogue**.
+
+**Entry criteria**:
+- [ ] Sortie 17 exit criteria met (the fixture that exhibits the defect exists)
+
+**Tasks**:
+1. Inside the title-page region only, treat a line that is empty **apart from whitespace**
+   as an **empty value for the preceding key**, not as the region terminator.
+2. Leave the terminator rule otherwise intact: a **genuinely empty** line still ends the
+   title page. Widening this into "whitespace-only lines are never blank" would change
+   Fountain body parsing everywhere and is explicitly out of scope.
+3. Preserve the value line's bytes in the line record. An empty value is not the same as
+   an absent key, and the writer (Sortie 24) must be able to tell them apart and write the
+   key back.
+4. Update the two descriptive tests Sortie 17 wrote against the broken behavior — the
+   "Known defect: a whitespace-only title-page value ends the title page early" case and
+   any golden snapshot that encodes it — so they assert the **corrected** behavior. Do not
+   delete them; they become the regression test.
+5. Do **not** change the GLOSA scanner, the boneyard, or note handling. This is one rule.
+
+**Exit criteria**:
+- [ ] `make test-core` exits 0, `make test` exits 0, `make test-ios` exits 0
+- [ ] A test asserts `episode_01.fountain` yields **exactly 9 title-page keys**, named and
+      in source order: `TITLE`, `EPISODE`, `CREDIT`, `AUTHOR`, `SOURCE`, `CONTACT INFO`,
+      `DRAFT DATE`, `NOTES`, `REVISION`
+- [ ] A test asserts `CREDIT:` in that fixture is a title-page key and **not** an
+      `ElementKind` of character cue, and that the line below it is not dialogue
+- [ ] A test asserts a lone-tab value line and a lone-space value line both produce an
+      **empty value** for their key, with the key still present
+- [ ] A test asserts a **genuinely empty** line still terminates the title page — the fix
+      must not swallow the terminator
+- [ ] A test asserts an empty value is distinguishable from an absent key in the line record
+- [ ] `verbsCovered:` and `Abstract:` still survive byte-identically in key text and order
+      (Sortie 15's criterion must not regress)
+- [ ] The Sortie 6 invariant helper passes on every title-page scan
+
+### Sortie 32: Vendor the project metadata and cast model into this package
+
+**Priority**: 60 — Blocks Sortie 33. Gives the org one canonical home for the structure.
+
+**Rationale**: `SwiftProyecto` holds `ProjectFrontMatter` (938 lines) and `CastMember`
+(515 lines), both **Foundation-only** and both `Codable`. `ProjectFrontMatter` already
+solves the same problem the Fountain title page solves — preserving keys it does not
+recognize, via `appSections: [String: AnyCodable]`. Two implementations of one idea in two
+packages, one of which was broken until Sortie 31.
+
+**Entry criteria**:
+- [ ] Sortie 31 exit criteria met
+- [ ] Target placement settled — **D-5**, decided by the user 2026-07-26
+
+**Tasks**:
+1. Move `ProjectFrontMatter.swift`, `CastMember.swift`, and the supporting types they
+   require (`TTSConfig`, `SeasonDefinition`, `LanguageDefinition`, `FilePattern`,
+   `VariantReference`, `AnyCodable`, `Gender`, and any others the compiler demands) into
+   this package. Follow the compiler, not this list — the list is a starting point.
+2. **No behavior change.** This sortie is a move plus whatever minimal edits compilation
+   requires. Redesign is not in scope and is the fastest way to lose data silently.
+3. Do **not** modify `SwiftProyecto`. The user has explicitly deferred that side; this
+   package gains a copy and Proyecto is repointed later.
+4. Preserve the unknown-key mechanism exactly. `appSections` is the data-loss guard.
+5. Keep the moved code **Foundation-only**.
+
+**Exit criteria**:
+- [ ] `make build`, `make test`, `make test-ios`, `make test-core` all exit 0
+- [ ] `grep -rE '^\s*import (SwiftUI|AppKit|UIKit)' <new target dir>/` returns no matches
+- [ ] The moved model declares no dependency outside Foundation
+- [ ] `Sources/EscriboCore/` gains **no** new public declaration (the scanner charter is
+      unchanged by this sortie)
+- [ ] A test decodes and re-encodes a real `PROJECT.md` front matter and asserts the
+      result is semantically equal, including every key in `appSections`
+
+### Sortie 33: The no-data-loss gate for cast and unknown keys
+
+**Priority**: 55 — Terminal for WU-8. The gate that makes the move trustworthy.
+
+**Entry criteria**:
+- [ ] Sortie 32 exit criteria met
+
+<!-- AMENDED 2026-07-26 after Sortie 32 reported DL-152 and the CastMember equality gap.
+     Both would have made this gate green against the exact data loss it exists to catch. -->
+
+**Three facts that change how this gate must be written.** The third was established by a
+supervisor probe, not by reasoning:
+
+0. **A round-trip gate is blind to decode-side data loss, by construction.** It compares
+   `decode(x)` against `decode(encode(decode(x)))` — both sides pass through the *same*
+   decoder, so a field the decoder drops is missing from both and they compare **equal**.
+   The supervisor proved this on the shipped code: dropping **every voice from every cast
+   member** on decode left the corpus test "Every field survives the round trip, including
+   every unknown key" **green**. Only tests asserting against **literal expected values**
+   caught it. **This gate must therefore assert cast and unknown-key content against values
+   read from the fixture bytes — not only against a second decode.** DL-151 (`episodes:`
+   discarded on decode) is a live instance of exactly this class.
+
+1. **`==` is unusable as the comparison.** `CastMember` overrides `==` to compare
+   **character names only**. `ProjectFrontMatter ==` therefore reports equal for a cast
+   that has lost every actor, gender, voice, language, and unknown key. Writing this gate
+   with `==` would make it **green against precisely the data loss it exists to detect**.
+   Compare **field by field**, and ship a self-test proving the comparator itself can fail.
+2. **`encode(to:)` stamps `schemaVersion: 4` unconditionally** (DL-152), so
+   `decode(encode(decode(x))) == decode(x)` is **false for every legacy fixture** for
+   reasons unrelated to data loss. Exclude `schemaVersion` from the comparison, or restrict
+   the corpus to `schemaVersion: 4` files — and say which you chose and why.
+
+**Tasks**:
+1. Property-test round-tripping over a corpus of real `PROJECT.md` front matter, including
+   files carrying keys the model does not know. Compare the decoded values **field by
+   field** — never with `==`, for the reason above.
+2. Assert **every** cast member survives: character, actor, gender, voiceDescription,
+   every provider key in `voices`, and language. A cast member with only a `character` and
+   one with every field populated must both round-trip.
+3. Assert **unknown keys survive** — an `appSections` key absent from the model is present,
+   with its value intact, after a round trip.
+4. Drive the corpus through `@Test(arguments:)` so one failing file names itself (D-1).
+5. **Do not assert `encode(decode(x)) == x`** — encoding normalizes, so that formulation
+   fails on any non-canonical input. Same reasoning as Sortie 24's idempotence gate.
+
+**Exit criteria**:
+- [ ] `make test` exits 0 and `make test-core` exits 0
+- [ ] The round-trip assertion passes on **every** fixture in the corpus
+- [ ] The corpus contains ≥4 real `PROJECT.md` front matter fixtures, **vendored into the
+      repo** (D-3 applies — no path outside the repo, loaded via `Bundle.module`)
+- [ ] A test asserts a cast member with every field populated round-trips field for field
+- [ ] A test asserts an unknown top-level key round-trips with its value intact
+- [ ] Deliberately dropping `appSections` from the **encoder** turns the gate **red** —
+      recorded in the sortie report as proof the test can fail
+- [ ] Deliberately dropping every `voices` entry in the **decoder** also turns the gate
+      **red**. This is the decode-side twin of the criterion above and it is the one that
+      currently fails: it must be caught by an assertion against literal expected values,
+      because round-tripping cannot see it (see fact 0)
+- [ ] For at least one fixture, cast content is asserted against values **read from the
+      committed fixture bytes** — character names, and for one member every provider key
+      and voice id — rather than against a second decode
+
+---
+
 ## WU-5 — Writer
 
 Built after the scanner, which is only cheap because Architecture §9 (lossless line
@@ -741,6 +902,8 @@ records) has held since Sortie 13.
 
 **Entry criteria**:
 - [ ] Sortie 17 exit criteria met
+- [ ] **Sortie 31 exit criteria met** (amendment 2026-07-26 — the writer must not be built
+      against a scanner that misreads the title page; see WU-8)
 
 **Tasks**:
 1. Emit well-formed Fountain from `[LineRecord]` for scene headings, action,
@@ -768,22 +931,40 @@ records) has held since Sortie 13.
 - [ ] Sortie 23 exit criteria met
 
 **Tasks**:
+<!-- AMENDED 2026-07-26 after Sortie 23. The original task 2 was itself unsatisfiable for a
+     normalizing writer; taking it literally would look like a writer bug and would not be
+     one. Corrected below. -->
+
 1. Write the title page with **arbitrary keys preserved verbatim** — spelling, casing,
    and original order.
-2. Implement the idempotence test: `parse(write(parse(x))) == parse(x)`.
+2. Implement idempotence as a **fixed point of the writer**:
+   let `y = write(parse(x))`, then assert **`write(parse(y)) == y`**, compared as text.
+   Applying the writer a second time must change nothing.
 3. Do **not** assert `write(parse(x)) == x` — writing normalizes, so that assertion
    fails on any non-canonical input and is the wrong formulation.
+3a. **Do not assert `parse(write(parse(x))) == parse(x)` compared as `LineRecord`s or
+   `ScanResult`s either** — the original wording of this plan, and it is also wrong.
+   Sortie 23 established why: the writer normalizes (`=====` → `===`, `#   ACT` → `# ACT`),
+   which **shifts every subsequent `range`**, so record equality fails on any non-canonical
+   document for reasons that have nothing to do with data loss. If you want a
+   parse-level comparison, compare **element classifications**, not raw records.
 4. Run idempotence across the full Sortie 17 fixture corpus, hostile fixtures included.
 
 **Exit criteria**:
-- [ ] `make test-core` exits 0
-- [ ] The idempotence assertion passes on **every** fixture in the corpus
+- [ ] `make test-core` exits 0, `make test` exits 0, `make test-ios` exits 0
+- [ ] The fixed-point assertion `write(parse(write(parse(x)))) == write(parse(x))` passes
+      on **every** fixture in the corpus
 - [ ] A test asserts `verbsCovered:` writes back with that exact casing and in its
       original position relative to other keys
-- [ ] `grep -rn 'write(parse(' Tests/ | grep -v 'parse(write(parse('` returns no
-      matches — the wrong formulation is not present anywhere
-- [ ] A test asserts idempotence holds for a document whose title page has a duplicate
-      key
+- [ ] A test asserts idempotence holds for a document whose title page has a duplicate key
+- [ ] **A title-page key whose value is empty writes back as key **and** value line — it
+      must not collapse into an absent key.** Sortie 31 made these distinct records with an
+      empty `contentRange` and preserved bytes; Sortie 23 confirmed nothing in the writer
+      skips a record for an empty content range, and `emptyTitlePageValueSurvives` guards it
+- [ ] The identity function must **fail** these tests. At least one fixture used by the
+      idempotence gate must be non-canonical (e.g. `=====`, over-spaced section marker), so
+      a writer that returns its input cannot pass — see the Sortie 23 finding that all three
+      of *its* exit criteria were identity-satisfiable as originally worded
 
 ---
 
@@ -1128,13 +1309,43 @@ the design does not need.
 
 ---
 
+### D-5: The moved metadata model lives in a new `EscriboProject` target
+
+**Affects**: Sortie 32, Sortie 33, Sortie 30
+**Decided**: 2026-07-26 by the user, during execution, as part of the WU-8 amendment.
+
+**Decision**: A **third Foundation-only shipping target, `EscriboProject`**, depending on
+`EscriboCore`, plus a `Tests/EscriboProjectTests/` target. It receives
+`ProjectFrontMatter`, `CastMember`, and **only** the types the compiler demands
+(`TTSConfig`, `SeasonDefinition`, `LanguageDefinition`, `FilePattern`, `VariantReference`,
+`AnyCodable`, `Gender`). Everything else stays in `SwiftProyecto`: the `LLMBackend/*`
+extractors, the SwiftUI `ProjectBrowser/*`, and the `proyecto` CLI.
+
+**Rationale**: `EscriboCore` is the scanner layer — `AGENTS.md` states its architecture as
+"LineIndex + IncrementalScanner ← EscriboCore, Foundation only", and Sortie 30 must audit
+**every** public declaration in it against REQUIREMENTS.md § What is public in 1.0. Adding
+~1,450 lines of podcast project metadata would both contradict that architecture statement
+and make the 1.0 API audit intractable, for no benefit — nothing in the scanner consumes
+project metadata. A separate target gives the org one canonical home for the structure,
+which is the actual goal, while leaving the scanner charter and the 1.0 surface untouched.
+Moving the whole `Models/` directory was declined for the same reason: `ParseFileIterator`,
+`ParseBatchConfig`, `ProjectStructure` and friends are unrelated to the title-page/cast
+data structure and would enlarge the audit surface without serving the goal.
+
+**Consequence for Sortie 30**: the public-API audit now covers **two** shipping targets
+plus `EscriboProject`. `EscriboProject`'s surface is audited on its own terms — it is not
+part of the REQUIREMENTS.md § What is public in 1.0 list, which describes the editor and
+scanner only.
+
+---
+
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Work units | 7 |
-| Total sorties | 30 |
-| Open questions | 0 — all 4 settled (D-1…D-4) |
+| Work units | 8 (WU-8 added 2026-07-26 by user amendment) |
+| Total sorties | 33 (31–33 added 2026-07-26; all run before Sortie 23) |
+| Open questions | 0 — all 5 settled (D-1…D-5) |
 | Dependency structure | 5 layers (0 → 4), with WU-3 and WU-4 parallel at layer 2 and WU-5 and WU-6 parallel at layer 3 |
 | Critical path | 21 of 30 sorties |
 | Max parallelism | 3 concurrent branches (layer 3) |

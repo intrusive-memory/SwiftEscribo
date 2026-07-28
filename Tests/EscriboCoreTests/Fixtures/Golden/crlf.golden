@@ -1,0 +1,23 @@
+fixture crlf
+utf16 91
+lines 10
+spans 15
+digest 554ee50621c7b410
+--- records (count element depth) ---
+1 sceneHeading 0
+1 blank 0
+1 action 0
+1 blank 0
+1 character 0
+1 dialogue 0
+1 blank 0
+1 transition 0
+1 blank 0
+1 action 0
+--- span kinds (kind/role/style count) ---
+action/content/0 2
+character/content/0 1
+dialogue/content/0 1
+sceneHeading/content/0 1
+text/content/0 9
+transition/content/0 1

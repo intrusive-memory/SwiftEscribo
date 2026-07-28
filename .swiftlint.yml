@@ -1,6 +1,7 @@
 # SwiftLint Configuration for SwiftEscribo
-# Enforces macOS/iOS 26.0+ minimum deployment target, and this package's two
-# structural rules: no regex in the scanners, no UI imports in EscriboCore.
+# Enforces macOS/iOS 26.0+ minimum deployment target, and this package's three
+# structural rules: no regex in the scanners, no UI imports in EscriboCore, and
+# no `import Markdown` anywhere under Sources/.
 
 excluded:
   - .build
@@ -25,6 +26,29 @@ disabled_rules:
 
 opt_in_rules:
   - unavailable_function
+
+# DL-185. Sortie 29 put `large_tuple` in `disabled_rules` to get the gate green, and
+# Sortie 29's own report flagged that as a deliberate widening for Sortie 30 to settle.
+# Settled here as a raised threshold rather than a deletion.
+#
+# The data has not changed: `large_tuple` fires 17 times, all 17 under `Tests/` and zero
+# under `Sources/`. Sixteen are 3-member labelled tuples used as test expectation tables;
+# one is the 4-member `(range:kind:role:covers:)` table at
+# `Tests/EscriboCoreTests/FountainInMarkdownTests.swift:81`, and at SwiftLint's defaults
+# (warning 2, error 3) that single site is the only default-rule violation in the package
+# carrying `error` severity — it alone decided whether the gate was red.
+#
+# Disabling the rule made the gate green by deleting the signal: a 9-member tuple added
+# tomorrow would also have been silent. `warning: 2` / `error: 5` keeps every one of the 17
+# reported, as warnings, and still fails the build on a tuple large enough that nobody
+# would defend it. A threshold is the difference between "we looked at these and they are
+# fine" and "we stopped looking".
+#
+# Verified at this exact form: `make lint` exits 0, 17 `large_tuple` findings reported,
+# 0 of them errors.
+large_tuple:
+  warning: 2
+  error: 5
 
 custom_rules:
   # Prevent @available with macOS/iOS versions < 26
@@ -61,4 +85,29 @@ custom_rules:
     included: 'Sources/EscriboCore/.*'
     regex: '^\s*import\s+(SwiftUI|AppKit|UIKit)\b'
     message: "EscriboCore must import Foundation only — no SwiftUI/AppKit/UIKit. Put UI code in Sources/SwiftEscribo."
+    severity: error
+
+  # `swift-markdown` is the CommonMark/GFM differential oracle for MarkdownGrammar
+  # and is declared on `EscriboCoreTests` only. This rule is the thing that keeps it
+  # there, and it exists because SwiftPM will not.
+  #
+  # SwiftPM prunes a test-only dependency out of a downstream consumer's graph as a
+  # *graph property* — it is pruned because no shipping target happens to reference
+  # it — not because anything in Package.swift declares it test-only. There is no
+  # `testOnly:` to write, and no diagnostic when the property stops holding:
+  # https://github.com/swiftlang/swift-package-manager/issues/7007
+  #
+  # So the day any target under Sources/ says `import Markdown`, swift-markdown (and
+  # swift-cmark under it) silently becomes a dependency of every consumer of the
+  # Fountain parser, the zero-dependency charter in AGENTS.md breaks, and the build
+  # stays green. The failure is invisible at exactly the moment it is introduced,
+  # which is why it is guarded at the import site rather than at the resolution site
+  # (EXECUTION_PLAN.md § D-2: no throwaway consumer package, no CI resolution guard).
+  #
+  # Scoped to Sources/ deliberately — Tests/EscriboCoreTests is where the import
+  # belongs and must keep working.
+  no_markdown_import_in_sources:
+    included: 'Sources/.*'
+    regex: '^\s*(@testable\s+)?import\s+Markdown\b'
+    message: "swift-markdown is a test-only differential oracle. `import Markdown` under Sources/ makes it a dependency of every consumer, silently — SwiftPM will not warn. Keep it in Tests/EscriboCoreTests."
     severity: error

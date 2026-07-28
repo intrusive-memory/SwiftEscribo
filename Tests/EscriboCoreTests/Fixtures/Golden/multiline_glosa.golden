@@ -1,0 +1,24 @@
+fixture multiline_glosa
+utf16 142
+lines 12
+spans 27
+digest aec1f0fa466b3960
+--- records (count element depth) ---
+1 sceneHeading 0
+1 blank 0
+3 note 0
+1 blank 0
+2 note 0
+1 blank 0
+1 character 0
+1 dialogue 0
+1 blank 0
+--- span kinds (kind/role/style count) ---
+character/content/0 1
+dialogue/content/0 1
+glosaPunctuation/marker/0 4
+glosaTag/content/0 2
+note/content/0 2
+note/marker/0 4
+sceneHeading/content/0 1
+text/content/0 12
