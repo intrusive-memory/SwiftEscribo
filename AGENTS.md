@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo — Agent Instructions
-updated: 2026-07-27
+updated: 2026-07-28
 ---
 
 # AGENTS.md
@@ -11,7 +11,8 @@ SwiftEscribo.
 
 ## Mission record
 
-The 1.0 implementation shipped as OPERATION FOUNTAIN SURGEON (33 sorties). Its record is
+The initial implementation shipped as OPERATION FOUNTAIN SURGEON (33 sorties), released
+as **0.1.0**. Its record is
 archived and worth reading before changing the scanners:
 
 - [Disagreement register and errata](docs/complete/fountain-surgeon-01/FOUNTAIN_SURGEON_01_ERRATA.md)
@@ -36,7 +37,7 @@ Two things, in one repo, deliberately:
    a new one exists rather than a fix to an old one.
 2. **A stylized Markdown/Fountain editor** for SwiftUI.
 
-**1.0 is standalone.** No dependency on, coordination with, or API accommodation for
+**This package is standalone.** No dependency on, coordination with, or API accommodation for
 `SwiftCompartido` or any other package in the collection. If a task seems to call for
 one, it is out of scope — say so rather than building a seam for it.
 
@@ -67,9 +68,12 @@ one, it is out of scope — say so rather than building a seam for it.
   one `import Markdown` to `EscriboCore` or `SwiftEscribo` and the zero-dependency
   charter breaks silently, with no error. **The guard is the `no_markdown_import_in_sources`
   SwiftLint rule**, run by the `Lint` CI job via `make lint` — not a throwaway consumer
-  package, which cannot work before 1.0 is published (see the execution plan's D-2).
-  Proven to fire: `import Markdown` in a shipping target makes `make lint` exit 2.
-  Never move it out of the test target.
+  package, which had no published version to resolve against when the rule was written
+  (see the execution plan's D-2). Proven to fire: `import Markdown` in a shipping target
+  makes `make lint` exit 2. Never move it out of the test target.
+  **Now that 0.1.0 is published, the consumer-package check is buildable** and would
+  catch the charter breaking as a *resolution* fact rather than a lint rule. Worth
+  adding as a second, independent guard — the lint rule stays either way.
 - **Undo does not work on iOS yet** — deliberate, deferred. macOS has it. Do not
   solve macOS undo with an AppKit-shaped seam UIKit cannot later adopt.
 - **Line records must be lossless for the writer.** Never discard forced-element
@@ -208,7 +212,7 @@ PR-blocking job because wall-clock budgets are machine dependent.
 
 ## Scope
 
-1.0 is a standalone package: the two scanners, the writer, and the editor. Adoption by
+SwiftEscribo is a standalone package: the two scanners, the writer, and the editor. Adoption by
 anything else in the collection is a later decision made against a shipped API, and
 must not influence the design now. Design the public API for its own users.
 

@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo
-updated: 2026-07-27
+updated: 2026-07-28
 ---
 
 # SwiftEscribo
@@ -73,8 +73,29 @@ line records rather than a second parse.
 **`LineState` is opaque.** It is public only because `LineRecord` carries it, and it
 exposes no cases, no properties, and no initializer. Comparing two of them is the
 only thing a caller can do and the only thing anyone needs. Exposing its shape would
-freeze the scanner's internals at 1.0 and make every convergence improvement a
+freeze the scanner's internals and make every convergence improvement a
 breaking change.
+
+## Installing it
+
+```swift
+.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.1.0"))
+```
+
+Then depend on whichever products you need — they are independent:
+
+```swift
+.target(name: "MyTool", dependencies: [
+    .product(name: "EscriboCore", package: "SwiftEscribo"),
+])
+```
+
+**Note the `.upToNextMinor`.** This is a `0.x` release: the API is complete and
+audited but not yet frozen, and SwiftPM treats the **minor** as the breaking axis
+below `1.0`. `.upToNextMajor(from: "0.1.0")` resolves to `>=0.1.0 <0.2.0` anyway, so
+the two forms mean the same thing today — `.upToNextMinor` just says so out loud.
+[CHANGELOG.md § Stability](CHANGELOG.md#stability) has the full statement of what
+`0.x` reserves and what reaching `1.0` requires.
 
 ## Using it
 
@@ -95,7 +116,7 @@ let next = scanner.incrementalScan(TextEdit(range: 12..<12, replacementLength: 1
 The full public surface, type by type, is in
 [CHANGELOG.md](CHANGELOG.md#escribocore--the-parser-foundation-only).
 
-## Known limitations at 1.0
+## Known limitations
 
 Every one of these is known, reproduced by a test, and shipped deliberately. They are
 here so a user meets them in a README rather than in their own document.
@@ -153,7 +174,7 @@ here so a user meets them in a README rather than in their own document.
 - **VoiceOver reads the markers.** `**bold**` is spoken with its asterisks. That
   falls directly out of display text being character-identical to source, which is
   what makes selection, undo, find, and IME work without an index map. Half an
-  accessibility text mapping is worse than none, so 1.0 ships none.
+  accessibility text mapping is worse than none, so this release ships none.
 
 ### `EscriboProject`
 
