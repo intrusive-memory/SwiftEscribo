@@ -80,13 +80,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # `make test-ios`, not a spelled-out xcodebuild, for the same reason the lint job
+      # invokes `make lint`: a duplicated destination string drifts. This job failed on its
+      # very first run because the workflow pinned OS=26.1 in one place and the Makefile
+      # pinned it in another, and only one of them was ever run locally. One definition now.
       - name: Test
-        run: |
-          xcodebuild test \
-            -scheme SwiftEscribo-Package \
-            -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.1' \
-            -skip-testing:EscriboPerformanceTests \
-            -skipPackagePluginValidation \
-            ARCHS=arm64 \
-            ONLY_ACTIVE_ARCH=YES \
-            COMPILER_INDEX_STORE_ENABLE=NO
+        run: make test-ios

@@ -4,7 +4,17 @@
 # including the three test targets, so it is the only usable scheme here.
 SCHEME = SwiftEscribo-Package
 DESTINATION = 'platform=macOS,arch=arm64'
-IOS_DESTINATION = 'platform=iOS Simulator,name=iPhone 17,OS=26.1'
+# Pinned to an exact OS, never `latest` — `OS=latest` does not resolve on these runners.
+# The cost of pinning is that the runner image eventually drops the version: 26.1 vanished
+# from `macos-26` between this package's last local run and its first CI run, and xcodebuild
+# reports that as `Unable to find a device matching the provided destination specifier`
+# (exit 70) with **zero tests run** — a hard failure that looks nothing like a test failure.
+# 26.5 is chosen because it is the ONLY version present both on the `macos-26` runner
+# (which offers 26.2 / 26.4.1 / 26.5) and on this developer machine (26.0 / 26.1 / 26.3 /
+# 26.5). Pinning the oldest CI version instead would fix CI and break `make test-ios`
+# locally, which is how the two pins drifted apart in the first place. Check the
+# intersection with `xcrun simctl list runtimes` before changing this number.
+IOS_DESTINATION = 'platform=iOS Simulator,name=iPhone 17,OS=26.5'
 
 # Apple Silicon only. Intel and Rosetta are out of scope, and an accidental
 # x86_64 or universal build makes the performance suite report numbers for a
