@@ -10,7 +10,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] — 2026-07-28
+
+A **minor** bump, and under the `0.x` rules stated in the `0.1.0` entry's § Stability
+that is the breaking axis: a consumer pinned with `.upToNextMinor(from: "0.1.0")` —
+which is what README recommends — will **not** pick this up automatically and must
+move the pin to `0.2.0`. Nothing in the public surface was removed or renamed; the
+minor is spent on new behavior in the Fountain scanner, which changes how a document
+opening with `---` is classified.
 
 ### Added
 
