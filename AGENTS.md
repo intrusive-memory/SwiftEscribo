@@ -9,6 +9,20 @@ updated: 2026-07-28
 Canonical project context for AI agents (Claude, Gemini, Codex) working in
 SwiftEscribo.
 
+## Current version
+
+**`0.1.0-dev`** — the post-`v0.1.0` development cycle. The next release strips the
+`-dev` suffix and picks a clean version.
+
+The marker lives here rather than in a `Sources/` constant on purpose. Sortie 30
+audited every public declaration in `EscriboCore` against the requirements, and a new
+`public let version` would enlarge that surface for no consumer's benefit. It is also
+*not* in README.md's install snippet: that snippet tells a consumer what to pin, and
+`0.1.0-dev` is not a resolvable release. README and CHANGELOG correctly say `0.1.0`.
+
+So: **docs that address a consumer name the released version; this line names the
+working state.** Do not "fix" the apparent mismatch by aligning them.
+
 ## Mission record
 
 The initial implementation shipped as OPERATION FOUNTAIN SURGEON (33 sorties), released
