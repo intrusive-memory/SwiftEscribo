@@ -143,7 +143,7 @@ here so a user meets them in a README rather than in their own document.
 - **Undo coalescing on iOS is whatever UIKit provides.** macOS registers each
   multi-character rewrite (`- [ ] `, smart Tab) as one coalesced action;
   `UITextView` gives far less control over undo grouping, so iOS ships without the
-  guarantee. Deliberate and deferred (REQUIREMENTS.md § Known limitations §1), and a
+  guarantee. Deliberate and deferred (`docs/complete/fountain-surgeon-01/REQUIREMENTS.md` § Known limitations §1), and a
   scheduling decision rather than an architectural one — the coordinator has no
   AppKit-shaped undo seam for UIKit to fail to adopt.
 - **Fountain paragraph geometry is LTR-only.** Screenplay margins are defined in
