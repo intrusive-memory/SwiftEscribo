@@ -104,6 +104,16 @@ struct GateDocument: Sendable, CustomTestStringConvertible {
 ///   Fountain document here: this is a **convergence** check and it cannot fail on a wrong
 ///   note, boneyard, or title-page rule. `FountainRegionTests` is where those are asserted
 ///   by hand.
+/// - `fountain frontmatter and title page` opens with a YAML region and then, under a blank
+///   line, a Fountain title page — the two leading regions a screenplay may carry at once
+///   (`FountainGrammar` deviations 12 and 12b). It is here for the **offset-zero** shape and
+///   for one state transition no other document in this corpus has: `.afterFrontmatter`,
+///   which survives blank lines and is the only ``TitlePageRegion`` value reachable in the
+///   middle of a document. An edit that deletes the closing `---`, or the blank line under
+///   it, moves that transition and everything below it. As with every other document here it
+///   is a **convergence** check and cannot fail on a wrong frontmatter rule — both sides run
+///   the same grammar. `FountainFrontmatterTests` is where the rule itself is asserted by
+///   hand.
 /// - `fountain in markdown` is a Markdown document hosting a ```` ```fountain ```` fence,
 ///   added by Sortie 21. It is the only document here whose lines are scanned by **two**
 ///   grammars, and the only one where two multi-line constructs are open at once — the outer
@@ -219,6 +229,23 @@ let gateCorpus: [GateDocument] = [
       /* struck out
       INT. NOWHERE - NIGHT
       */
+
+      BOB
+      Hello there.
+      """),
+  GateDocument(
+    name: "fountain frontmatter and title page",
+    text: """
+      ---
+      type: episode
+      cast:
+        - BOB
+      ---
+
+      Title: THE THING
+      Author: NOBODY
+
+      INT. HOUSE - DAY
 
       BOB
       Hello there.

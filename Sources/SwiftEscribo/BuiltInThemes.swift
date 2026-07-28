@@ -18,6 +18,16 @@ import EscriboCore
 /// these themes fix now is the part that is genuinely a Fountain decision and not a
 /// Sortie 13 decision: a monospaced base at screenplay size, no per-element size scaling
 /// (a screenplay page is uniform), and marker dimming.
+///
+/// ## Why the leading regions declare a family the base already gives them
+///
+/// The title-page and frontmatter entries in the Fountain themes set
+/// ``FontFamilyRole/monospaced`` even though ``base`` is already monospaced. That is not
+/// redundancy for its own sake: a screenplay's metadata must be monospaced *because it is
+/// metadata* — it is `Key: Value` text whose columns are the whole reason it is readable —
+/// and not because the body around it happens to be. A host that swaps the base family for
+/// a proportional reading face keeps the guarantee, and the two Markdown themes, whose base
+/// is proportional, reach the same rendering through the same entries.
 extension EscriboTheme {
 
   // MARK: - Markdown
@@ -43,6 +53,18 @@ extension EscriboTheme {
         foreground: EscriboColor(red: 0.42, green: 0.42, blue: 0.45),
         family: .monospaced,
         traits: .italic
+      ),
+      .frontmatterDelimiter: TokenStyle(
+        foreground: EscriboColor(red: 0.42, green: 0.42, blue: 0.45),
+        family: .monospaced
+      ),
+      .frontmatterKey: TokenStyle(
+        foreground: EscriboColor(red: 0.31, green: 0.16, blue: 0.42),
+        family: .monospaced
+      ),
+      .frontmatterValue: TokenStyle(
+        foreground: EscriboColor(red: 0.24, green: 0.30, blue: 0.36),
+        family: .monospaced
       ),
     ],
     styleStyles: markdownStyleFlags,
@@ -73,6 +95,18 @@ extension EscriboTheme {
         family: .monospaced,
         traits: .italic
       ),
+      .frontmatterDelimiter: TokenStyle(
+        foreground: EscriboColor(red: 0.62, green: 0.62, blue: 0.66),
+        family: .monospaced
+      ),
+      .frontmatterKey: TokenStyle(
+        foreground: EscriboColor(red: 0.78, green: 0.62, blue: 0.92),
+        family: .monospaced
+      ),
+      .frontmatterValue: TokenStyle(
+        foreground: EscriboColor(red: 0.72, green: 0.79, blue: 0.86),
+        family: .monospaced
+      ),
     ],
     styleStyles: markdownStyleFlags,
     elementSizeScales: [.heading: headingSizeScale],
@@ -94,7 +128,27 @@ extension EscriboTheme {
       .heading: TokenStyle(
         foreground: EscriboColor(red: 0.16, green: 0.24, blue: 0.44),
         traits: .bold
-      )
+      ),
+      .titlePageKey: TokenStyle(
+        foreground: EscriboColor(red: 0.35, green: 0.30, blue: 0.20),
+        family: .monospaced
+      ),
+      .titlePageValue: TokenStyle(
+        foreground: EscriboColor(red: 0.10, green: 0.10, blue: 0.10),
+        family: .monospaced
+      ),
+      .frontmatterDelimiter: TokenStyle(
+        foreground: EscriboColor(red: 0.42, green: 0.42, blue: 0.45),
+        family: .monospaced
+      ),
+      .frontmatterKey: TokenStyle(
+        foreground: EscriboColor(red: 0.31, green: 0.16, blue: 0.42),
+        family: .monospaced
+      ),
+      .frontmatterValue: TokenStyle(
+        foreground: EscriboColor(red: 0.24, green: 0.30, blue: 0.36),
+        family: .monospaced
+      ),
     ],
     styleStyles: screenplayStyleFlags,
     // Deliberately empty. A screenplay page is uniform 12-point: nothing on it is set
@@ -116,7 +170,27 @@ extension EscriboTheme {
       .heading: TokenStyle(
         foreground: EscriboColor(red: 0.62, green: 0.75, blue: 1.0),
         traits: .bold
-      )
+      ),
+      .titlePageKey: TokenStyle(
+        foreground: EscriboColor(red: 0.80, green: 0.74, blue: 0.58),
+        family: .monospaced
+      ),
+      .titlePageValue: TokenStyle(
+        foreground: EscriboColor(red: 0.91, green: 0.90, blue: 0.87),
+        family: .monospaced
+      ),
+      .frontmatterDelimiter: TokenStyle(
+        foreground: EscriboColor(red: 0.62, green: 0.62, blue: 0.66),
+        family: .monospaced
+      ),
+      .frontmatterKey: TokenStyle(
+        foreground: EscriboColor(red: 0.78, green: 0.62, blue: 0.92),
+        family: .monospaced
+      ),
+      .frontmatterValue: TokenStyle(
+        foreground: EscriboColor(red: 0.72, green: 0.79, blue: 0.86),
+        family: .monospaced
+      ),
     ],
     styleStyles: screenplayStyleFlags,
     elementSizeScales: [:],

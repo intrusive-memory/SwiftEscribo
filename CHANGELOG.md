@@ -10,6 +10,45 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### YAML frontmatter in Fountain
+
+A screenplay may now open with a `---`-fenced YAML frontmatter region, the same construct
+Markdown has carried since Sortie 20 and with the same span vocabulary —
+`SpanKind.frontmatterDelimiter`, `.frontmatterKey`, `.frontmatterValue`, and the
+`ElementKind.frontmatterDelimiter` / `.frontmatter` line classifications. No new public
+member: this is existing vocabulary reaching a second language.
+
+The line rules now live in one place (`FrontmatterScanning`) and are shared verbatim by
+both grammars, so `key: value` splits at the same colon in a `.fountain` file as in a `.md`
+one. Markdown's behavior is unchanged, byte for byte.
+
+Three rules are Fountain's own, and all three are stated as deviations 12, 12a, and 12b on
+`FountainGrammar`:
+
+- The region opens where the title page may open — the first line of a screenplay, or the
+  first line of a ` ```fountain ` fence — and nowhere else.
+- **The opening `---` requires corroboration**: the line below it must look like a
+  frontmatter entry. Markdown's does not. An unterminated region runs to the end of the
+  document, so in a screenplay an uncorroborated rule would turn a scene separator typed at
+  the top of the file into a document-wide YAML block; in Markdown the same mistake costs a
+  paragraph, and every static-site generator already reads the bare form.
+- **A title page may still open below a closed region**, across blank lines. A file that
+  writes `---` metadata and then `Title:` has written both leading regions.
+
+`FountainWriter` re-emits the whole region verbatim — indentation is significant in YAML and
+this package parses none of it.
+
+### Changed
+
+- The built-in Markdown themes now render frontmatter in a **monospaced** face. Their base is
+  proportional, so a `key: value` block previously lost the column alignment that makes it
+  readable as metadata. The built-in Fountain themes declare the same for frontmatter and for
+  the title page; their base was already monospaced, so nothing there changes on screen.
+
 ## [0.1.0] — 2026-07-28
 
 First release. Three products, zero shipping dependencies.

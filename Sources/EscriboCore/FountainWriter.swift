@@ -263,6 +263,15 @@ public struct FountainWriter {
     case .note, .boneyard:
       appendRaw(lineEnd: lineEnd, of: units, into: &out)
 
+    // A YAML frontmatter region (``FountainGrammar`` deviation 12) is not a screenplay
+    // element either — it is another language's document sitting on top of this one — and
+    // this writer knows no YAML. Indentation is significant in it, quoting styles are not
+    // interchangeable, and a `-` at the head of a line is a sequence entry rather than
+    // anything to canonicalize, so **verbatim is the only correct answer** here and is
+    // stated explicitly rather than left to the fallthrough below.
+    case .frontmatterDelimiter, .frontmatter:
+      appendRaw(lineEnd: lineEnd, of: units, into: &out)
+
     // Every Markdown element, and anything a later version adds. Verbatim is always
     // defensible and is never a crash.
     default:

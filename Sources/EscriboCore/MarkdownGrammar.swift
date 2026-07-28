@@ -908,13 +908,21 @@ struct MarkdownGrammar: LineGrammar {
   /// higher is the whole of what this method adds. `---` on line five stays a thematic
   /// break because this method is never reached there, not because it declines the line.
   ///
-  /// **Exactly three hyphens**, no leading whitespace, nothing but whitespace after them.
-  /// Three and not "three or more", so that `----` on line one is still a thematic break:
-  /// Jekyll, Hugo, and every other tool that reads this region spell the fence `---`, and
-  /// widening the rule would silently swallow the top of a document that opens with a rule.
+  /// The line **shapes** — what a fence is, what a key is — live in
+  /// ``FrontmatterScanning``, because ``FountainGrammar`` has the same region and the span
+  /// kinds it produces are one vocabulary rather than two. What stays here is the part that
+  /// is genuinely this grammar's: *when* a region may open. The two grammars answer that
+  /// differently and neither answer belongs in a shared rule.
+  ///
+  /// This grammar's opening criterion is the line's position and **nothing else** — no
+  /// corroboration from the line below, unlike Fountain's (deviation 12 there). A `---` on
+  /// line one of a Markdown document is frontmatter even if the line under it is prose,
+  /// which is the behavior every static-site generator that reads this region has, and
+  /// changing it would reclassify documents that scan correctly today.
   private func scanFrontmatterOpening(_ line: GrammarLine) -> LineScan? {
-    guard let runEnd = frontmatterDelimiterEnd(line.units) else { return nil }
-    return frontmatterDelimiterScan(line, runEnd: runEnd, opening: true)
+    guard let runEnd = FrontmatterScanning.delimiterEnd(line.units) else { return nil }
+    return FrontmatterScanning.delimiterScan(
+      line, runEnd: runEnd, endState: LineState(openConstruct: Self.frontmatterTag))
   }
 
   /// Scans a line that begins **inside** an open frontmatter region.
@@ -933,135 +941,13 @@ struct MarkdownGrammar: LineGrammar {
   /// practice — is therefore `.text` from its second line to the end of the document, which
   /// is the outcome the requirement asks for by the route a line grammar can actually take.
   private func scanInsideFrontmatter(_ line: GrammarLine) -> LineScan {
-    if let runEnd = frontmatterDelimiterEnd(line.units) {
-      return frontmatterDelimiterScan(line, runEnd: runEnd, opening: false)
+    if let runEnd = FrontmatterScanning.delimiterEnd(line.units) {
+      // A fresh state: the region is closed and this grammar had nothing else open across
+      // it, because a frontmatter region can only ever have begun on line zero.
+      return FrontmatterScanning.delimiterScan(line, runEnd: runEnd, endState: LineState())
     }
-    return scanFrontmatterEntry(line)
-  }
-
-  /// The shared shape of an opening and a closing frontmatter fence: one marker span, an
-  /// empty content range, and the state the region is or is not open in.
-  private func frontmatterDelimiterScan(
-    _ line: GrammarLine, runEnd: Int, opening: Bool
-  ) -> LineScan {
-    let base = line.contentRange.lowerBound
-    return LineScan(
-      spans: [
-        EscriboSpan(range: base..<(base + runEnd), kind: .frontmatterDelimiter, role: .marker)
-      ],
-      element: .frontmatterDelimiter,
-      // Pure delimiter, like a closing code fence: no content, so an empty range where
-      // content would have begun.
-      contentRange: (base + runEnd)..<(base + runEnd),
-      endState: opening ? LineState(openConstruct: Self.frontmatterTag) : LineState()
-    )
-  }
-
-  /// The end offset of a frontmatter fence run, or `nil` if this line is not one.
-  ///
-  /// No leading whitespace — a fence sits flush left — exactly three hyphens, and nothing
-  /// but spaces and tabs after them.
-  private func frontmatterDelimiterEnd(_ units: [UInt16]) -> Int? {
-    var runEnd = 0
-    while runEnd < units.count, units[runEnd] == hyphen {
-      runEnd += 1
-    }
-    guard runEnd == 3 else { return nil }
-    var cursor = runEnd
-    while cursor < units.count, isSpaceOrTab(units[cursor]) {
-      cursor += 1
-    }
-    guard cursor == units.count else { return nil }
-    return runEnd
-  }
-
-  /// Scans one line inside a frontmatter region into key and value **spans**.
-  ///
-  /// Spans, never values. `EscriboCore` imports nothing at all, so there is no YAML parser
-  /// here and deliberately no date, number, or boolean anywhere in this package's output:
-  /// the scanner says where the value is and the source says what it is. A consumer that
-  /// wants `type: docs` as a dictionary reads the ranges and does its own parsing, with its
-  /// own dependencies, outside this package.
-  ///
-  /// The key is everything from the first non-whitespace character to the first `:` that is
-  /// followed by whitespace or ends the line — YAML's own rule, and the reason
-  /// `url: https://example.com` does not split at the scheme's colon. A leading `- ` is
-  /// consumed as part of the leading marker so a sequence of mappings still finds its keys.
-  private func scanFrontmatterEntry(_ line: GrammarLine) -> LineScan {
-    let units = line.units
-    let base = line.contentRange.lowerBound
-    let openState = LineState(openConstruct: Self.frontmatterTag)
-
-    var keyStart = 0
-    while keyStart < units.count, isSpaceOrTab(units[keyStart]) {
-      keyStart += 1
-    }
-    // A YAML sequence entry — `- name: bob`. The dash and its space are marker, and the
-    // key search resumes after them.
-    if keyStart < units.count, units[keyStart] == hyphen,
-      keyStart + 1 < units.count, isSpaceOrTab(units[keyStart + 1])
-    {
-      keyStart += 2
-      while keyStart < units.count, isSpaceOrTab(units[keyStart]) {
-        keyStart += 1
-      }
-    }
-
-    // A `#` comment and a blank line are not entries, and neither is a line with no key.
-    // All three take the degrade path below rather than pretending to a structure they do
-    // not have.
-    if keyStart < units.count, units[keyStart] != numberSign,
-      let colonOffset = frontmatterKeySeparator(units, from: keyStart), colonOffset > keyStart
-    {
-      var valueStart = colonOffset + 1
-      while valueStart < units.count, isSpaceOrTab(units[valueStart]) {
-        valueStart += 1
-      }
-      var spans: [EscriboSpan] = [
-        EscriboSpan(
-          range: (base + keyStart)..<(base + colonOffset), kind: .frontmatterKey),
-        // The `:` and the whitespace after it, as a marker carrying the key's own kind —
-        // the rule every marker in this package obeys.
-        EscriboSpan(
-          range: (base + colonOffset)..<(base + valueStart), kind: .frontmatterKey,
-          role: .marker),
-      ]
-      if valueStart < units.count {
-        spans.append(
-          EscriboSpan(
-            range: (base + valueStart)..<line.contentRange.upperBound, kind: .frontmatterValue))
-      }
-      return LineScan(
-        spans: spans,
-        element: .frontmatter,
-        contentRange: (base + valueStart)..<line.contentRange.upperBound,
-        endState: openState
-      )
-    }
-
-    // Degrade: one `.text` span over whatever is there, and the region stays open.
-    return LineScan(
-      spans: line.contentRange.isEmpty
-        ? [] : [EscriboSpan(range: line.contentRange, kind: .text)],
-      element: .frontmatter,
-      contentRange: line.contentRange,
-      endState: openState
-    )
-  }
-
-  /// The offset of the `:` separating a frontmatter key from its value, or `nil`.
-  ///
-  /// YAML's rule: the colon must be followed by whitespace or end the line. Without it
-  /// `url: https://example.com` would split at `https:` and the key would be `url: https`.
-  private func frontmatterKeySeparator(_ units: [UInt16], from start: Int) -> Int? {
-    var cursor = start
-    while cursor < units.count {
-      if units[cursor] == colon, cursor + 1 == units.count || isSpaceOrTab(units[cursor + 1]) {
-        return cursor
-      }
-      cursor += 1
-    }
-    return nil
+    return FrontmatterScanning.entryScan(
+      line, endState: LineState(openConstruct: Self.frontmatterTag))
   }
 
   // MARK: - GFM tables
