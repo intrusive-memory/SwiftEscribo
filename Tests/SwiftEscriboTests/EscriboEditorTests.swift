@@ -267,6 +267,25 @@ struct EscriboEditorSurfaceTests {
     let view: any View = EscriboEditor(text: .constant(""), language: .markdown)
     #expect(view is EscriboEditor)
   }
+
+  /// Source compatibility for `findBar:`, and it is the *absence* of edits above that carries
+  /// it: every call form in ``publicViewIsConstructible()`` predates the parameter and still
+  /// compiles unchanged, which is only true because the parameter is defaulted. This test adds
+  /// the new forms rather than rewriting the old ones, so a future non-defaulted parameter
+  /// breaks the older test and not this one.
+  @Test("findBar is opt-in and platform-neutral in the public signature")
+  func findBarIsAnOptInParameter() {
+    _ = EscriboEditor(text: .constant(""), language: .markdown, findBar: true)
+    _ = EscriboEditor(
+      text: .constant(""), language: .fountain, mode: .source, theme: .fountainDark,
+      findBar: true)
+
+    // The signature is the same on both platforms — no `#if` at the call site. What differs
+    // is what the parameter *does*, which is asserted in `MacTextViewFindBarTests`.
+    let view: any View = EscriboEditor(
+      text: .constant(""), language: .markdown, findBar: true)
+    #expect(view is EscriboEditor)
+  }
 }
 
 /// A mutable target for a `Binding` that also counts writes.

@@ -60,6 +60,80 @@
     }
   }
 
+  /// The find-bar parameter, asserted against the text view the construction path actually
+  /// builds — the same rule the rest of this file follows.
+  ///
+  /// Both directions are assertions, not just the `true` one. The off case is the load-bearing
+  /// half: it is what proves the default is a real "no find bar" rather than whatever AppKit
+  /// happened to leave the flags at, and it is what a host relies on when it does not opt in.
+  @MainActor
+  @Suite("macOS text view — find bar configuration")
+  struct MacTextViewFindBarTests {
+
+    @Test("findBar: true sets the find bar and incremental searching on the text view")
+    func findBarOnSetsBothFlags() {
+      let editor = EscriboTextView(language: .markdown, theme: .markdownLight, findBar: true)
+      #expect(editor.textView.usesFindBar == true)
+      #expect(editor.textView.isIncrementalSearchingEnabled == true)
+    }
+
+    @Test("findBar: false leaves both flags off")
+    func findBarOffClearsBothFlags() {
+      let editor = EscriboTextView(language: .markdown, theme: .markdownLight, findBar: false)
+      #expect(editor.textView.usesFindBar == false)
+      #expect(editor.textView.isIncrementalSearchingEnabled == false)
+    }
+
+    @Test("The default is off — a host opts in")
+    func findBarDefaultsToOff() {
+      let editor = EscriboTextView(language: .markdown, theme: .markdownLight)
+      #expect(editor.textView.usesFindBar == false)
+      #expect(editor.textView.isIncrementalSearchingEnabled == false)
+    }
+
+    /// The find **bar** lives inside the editor's own scroll view. This is the assertion that
+    /// distinguishes it from the floating find *panel*, which is a separate window and would
+    /// make the enclosing scroll view irrelevant.
+    @Test("The find bar's host is the editor's own scroll view")
+    func findBarLivesInsideTheScrollView() {
+      let editor = EscriboTextView(language: .markdown, theme: .markdownLight, findBar: true)
+      #expect(editor.textView.enclosingScrollView === editor.scrollView)
+    }
+
+    @Test("The bridge carries the host's answer through to the shipped text view")
+    func bridgeThreadsTheParameterThrough() {
+      let on = EscriboEditorBridge(text: .constant(""))
+      let onEditor = on.makeEditor(
+        language: .markdown, mode: .live, theme: .markdownLight, appearance: .light,
+        findBar: true)
+      #expect(onEditor.textView.usesFindBar == true)
+      #expect(onEditor.textView.isIncrementalSearchingEnabled == true)
+
+      let off = EscriboEditorBridge(text: .constant(""))
+      let offEditor = off.makeEditor(
+        language: .markdown, mode: .live, theme: .markdownLight, appearance: .light,
+        findBar: false)
+      #expect(offEditor.textView.usesFindBar == false)
+      #expect(offEditor.textView.isIncrementalSearchingEnabled == false)
+    }
+
+    /// Turning the find bar on must not disturb anything Sorties 10, 11, and 25 assert about
+    /// the shipped text view — in particular `isRichText` and `allowsUndo`, which DL-65 makes
+    /// load-bearing for verbatim paste and for undo.
+    @Test("Enabling the find bar disturbs no other shipped setting")
+    func findBarDoesNotDisturbTheHygieneFlags() {
+      let editor = EscriboTextView(language: .markdown, theme: .markdownLight, findBar: true)
+      #expect(editor.textView.isAutomaticQuoteSubstitutionEnabled == false)
+      #expect(editor.textView.isAutomaticDashSubstitutionEnabled == false)
+      #expect(editor.textView.isAutomaticTextReplacementEnabled == false)
+      #expect(editor.textView.isAutomaticSpellingCorrectionEnabled == false)
+      #expect(editor.textView.isContinuousSpellCheckingEnabled == true)
+      #expect(editor.textView.isRichText == false)
+      #expect(editor.textView.allowsUndo == true)
+      #expect(editor.textView.textLayoutManager != nil)
+    }
+  }
+
   /// The one behavioral exit criterion: typing must reach the coordinator and come back
   /// out as real text-storage attributes, exactly as it would for a user at the keyboard.
   @MainActor

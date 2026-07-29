@@ -540,6 +540,19 @@ Setting the `@Binding` from outside is a reset, not an edit:
 the writer. `SwiftEscribo`: the editor view, `EscriboTheme`, `TokenStyle`,
 `ParagraphMetrics`, `EditorMode`.
 
+The editor view's initializer is
+`EscriboEditor(text:language:mode:theme:findBar:)`. `mode`, `theme`, and `findBar` are
+all defaulted, so every call form that predates a parameter keeps compiling — adding a
+defaulted parameter to this initializer is a **minor** release.
+
+`findBar` is a `Bool`, defaulting to `false`. It asks for the system find **bar** —
+the accessory inside the editor's own scroll view, with incremental searching on — never
+the floating find panel, which is a separate window. It is platform-neutral in the
+signature and honoured on macOS only; `UITextView` has no equivalent, so on iOS it is
+accepted and ignored rather than fenced out, and a cross-platform host writes one call
+site instead of two. The menu items and their key equivalents stay the host's job
+(Non-goals §8).
+
 `LineState` is public but **opaque** — no public cases, no public properties. It
 exists in the API only because `LineRecord` carries it. Exposing its shape would
 freeze the scanner's internals at 1.0 and make every convergence improvement a

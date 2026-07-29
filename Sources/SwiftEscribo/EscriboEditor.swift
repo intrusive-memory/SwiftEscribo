@@ -56,6 +56,9 @@ public struct EscriboEditor: View {
   /// current appearance.
   private let theme: EscriboTheme?
 
+  /// Whether the editor offers the system find bar. macOS only; a no-op on iOS.
+  private let findBar: Bool
+
   /// The system appearance, which selects between a theme pair when `theme` is `nil`.
   @Environment(\.colorScheme) private var colorScheme
 
@@ -72,16 +75,28 @@ public struct EscriboEditor: View {
   ///     (plain). Both edit the same string.
   ///   - theme: The theme to style with, or `nil` for the built-in theme matching
   ///     `language` and the current `ColorScheme`.
+  ///   - findBar: Whether the editor offers the system **find bar** — the one that slides
+  ///     in at the top of the editor's own scroll view, with incremental searching on —
+  ///     rather than the floating find *panel*. Defaulted to `false` so a host opts in;
+  ///     the menu items and their key equivalents remain the host's to supply, because
+  ///     Non-goals §8 keeps document-level chrome out of this view.
+  ///
+  ///     Platform-neutral in this signature and honoured on macOS only. `UITextView` has
+  ///     no find-bar equivalent, so on iOS the parameter is accepted and ignored rather
+  ///     than fenced out of the API — a host that compiles for both platforms writes one
+  ///     call site, not two.
   public init(
     text: Binding<String>,
     language: Language,
     mode: EditorMode = .live,
-    theme: EscriboTheme? = nil
+    theme: EscriboTheme? = nil,
+    findBar: Bool = false
   ) {
     self._text = text
     self.language = language
     self.mode = mode
     self.theme = theme
+    self.findBar = findBar
   }
 
   public var body: some View {
@@ -91,6 +106,7 @@ public struct EscriboEditor: View {
       language: language,
       mode: mode,
       theme: theme ?? .builtIn(language: language, appearance: appearance),
-      appearance: appearance)
+      appearance: appearance,
+      findBar: findBar)
   }
 }

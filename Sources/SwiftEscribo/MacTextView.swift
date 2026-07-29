@@ -53,8 +53,11 @@
     ///   - language: The grammar to scan with.
     ///   - styler: The style cache. Pass the same instance for the document's lifetime —
     ///     ``EscriboStyler`` is a cache, and a fresh one per edit would make it pointless.
-    init(language: Language, styler: EscriboStyler) {
-      let textView = Self.makeTextView()
+    ///   - findBar: Whether the text view offers the system find **bar**, with incremental
+    ///     searching. Construction-time only, and written explicitly in both directions —
+    ///     see ``makeTextView(findBar:)``.
+    init(language: Language, styler: EscriboStyler, findBar: Bool = false) {
+      let textView = Self.makeTextView(findBar: findBar)
       self.textView = textView
       self.scrollView = Self.makeScrollView(hosting: textView)
 
@@ -86,8 +89,8 @@
     }
 
     /// Builds the view over a fresh styler constructed from `theme`.
-    convenience init(language: Language, theme: EscriboTheme) {
-      self.init(language: language, styler: EscriboStyler(theme: theme))
+    convenience init(language: Language, theme: EscriboTheme, findBar: Bool = false) {
+      self.init(language: language, styler: EscriboStyler(theme: theme), findBar: findBar)
     }
 
     // MARK: - Construction
@@ -101,7 +104,10 @@
     /// the one initializer that states the layout stack as an explicit, checkable
     /// argument rather than an inferred default, so it is the only one used here — the
     /// resulting view's `textLayoutManager` is guaranteed non-nil.
-    private static func makeTextView() -> EscriboNativeTextView {
+    ///
+    /// - Parameter findBar: The host's ``EscriboEditor/init(text:language:mode:theme:findBar:)``
+    ///   answer, written straight onto the two AppKit flags below.
+    private static func makeTextView(findBar: Bool = false) -> EscriboNativeTextView {
       let textView = EscriboNativeTextView(usingTextLayoutManager: true)
 
       // REQUIREMENTS.md § Text-system hygiene: every one of these rewrites the user's
@@ -117,6 +123,24 @@
       // by a restyle and cannot corrupt the source. Left on, and left explicit rather than
       // relying on the system default.
       textView.isContinuousSpellCheckingEnabled = true
+
+      // Find. The **bar**, not the panel: `usesFindBar` selects the accessory that slides in
+      // at the top of the enclosing `NSScrollView` over the floating find panel, which is a
+      // separate window that covers the document and loses the editor's scroll position.
+      // `isIncrementalSearchingEnabled` is what makes it search as the user types rather
+      // than only on Return.
+      //
+      // Written explicitly in **both** directions rather than only when `findBar` is on. The
+      // AppKit defaults for these two are not something this package wants to inherit — the
+      // same reasoning as `isContinuousSpellCheckingEnabled` above — and an editor that was
+      // asked for no find bar must actually have none, which is only true if the off case
+      // assigns `false` instead of leaving the flag wherever AppKit left it.
+      //
+      // Neither flag touches a character: find is a selection and a temporary layout-manager
+      // highlight, never a text-storage attribute, so nothing here can be clobbered by a
+      // restyle and nothing here can corrupt the source (Architecture §1).
+      textView.usesFindBar = findBar
+      textView.isIncrementalSearchingEnabled = findBar
 
       // Plain text is the value (Architecture §1): every attribute this view's storage
       // ever carries is syntax styling the coordinator applies, never user-chosen rich

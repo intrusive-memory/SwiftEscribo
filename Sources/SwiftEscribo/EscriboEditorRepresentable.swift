@@ -78,15 +78,26 @@ final class EscriboEditorBridge: NSObject {
   /// ``EscriboTextView``'s own initializer (Sorties 10 and 11) and are asserted against the
   /// view that initializer builds. Duplicating or overriding any of it here would put the
   /// shipped configuration out of reach of those tests.
+  ///
+  /// `findBar` is the one argument here whose handling is platform-specific, and the fence
+  /// is deliberately two lines wide: the flag is a plain `Bool` on both platforms and it is
+  /// only the *initializer* that differs, because `UITextView` has no find bar to configure.
+  /// Standing rule — platform-neutral values stay in platform-neutral files, and the `#if`
+  /// wraps the AppKit call rather than the parameter.
   func makeEditor(
     language: Language,
     mode: EditorMode,
     theme: EscriboTheme,
-    appearance: EscriboAppearance
+    appearance: EscriboAppearance,
+    findBar: Bool = false
   ) -> EscriboTextView {
     let styler = EscriboStyler(
       environment: EditorStyleEnvironment(theme: theme, mode: mode, appearance: appearance))
-    let editor = EscriboTextView(language: language, styler: styler)
+    #if os(macOS)
+      let editor = EscriboTextView(language: language, styler: styler, findBar: findBar)
+    #else
+      let editor = EscriboTextView(language: language, styler: styler)
+    #endif
     self.editor = editor
 
     editor.textView.delegate = self
@@ -175,13 +186,19 @@ final class EscriboEditorBridge: NSObject {
     let theme: EscriboTheme
     let appearance: EscriboAppearance
 
+    /// Construction-time only: the find bar is configured once, on the text view this
+    /// Representable builds, and never re-applied from `updateNSView`. Flipping it on a
+    /// live editor is not something ``EscriboEditor`` offers, so nothing here pretends it
+    /// is supported.
+    let findBar: Bool
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
       context.coordinator.makeEditor(
-        language: language, mode: mode, theme: theme, appearance: appearance
+        language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar
       ).scrollView
     }
 
@@ -209,13 +226,18 @@ final class EscriboEditorBridge: NSObject {
     let theme: EscriboTheme
     let appearance: EscriboAppearance
 
+    /// Accepted and ignored. `UITextView` has no find bar — UIKit's search affordance is
+    /// the host's own chrome — so the property exists here purely so ``EscriboEditor``'s
+    /// `body` is one unfenced expression on both platforms.
+    let findBar: Bool
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
 
     func makeUIView(context: Context) -> UITextView {
       context.coordinator.makeEditor(
-        language: language, mode: mode, theme: theme, appearance: appearance
+        language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar
       ).textView
     }
 
