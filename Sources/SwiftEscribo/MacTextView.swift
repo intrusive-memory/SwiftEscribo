@@ -55,9 +55,16 @@
     ///     ``EscriboStyler`` is a cache, and a fresh one per edit would make it pointless.
     ///   - findBar: Whether the text view offers the system find **bar**, with incremental
     ///     searching. Construction-time only, and written explicitly in both directions —
-    ///     see ``makeTextView(findBar:)``.
-    init(language: Language, styler: EscriboStyler, findBar: Bool = false) {
-      let textView = Self.makeTextView(findBar: findBar)
+    ///     see ``makeTextView(findBar:focusOnAppear:)``.
+    ///   - focusOnAppear: Whether the text view claims first responder when it lands in a
+    ///     window. Construction-time only, for the same reason `findBar` is.
+    init(
+      language: Language,
+      styler: EscriboStyler,
+      findBar: Bool = false,
+      focusOnAppear: Bool = false
+    ) {
+      let textView = Self.makeTextView(findBar: findBar, focusOnAppear: focusOnAppear)
       self.textView = textView
       self.scrollView = Self.makeScrollView(hosting: textView)
 
@@ -89,8 +96,17 @@
     }
 
     /// Builds the view over a fresh styler constructed from `theme`.
-    convenience init(language: Language, theme: EscriboTheme, findBar: Bool = false) {
-      self.init(language: language, styler: EscriboStyler(theme: theme), findBar: findBar)
+    convenience init(
+      language: Language,
+      theme: EscriboTheme,
+      findBar: Bool = false,
+      focusOnAppear: Bool = false
+    ) {
+      self.init(
+        language: language,
+        styler: EscriboStyler(theme: theme),
+        findBar: findBar,
+        focusOnAppear: focusOnAppear)
     }
 
     // MARK: - Construction
@@ -105,9 +121,16 @@
     /// argument rather than an inferred default, so it is the only one used here — the
     /// resulting view's `textLayoutManager` is guaranteed non-nil.
     ///
-    /// - Parameter findBar: The host's ``EscriboEditor/init(text:language:mode:theme:findBar:)``
-    ///   answer, written straight onto the two AppKit flags below.
-    private static func makeTextView(findBar: Bool = false) -> EscriboNativeTextView {
+    /// - Parameters:
+    ///   - findBar: The host's
+    ///     ``EscriboEditor/init(text:language:mode:theme:findBar:focusOnAppear:)`` answer,
+    ///     written straight onto the two AppKit flags below.
+    ///   - focusOnAppear: The same initializer's `focusOnAppear:` answer, written onto the
+    ///     one flag ``EscriboNativeTextView/focusesOnAppear`` reads.
+    private static func makeTextView(
+      findBar: Bool = false,
+      focusOnAppear: Bool = false
+    ) -> EscriboNativeTextView {
       let textView = EscriboNativeTextView(usingTextLayoutManager: true)
 
       // REQUIREMENTS.md § Text-system hygiene: every one of these rewrites the user's
@@ -141,6 +164,18 @@
       // restyle and nothing here can corrupt the source (Architecture §1).
       textView.usesFindBar = findBar
       textView.isIncrementalSearchingEnabled = findBar
+
+      // Focus. Written here rather than performed here: this function has a text view and no
+      // window, and "make this the first responder" is a question that cannot be answered
+      // until there is a window to be first responder *of*. So the answer is stored, and
+      // ``EscriboNativeTextView/viewDidMoveToWindow()`` — the exact moment AppKit says the
+      // window exists — spends it.
+      //
+      // Note what this does not do: look for anything. The view that will be focused is the
+      // view being configured, so there is no hierarchy to walk and no `NSTextView` to
+      // identify. A consumer outside this package has to search precisely because it does
+      // not own this object; that is the whole reason this parameter exists.
+      textView.focusesOnAppear = focusOnAppear
 
       // Plain text is the value (Architecture §1): every attribute this view's storage
       // ever carries is syntax styling the coordinator applies, never user-chosen rich

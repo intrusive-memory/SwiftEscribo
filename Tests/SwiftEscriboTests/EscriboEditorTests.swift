@@ -286,6 +286,31 @@ struct EscriboEditorSurfaceTests {
       text: .constant(""), language: .markdown, findBar: true)
     #expect(view is EscriboEditor)
   }
+
+  /// Source compatibility for `focusOnAppear:`, carried the same way `findBar:`'s is — by
+  /// what is *not* edited above. `publicViewIsConstructible()` and `findBarIsAnOptInParameter()`
+  /// both predate this parameter and both still compile unchanged, which is only true because
+  /// it is defaulted **and** because it was added last in the parameter list.
+  @Test("focusOnAppear is opt-in and platform-neutral in the public signature")
+  func focusOnAppearIsAnOptInParameter() {
+    _ = EscriboEditor(text: .constant(""), language: .markdown, focusOnAppear: true)
+    _ = EscriboEditor(
+      text: .constant(""), language: .fountain, mode: .source, theme: .fountainDark,
+      focusOnAppear: true)
+
+    // The two opt-ins compose: a host that wants both writes one call, not a fork.
+    _ = EscriboEditor(
+      text: .constant(""), language: .fountain, mode: .live, theme: .fountainLight,
+      findBar: true, focusOnAppear: true)
+
+    // The signature is the same on both platforms — no `#if` at the call site. What differs
+    // is what the parameter *does*, which is asserted in `MacTextViewFocusOnAppearTests`;
+    // on iOS it is accepted and ignored, deliberately, so the software keyboard does not
+    // rise the moment a document opens.
+    let view: any View = EscriboEditor(
+      text: .constant(""), language: .markdown, focusOnAppear: true)
+    #expect(view is EscriboEditor)
+  }
 }
 
 /// A mutable target for a `Binding` that also counts writes.

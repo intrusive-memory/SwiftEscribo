@@ -59,6 +59,9 @@ public struct EscriboEditor: View {
   /// Whether the editor offers the system find bar. macOS only; a no-op on iOS.
   private let findBar: Bool
 
+  /// Whether the editor takes the caret when it is installed. macOS only; a no-op on iOS.
+  private let focusOnAppear: Bool
+
   /// The system appearance, which selects between a theme pair when `theme` is `nil`.
   @Environment(\.colorScheme) private var colorScheme
 
@@ -85,18 +88,40 @@ public struct EscriboEditor: View {
   ///     no find-bar equivalent, so on iOS the parameter is accepted and ignored rather
   ///     than fenced out of the API — a host that compiles for both platforms writes one
   ///     call site, not two.
+  ///   - focusOnAppear: Whether the editor's text view claims **first responder** the moment
+  ///     it is installed in a window, so the first thing typed into a freshly-opened
+  ///     document lands in the document instead of nowhere. Defaulted to `false`, because a
+  ///     view that seizes the caret on sight is wrong in any host that puts something else
+  ///     first.
+  ///
+  ///     It fires **once**, on the first window the view is given. A later re-attachment is
+  ///     not an appearance, and an editor that yanked the selection back on every layout
+  ///     pass would be worse than no focus at all.
+  ///
+  ///     This is a hook rather than a suggestion: the package owns the text view, so it
+  ///     focuses it directly. A host cannot do the same — a `NSViewRepresentable`'s view is
+  ///     unreachable from SwiftUI's focus system, which leaves a consumer no option but a
+  ///     sibling probe that walks the window's content view hunting for an `NSTextView`.
+  ///     This parameter exists to delete that walk.
+  ///
+  ///     Platform-neutral in this signature and honoured on macOS only, like `findBar` — but
+  ///     the iOS no-op is a *decision*, not a gap. `becomeFirstResponder()` on a
+  ///     `UITextView` raises the software keyboard, and doing that the instant a document
+  ///     opens is an interruption rather than a convenience.
   public init(
     text: Binding<String>,
     language: Language,
     mode: EditorMode = .live,
     theme: EscriboTheme? = nil,
-    findBar: Bool = false
+    findBar: Bool = false,
+    focusOnAppear: Bool = false
   ) {
     self._text = text
     self.language = language
     self.mode = mode
     self.theme = theme
     self.findBar = findBar
+    self.focusOnAppear = focusOnAppear
   }
 
   public var body: some View {
@@ -107,6 +132,7 @@ public struct EscriboEditor: View {
       mode: mode,
       theme: theme ?? .builtIn(language: language, appearance: appearance),
       appearance: appearance,
-      findBar: findBar)
+      findBar: findBar,
+      focusOnAppear: focusOnAppear)
   }
 }

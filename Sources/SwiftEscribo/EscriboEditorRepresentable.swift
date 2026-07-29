@@ -79,22 +79,31 @@ final class EscriboEditorBridge: NSObject {
   /// view that initializer builds. Duplicating or overriding any of it here would put the
   /// shipped configuration out of reach of those tests.
   ///
-  /// `findBar` is the one argument here whose handling is platform-specific, and the fence
-  /// is deliberately two lines wide: the flag is a plain `Bool` on both platforms and it is
-  /// only the *initializer* that differs, because `UITextView` has no find bar to configure.
-  /// Standing rule — platform-neutral values stay in platform-neutral files, and the `#if`
-  /// wraps the AppKit call rather than the parameter.
+  /// `findBar` and `focusOnAppear` are the two arguments here whose handling is
+  /// platform-specific, and the fence is deliberately two lines wide: both are plain `Bool`s
+  /// on both platforms and it is only the *initializer* that differs, because `UITextView`
+  /// has no find bar to configure and raising the software keyboard the instant a document
+  /// opens is an interruption rather than a convenience. Standing rule — platform-neutral
+  /// values stay in platform-neutral files, and the `#if` wraps the AppKit call rather than
+  /// the parameters.
+  ///
+  /// Focus is *configured* here and *taken* by the text view itself, when AppKit hands it a
+  /// window. Nothing in this method installs a probe, schedules a run-loop hop, or looks for
+  /// a view: the object that will claim first responder is the one being constructed two
+  /// lines down.
   func makeEditor(
     language: Language,
     mode: EditorMode,
     theme: EscriboTheme,
     appearance: EscriboAppearance,
-    findBar: Bool = false
+    findBar: Bool = false,
+    focusOnAppear: Bool = false
   ) -> EscriboTextView {
     let styler = EscriboStyler(
       environment: EditorStyleEnvironment(theme: theme, mode: mode, appearance: appearance))
     #if os(macOS)
-      let editor = EscriboTextView(language: language, styler: styler, findBar: findBar)
+      let editor = EscriboTextView(
+        language: language, styler: styler, findBar: findBar, focusOnAppear: focusOnAppear)
     #else
       let editor = EscriboTextView(language: language, styler: styler)
     #endif
@@ -192,13 +201,20 @@ final class EscriboEditorBridge: NSObject {
     /// is supported.
     let findBar: Bool
 
+    /// Construction-time only, like `findBar`, and for a stronger reason: "on appear" names
+    /// an event that happens once. `updateNSView` runs on every layout pass, and re-applying
+    /// focus from there would drag the caret back into the editor every time the host's
+    /// state changed.
+    let focusOnAppear: Bool
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
       context.coordinator.makeEditor(
-        language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar
+        language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
+        focusOnAppear: focusOnAppear
       ).scrollView
     }
 
@@ -231,13 +247,21 @@ final class EscriboEditorBridge: NSObject {
     /// `body` is one unfenced expression on both platforms.
     let findBar: Bool
 
+    /// Accepted and ignored, and deliberately so rather than incidentally. Focusing a
+    /// `UITextView` on appear raises the software keyboard the instant a document opens,
+    /// which covers half the screen before the user has asked for anything — an interruption
+    /// on iOS where it is a convenience on macOS. The property exists here for the same
+    /// reason `findBar` does: so ``EscriboEditor``'s `body` is one unfenced expression.
+    let focusOnAppear: Bool
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
 
     func makeUIView(context: Context) -> UITextView {
       context.coordinator.makeEditor(
-        language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar
+        language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
+        focusOnAppear: focusOnAppear
       ).textView
     }
 

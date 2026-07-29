@@ -541,9 +541,10 @@ the writer. `SwiftEscribo`: the editor view, `EscriboTheme`, `TokenStyle`,
 `ParagraphMetrics`, `EditorMode`.
 
 The editor view's initializer is
-`EscriboEditor(text:language:mode:theme:findBar:)`. `mode`, `theme`, and `findBar` are
-all defaulted, so every call form that predates a parameter keeps compiling — adding a
-defaulted parameter to this initializer is a **minor** release.
+`EscriboEditor(text:language:mode:theme:findBar:focusOnAppear:)`. `mode`, `theme`,
+`findBar`, and `focusOnAppear` are all defaulted, so every call form that predates a
+parameter keeps compiling — adding a defaulted parameter to this initializer is a
+**minor** release.
 
 `findBar` is a `Bool`, defaulting to `false`. It asks for the system find **bar** —
 the accessory inside the editor's own scroll view, with incremental searching on — never
@@ -552,6 +553,26 @@ signature and honoured on macOS only; `UITextView` has no equivalent, so on iOS 
 accepted and ignored rather than fenced out, and a cross-platform host writes one call
 site instead of two. The menu items and their key equivalents stay the host's job
 (Non-goals §8).
+
+`focusOnAppear` is a `Bool`, defaulting to `false`. When on, the editor's text view
+becomes the window's **first responder** the moment it is installed, so the first
+keystroke into a freshly-opened document reaches the document instead of nowhere. It
+fires **once**, on the first window the view is given; a re-attachment is not an
+appearance, and re-focusing on every layout pass would drag the caret back from wherever
+the user put it.
+
+It is a hook rather than a convenience. A `NSViewRepresentable`'s view is unreachable
+from SwiftUI's focus system, so a host that wants the caret in the editor has no option
+but a sibling probe that walks the window's content view hunting for an `NSTextView`.
+This package owns the view it is focusing and performs **no view-hierarchy walk**: the
+answer is stored at construction and spent in the shipped text view's
+`viewDidMoveToWindow()`, where the object to focus is `self`. Consumers may delete their
+focus probes.
+
+Platform-neutral in the signature and honoured on macOS only, like `findBar` — but the
+iOS no-op is a decision rather than a gap: `becomeFirstResponder()` on a `UITextView`
+raises the software keyboard, and doing that the instant a document opens is an
+interruption rather than a convenience.
 
 `LineState` is public but **opaque** — no public cases, no public properties. It
 exists in the API only because `LineRecord` carries it. Exposing its shape would
