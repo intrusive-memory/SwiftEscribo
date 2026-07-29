@@ -109,6 +109,45 @@ struct CaretLineContext: Equatable {
     /// Sortie 26 hangs here rather than inventing a second mechanism.
     var tabKeyHandler: (@MainActor () -> Bool)?
 
+    /// Whether this view claims the caret the moment it has a window to claim it in.
+    ///
+    /// Set from ``EscriboTextView``'s construction path, never from a host — the public
+    /// answer is ``EscriboEditor``'s `focusOnAppear:`, and this is where that answer lands.
+    ///
+    /// It lives on the text view for the same structural reason `returnKeyHandler` does: the
+    /// behaviour must be a property of the object this package ships, not of the SwiftUI
+    /// bridge, so the shipped behaviour and the tested behaviour are the same behaviour.
+    ///
+    /// And it is why no host needs to go looking for this view. A `NSViewRepresentable`'s
+    /// view is unreachable from SwiftUI's focus system, so the alternative a consumer is
+    /// left with is a sibling probe that walks the window's content view for the first
+    /// `NSTextView` it can find. This package **owns** the view it is focusing and has no
+    /// reason to search for it: the object that would be found is `self`.
+    var focusesOnAppear = false
+
+    /// One-shot latch for ``focusesOnAppear``.
+    ///
+    /// `viewDidMoveToWindow()` fires on every attachment, not only the first — SwiftUI moves
+    /// its hosted views between windows, and a re-attachment is not an "appear". Without this
+    /// latch, a window the user has already clicked into somewhere else would have its
+    /// selection yanked back to the editor.
+    private var hasTakenInitialFocus = false
+
+    /// Claims first responder, once, when the view is installed in a window.
+    ///
+    /// This is the whole mechanism. `viewDidMoveToWindow()` is AppKit telling the view that
+    /// it now has a window — which is precisely the "the representable's view is installed"
+    /// moment, arriving at the one object that already knows both halves of the question.
+    /// Nothing is deferred to a later turn of the run loop and nothing is searched for,
+    /// because by the time this runs the view exists, the window exists, and `self` is the
+    /// view to focus.
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      guard focusesOnAppear, !hasTakenInitialFocus, let window else { return }
+      hasTakenInitialFocus = true
+      window.makeFirstResponder(self)
+    }
+
     override func insertNewline(_ sender: Any?) {
       if returnKeyHandler?() == true { return }
       super.insertNewline(sender)

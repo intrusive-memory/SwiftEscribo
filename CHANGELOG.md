@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo Changelog
-updated: 2026-07-28
+updated: 2026-07-29
 ---
 
 # Changelog
@@ -9,6 +9,68 @@ updated: 2026-07-28
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.3.0] — 2026-07-29
+
+A **minor** bump, per the same `0.x` rule restated in every entry so far: below `1.0`
+the minor is the breaking axis, so a consumer pinned with
+`.upToNextMinor(from: "0.2.0")` will **not** pick this up automatically and must move
+the pin to `0.3.0`. Nothing existing was removed or renamed; both additions are new,
+defaulted parameters on `EscriboEditor.init`, so every pre-existing call site keeps
+compiling unchanged.
+
+### Added
+
+#### `findBar:` on `EscriboEditor.init`
+
+`EscriboEditor.init` grows a fifth parameter, `findBar: Bool = false`, threaded
+through `EscriboEditorRepresentable` and `EscriboEditorBridge` to the macOS text view,
+where it sets `usesFindBar` and `isIncrementalSearchingEnabled` alongside the
+existing text-system hygiene flags.
+
+This is the find **bar** — the accessory inside the editor's own `NSScrollView` — not
+the floating find panel, which is a separate window that covers the document.
+`isIncrementalSearchingEnabled` is what makes it search as the user types rather than
+only on Return. Both flags are written explicitly in both directions rather than only
+when the parameter is on, so an editor asked for no find bar actually has none rather
+than inheriting whatever AppKit defaults to.
+
+Platform-neutral in the public signature and honoured on macOS only — `UITextView`
+has no find bar, so a cross-platform host still writes one call site; the parameter
+is accepted and ignored on iOS.
+
+#### `focusOnAppear:` on `EscriboEditor.init`
+
+`EscriboEditor.init` grows a sixth parameter, `focusOnAppear: Bool = false`, threaded
+the same way to `EscriboNativeTextView.focusesOnAppear` on macOS. The mechanism is an
+override of `viewDidMoveToWindow()` on the text view this package already ships — the
+moment AppKit tells the view it now has a window, which is exactly the "the
+representable's view is installed" moment. It fires once, latched, so a window the
+user had already clicked into elsewhere does not have its selection yanked back on a
+later re-attachment.
+
+This removes a view-hierarchy walk that was previously a consumer's own problem: an
+`NSViewRepresentable`'s view is unreachable from SwiftUI's focus system, so a host
+that wanted focus-on-open had to hunt the content view for the first `NSTextView`
+itself. This package owns the view it is focusing, so that walk collapses to `self`.
+
+Platform-neutral in the public signature; honoured on macOS only. The iOS no-op is a
+deliberate decision rather than a gap — `becomeFirstResponder()` on a `UITextView`
+raises the software keyboard, and doing that the instant a document opens is an
+interruption, not a convenience.
+
+Resulting public signature:
+
+```swift
+public init(
+  text: Binding<String>,
+  language: Language,
+  mode: EditorMode = .live,
+  theme: EscriboTheme? = nil,
+  findBar: Bool = false,
+  focusOnAppear: Bool = false
+)
+```
 
 ## [0.2.0] — 2026-07-28
 

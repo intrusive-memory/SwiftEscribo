@@ -11,9 +11,9 @@ SwiftEscribo.
 
 ## Current version
 
-**`0.2.0`** — released. The working tree sits on a tagged release, so this line and
-README's install snippet name the same version. Between releases this marker carries a
-developmental suffix and the two deliberately differ.
+**`0.2.0-dev`** — the post-`v0.2.0` development cycle. The next release strips the
+suffix and picks a clean version. README's install snippet still says `0.2.0`, which is
+correct: it names the last resolvable release, and this line names the working state.
 
 The marker lives here rather than in a `Sources/` constant on purpose. Sortie 30
 audited every public declaration in `EscriboCore` against the requirements, and a new
