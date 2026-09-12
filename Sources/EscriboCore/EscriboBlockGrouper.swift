@@ -32,7 +32,7 @@ enum EscriboBlockGrouper {
   static func blocks(from records: [LineRecord], dialect: BlockDialect) -> [EscriboBlock] {
     switch dialect {
     case .markdown: markdownBlocks(from: records)
-    case .fountain: []  // Fountain grouping lands with § 4.2; the vocabulary is already declared.
+    case .fountain: fountainBlocks(from: records)
     case .none: []
     }
   }
@@ -161,7 +161,235 @@ enum EscriboBlockGrouper {
     return append(&blocks, .paragraph, over: start..<end, records)
   }
 
+  // MARK: - Fountain (§ 4.2)
+
+  /// Groups a run of Fountain line records.
+  ///
+  /// | Element seen | Block |
+  /// |---|---|
+  /// | `.blank` | the whole run of blanks, one ``BlockKind/blank`` |
+  /// | `.frontmatterDelimiter` | through the closing delimiter, one ``BlockKind/frontmatter`` |
+  /// | `.sceneHeading` | **one line**, always — two adjacent slug lines are two blocks |
+  /// | `.pageBreak` | one line |
+  /// | `.character` | the cue plus its speech body — see ``speech(_:from:)`` |
+  /// | `.action` | the run |
+  /// | `.transition`, `.centered` | the run |
+  /// | `.lyrics` | the run — **unless** it sits under a cue, where it is speech body |
+  /// | `.titlePageKey` | the key plus its `.titlePageValue` continuations |
+  /// | `.note`, `.boneyard`, `.section`, `.synopsis` | the run, at one depth — but only when the run stands alone; see below |
+  ///
+  /// ## The contiguity rule, ported from the app (D-8)
+  ///
+  /// `ScriptPreview.blocks(from:)` decided where a speech ended with
+  /// `isContiguousWithPrevious: !sawBlankSinceLastBlock && !blocks.isEmpty`, where a
+  /// `.blank` record set the flag, a `.pageBreak` emitted a non-contiguous block and set
+  /// it, and `.note`, `.boneyard`, `.section`, and `.synopsis` were **dropped but
+  /// neutral** — they neither joined nor separated. Moving the rule here is the whole
+  /// point of § 4.2: the preview, the well, and read-aloud cannot disagree about where a
+  /// speech ends if only one of them decides.
+  ///
+  /// The consequence that matters, and the one the tests name: **a note or a boneyard
+  /// between a cue and its dialogue does not end the speech. A blank line does.** The
+  /// grammar already agrees — see ``ElementKind/note``, which says a note is commentary
+  /// layered over a screenplay rather than an element of one.
+  ///
+  /// "Neutral" is implemented as ``neutralBridge(_:from:resumingAt:)`` rather than as
+  /// greedy absorption, and the difference is observable: a neutral run joins what is on
+  /// both sides of it **only when the block actually resumes after it**. So
+  /// `action / note / action` is one action block, while `action / note / blank` is an
+  /// action block and then a note block. Greedy absorption would swallow the trailing note
+  /// into the action, which is neither what the app did nor what a writer sees.
+  ///
+  /// A neutral line cannot *start* a block either, which is why the neutral arm is
+  /// reached only when the line is not inside a run — there, it is its own block, which is
+  /// the case § 4.2 describes and by far the common one.
+  ///
+  /// The content of an absorbed neutral line is **omitted from
+  /// ``EscriboBlock/contentRanges``**: the line is inside the block's `lines` and `range`
+  /// because the tiling invariant requires it, but read-aloud must not speak
+  /// `[[a note]]`. That is the one place where a block's content is narrower than its
+  /// lines, and it is the reason `contentRanges` is an array.
+  static func fountainBlocks(from records: [LineRecord]) -> [EscriboBlock] {
+    var blocks: [EscriboBlock] = []
+    var cursor = 0
+
+    while cursor < records.count {
+      let element = records[cursor].element
+
+      switch element {
+      case .blank:
+        cursor = append(&blocks, .blank, over: run(records, from: cursor, of: .blank), records)
+
+      case .frontmatterDelimiter:
+        // Fountain hosts a leading YAML region too (see `FountainGrammar` deviation 12b:
+        // a file may write `---` metadata *and* a title page), so this is not a
+        // Markdown-only arm.
+        cursor = append(
+          &blocks, .frontmatter,
+          over: region(records, from: cursor, closedBy: .frontmatterDelimiter), records)
+
+      case .sceneHeading:
+        // One line, per § 4.2, and deliberately not a run: two slug lines in a row are two
+        // scenes, and a writer who wants one scene does not write two slugs.
+        cursor = append(&blocks, .sceneHeading, over: cursor..<(cursor + 1), records)
+
+      case .pageBreak:
+        // Non-contiguous in the app's rule, which here means simply: its own block, and it
+        // cannot be bridged into anything.
+        cursor = append(&blocks, .pageBreak, over: cursor..<(cursor + 1), records)
+
+      case .character:
+        cursor = append(
+          &blocks, .speech, over: speech(records, from: cursor), records,
+          omittingContentOf: neutralElements)
+
+      case .action:
+        cursor = append(
+          &blocks, .action, over: bridgedRun(records, from: cursor, of: .action), records,
+          omittingContentOf: neutralElements)
+
+      case .transition:
+        cursor = append(
+          &blocks, .transition, over: bridgedRun(records, from: cursor, of: .transition), records,
+          omittingContentOf: neutralElements)
+
+      case .centered:
+        cursor = append(
+          &blocks, .centered, over: bridgedRun(records, from: cursor, of: .centered), records,
+          omittingContentOf: neutralElements)
+
+      case .lyrics:
+        // A lyric run that is *not* under a cue. A lyric under one is speech — see
+        // `isSpeechBody`.
+        cursor = append(
+          &blocks, .lyrics, over: bridgedRun(records, from: cursor, of: .lyrics), records,
+          omittingContentOf: neutralElements)
+
+      case .titlePageKey:
+        cursor = append(&blocks, .titlePage, over: titlePageEntry(records, from: cursor), records)
+
+      case .titlePageValue:
+        // A continuation with no key above it — reachable at a window edge, or from a
+        // title page whose first line is indented. Its own block rather than dropped.
+        cursor = append(
+          &blocks, .titlePage, over: run(records, from: cursor, of: .titlePageValue), records)
+
+      case .note, .boneyard, .section, .synopsis:
+        // A neutral run that bridges nothing, so it stands on its own. Grouped by depth as
+        // well as by element, which matters only for `.section`: `# Act One` followed by
+        // `## Scene One` is two blocks, because they are two levels of structure.
+        cursor = append(
+          &blocks, degradedKind(for: element),
+          over: sameDepthRun(records, from: cursor, of: element), records)
+
+      default:
+        // Not part of the Fountain block vocabulary — a window edge, or an element a later
+        // grammar change introduces. A run of one element becomes one block, which keeps
+        // the tiling invariant true no matter what arrives.
+        cursor = append(
+          &blocks, degradedKind(for: element), over: run(records, from: cursor, of: element),
+          records)
+      }
+    }
+
+    return blocks
+  }
+
+  /// The elements that are **dropped but neutral**: they neither join nor separate a
+  /// block, and their content is omitted from the block that absorbs them.
+  ///
+  /// Exactly the four the app's rule dropped. They are annotations layered over a
+  /// screenplay rather than elements of one, which is why a note between two lines of
+  /// speech leaves the speech contiguous.
+  static let neutralElements: Set<ElementKind> = [.note, .boneyard, .section, .synopsis]
+
+  /// One speech: a `.character` cue at `cue`, plus the contiguous speech-body lines that
+  /// follow it, bridged across neutral annotation runs.
+  ///
+  /// It ends at a blank line, at the next cue, and at every other element — which is the
+  /// app's `sawBlankSinceLastBlock` rule restated positively. A second cue ends the first
+  /// speech because a cue is never part of the speech above it, however tightly the two
+  /// are written.
+  private static func speech(_ records: [LineRecord], from cue: Int) -> Range<Int> {
+    var end = cue + 1
+    while end < records.count {
+      if isSpeechBody(records[end]) {
+        end += 1
+        continue
+      }
+      if let resumed = neutralBridge(records, from: end, resumingAt: isSpeechBody) {
+        end = resumed
+        continue
+      }
+      break
+    }
+    return cue..<end
+  }
+
+  /// Whether `record` is a line of a speech's body.
+  ///
+  /// Parentheticals and dialogue, plainly. ``ElementKind/lyrics`` too, and that is a
+  /// judgment call worth naming: the grammar keeps a dialogue block **open** across a
+  /// lyric line (see `ElementKind.note`, which grants lyrics the same rule), and the app's
+  /// contiguity flag did not treat a lyric as a separator either — so a sung line under a
+  /// cue is part of that character's speech in both, and splitting it out here would
+  /// reintroduce exactly the disagreement § 4.2 exists to end. A lyric run with no cue
+  /// above it is still a ``BlockKind/lyrics`` block.
+  ///
+  /// Unlike a neutral line, a lyric's content is **kept**: it is sung, not annotated.
+  private static func isSpeechBody(_ record: LineRecord) -> Bool {
+    record.element == .parenthetical || record.element == .dialogue
+      || record.element == .lyrics
+  }
+
+  /// One title-page entry: a `.titlePageKey` line plus the `.titlePageValue` continuations
+  /// indented under it.
+  private static func titlePageEntry(_ records: [LineRecord], from key: Int) -> Range<Int> {
+    var end = key + 1
+    while end < records.count, records[end].element == .titlePageValue { end += 1 }
+    return key..<end
+  }
+
   // MARK: - Run finders
+
+  /// The maximal run of `element` beginning at `start`, continuing **across** any neutral
+  /// annotation run that is itself followed by another `element` line. Never empty.
+  ///
+  /// The "followed by" clause is the whole rule. Without it the run would greedily swallow
+  /// a trailing note, and `Bob waits. / # Act Two / INT. OFFICE` would become one action
+  /// block containing a section heading and reaching to the slug line.
+  private static func bridgedRun(
+    _ records: [LineRecord], from start: Int, of element: ElementKind
+  ) -> Range<Int> {
+    var end = start + 1
+    while end < records.count {
+      if records[end].element == element {
+        end += 1
+        continue
+      }
+      if let resumed = neutralBridge(records, from: end, resumingAt: { $0.element == element }) {
+        end = resumed
+        continue
+      }
+      break
+    }
+    return start..<end
+  }
+
+  /// If a run of neutral annotation lines begins at `start` and the line **after** that
+  /// run satisfies `resumes`, the index of that resuming line; otherwise `nil`.
+  ///
+  /// Returning the resuming index rather than a `Bool` is what makes the caller's loop
+  /// terminate: it advances past the whole neutral run in one step, and `resumed > start`
+  /// always, so no caller can spin.
+  private static func neutralBridge(
+    _ records: [LineRecord], from start: Int, resumingAt resumes: (LineRecord) -> Bool
+  ) -> Int? {
+    var end = start
+    while end < records.count, neutralElements.contains(records[end].element) { end += 1 }
+    guard end > start, end < records.count, resumes(records[end]) else { return nil }
+    return end
+  }
 
   /// The maximal run of `element` beginning at `start`. Never empty.
   private static func run(
@@ -236,10 +464,16 @@ enum EscriboBlockGrouper {
 
   /// Appends the block covering `lines` — **indices into `records`**, not document line
   /// indices — and returns the index to continue from.
+  ///
+  /// - Parameter omitted: Elements whose lines are inside the block but whose *content* is
+  ///   not. Empty for every Markdown block; the Fountain neutral annotations for the
+  ///   blocks that bridge across one. The line stays inside `lines` and `range` because
+  ///   the tiling invariant requires it, and leaves `contentRanges` because read-aloud
+  ///   must not speak a `[[note]]` buried in a speech.
   @discardableResult
   private static func append(
     _ blocks: inout [EscriboBlock], _ kind: BlockKind, over lines: Range<Int>,
-    _ records: [LineRecord]
+    _ records: [LineRecord], omittingContentOf omitted: Set<ElementKind> = []
   ) -> Int {
     guard let first = records[safe: lines.lowerBound], let last = records[safe: lines.upperBound - 1]
     else { return max(lines.upperBound, lines.lowerBound + 1) }
@@ -251,7 +485,10 @@ enum EscriboBlockGrouper {
         // cursor: on an incremental scan the window does not begin at line zero.
         lines: first.index..<(last.index + 1),
         range: first.range.lowerBound..<last.range.upperBound,
-        contentRanges: records[lines].map(\.contentRange).filter { !$0.isEmpty }
+        contentRanges: records[lines]
+          .filter { !omitted.contains($0.element) }
+          .map(\.contentRange)
+          .filter { !$0.isEmpty }
       ))
     return lines.upperBound
   }

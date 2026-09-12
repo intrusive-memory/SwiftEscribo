@@ -236,6 +236,9 @@ struct FountainGrammar: LineGrammar {
 
   var lookahead: Int { 1 }
 
+  /// Fountain block grouping — see ``EscriboBlockGrouper/fountainBlocks(from:)``.
+  var blockDialect: BlockDialect { .fountain }
+
   /// The ``LineState/openConstruct`` tag meaning "a `[[` note is open".
   ///
   /// Its meaning belongs to this grammar; the scanner only ever compares it. The value is

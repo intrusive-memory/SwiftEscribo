@@ -345,22 +345,28 @@ struct MarkdownBlockGroupingTests {
       "a block cannot begin outside the lines the result claims to cover")
   }
 
-  // MARK: - Non-Markdown dialects produce nothing
+  // MARK: - A grammar with no block structure produces nothing
 
   @Test("A grammar with no block dialect produces no blocks rather than wrong ones")
   func grammarsWithoutABlockDialectProduceNoBlocks() {
-    // `TextGrammar` has no block structure, and the default `blockDialect` is `.none`.
-    // Fountain grouping (§ 4.2) is not implemented yet and must be empty rather than
-    // guessed — a consumer treating "no blocks" as an error would be relying on grouping
-    // that has not shipped.
+    // `TextGrammar` recognizes nothing and its `blockDialect` is the protocol's `.none`
+    // default. Empty is the honest answer for a language with no block structure, and it
+    // must be *empty* rather than one block per line: a consumer that drew a well lane
+    // from these would be drawing structure the scanner never found.
     var text = IncrementalScanner(grammar: TextGrammar())
     let plain = text.fullScan("a\nb\n\nc")
     #expect(!plain.lineRecords.isEmpty, "the scan itself must still be total")
     #expect(plain.blocks.isEmpty)
 
+    // The other half of this test asserted, until § 4.2 shipped, that Fountain produced
+    // no blocks — a deliberate tripwire on the seam. It now asserts the opposite, and it
+    // stays here rather than moving so that the two dialects are compared in one place:
+    // `.none` means empty, and a real dialect never does.
     var fountain = IncrementalScanner(grammar: FountainGrammar())
     let screenplay = fountain.fullScan("INT. HOUSE - DAY\n\nBob waits.")
-    #expect(!screenplay.lineRecords.isEmpty)
-    #expect(screenplay.blocks.isEmpty)
+    #expect(!screenplay.blocks.isEmpty, "Fountain grouping shipped; blocks must not be empty")
+    #expect(
+      screenplay.blocks.map(\.kind) == [.sceneHeading, .blank, .action],
+      "and they must be the right blocks, not merely present")
   }
 }
