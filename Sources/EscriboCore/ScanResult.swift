@@ -42,6 +42,29 @@ public struct ScanResult: Equatable, Sendable {
   /// One record per line index in ``lines``, in ascending order.
   public let lineRecords: [LineRecord]
 
+  /// The blocks ``lineRecords`` group into — a writer's units of thought, not the
+  /// editor's lines (REQUIREMENTS-1.1.0 § 4).
+  ///
+  /// A third payload alongside spans and records, applied on a third path: spans become
+  /// character attributes, records become paragraph attributes, and blocks drive the
+  /// paragraph well's lane, read-aloud's granularity, and the script preview's grouping.
+  ///
+  /// **Scoped to ``lines``, like everything else here.** On a full scan that is the whole
+  /// document and the blocks are the document's. On an *incremental* scan it is the
+  /// rescanned window, so the first and last block may be truncated by the window's edge —
+  /// a paragraph that begins three lines above the window appears as a paragraph block
+  /// starting at the window's first line. A consumer that needs a document-wide answer
+  /// keeps its own blocks and splices, exactly as it does for records.
+  ///
+  /// Empty for a language with no block structure, and empty rather than absent for a
+  /// dialect whose grouping has not shipped: nothing downstream may treat "no blocks" as
+  /// an error.
+  ///
+  /// Ordered ascending, and for a non-empty result they tile ``lines`` with no gaps and no
+  /// overlaps — every line is in exactly one block, blank runs included. That is what lets
+  /// an offset-to-block lookup be a search with no fallback path.
+  public let blocks: [EscriboBlock]
+
   /// Creates a scan result.
   ///
   /// `internal` on purpose: a result is scanner output, and ``LineRecord`` is not
@@ -50,11 +73,13 @@ public struct ScanResult: Equatable, Sendable {
     dirtyRange: Range<Int>,
     spans: [EscriboSpan],
     lines: Range<Int>,
-    lineRecords: [LineRecord]
+    lineRecords: [LineRecord],
+    blocks: [EscriboBlock] = []
   ) {
     self.dirtyRange = dirtyRange
     self.spans = spans
     self.lines = lines
     self.lineRecords = lineRecords
+    self.blocks = blocks
   }
 }

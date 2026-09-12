@@ -374,6 +374,9 @@ struct MarkdownGrammar: LineGrammar {
   /// conservative padding and cannot change a painted line.
   var lookahead: Int { 1 }
 
+  /// CommonMark block grouping — see ``EscriboBlockGrouper/markdownBlocks(from:)``.
+  var blockDialect: BlockDialect { .markdown }
+
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan {
     let line = window.current
 

@@ -185,8 +185,19 @@ protocol LineGrammar {
   /// malformed construct is scanned as text and, if it is multi-line, carried in the
   /// returned state until the end of the document.
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan
+
+  /// Which block-grouping vocabulary this grammar's line records group under
+  /// (REQUIREMENTS-1.1.0 § 4).
+  ///
+  /// A property of the grammar rather than of the ``Language`` because the grouper runs
+  /// inside ``IncrementalScanner``, which is generic over this protocol and has never
+  /// heard of `Language`. The default is ``BlockDialect/none`` so that no existing test
+  /// grammar, and no future grammar without block structure, has to mention it.
+  var blockDialect: BlockDialect { get }
 }
 
 extension LineGrammar {
   var backwardExtent: Int { max(1, lookahead) }
+
+  var blockDialect: BlockDialect { .none }
 }

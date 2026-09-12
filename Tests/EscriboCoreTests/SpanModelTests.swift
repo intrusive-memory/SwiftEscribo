@@ -37,6 +37,13 @@ struct SpanModelTests {
     depth: 1
   )
 
+  private static let block = EscriboBlock(
+    kind: .heading,
+    lines: 0..<1,
+    range: 0..<12,
+    contentRanges: [3..<11]
+  )
+
   private static let result = ScanResult(
     dirtyRange: 0..<12,
     spans: [span],
@@ -58,6 +65,7 @@ struct SpanModelTests {
     #expect(requireSendable(Self.record) == Self.record)
     #expect(requireSendable(Self.result) == Self.result)
     #expect(requireSendable(Self.edit) == Self.edit)
+    #expect(requireSendable(Self.block) == Self.block)
     #expect(requireSendable(LineState.documentStart) == LineState.documentStart)
   }
 
@@ -165,6 +173,11 @@ struct SpanModelTests {
     #expect(
       Self.result
         != ScanResult(dirtyRange: 0..<12, spans: [Self.span], lines: 0..<1, lineRecords: []))
+    #expect(
+      Self.result
+        != ScanResult(
+          dirtyRange: 0..<12, spans: [Self.span], lines: 0..<1, lineRecords: [Self.record],
+          blocks: [Self.block]))
   }
 
   // MARK: - LineState

@@ -141,6 +141,14 @@ enum ResolvedGrammar: LineGrammar {
     }
   }
 
+  var blockDialect: BlockDialect {
+    switch self {
+    case .markdown(let grammar): grammar.blockDialect
+    case .fountain(let grammar): grammar.blockDialect
+    case .text(let grammar): grammar.blockDialect
+    }
+  }
+
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan {
     switch self {
     case .markdown(let grammar): grammar.scanLine(window, state: state)

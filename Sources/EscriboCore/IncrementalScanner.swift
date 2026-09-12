@@ -307,7 +307,13 @@ struct IncrementalScanner<Grammar: LineGrammar> {
     }
 
     return (
-      ScanResult(dirtyRange: dirtyRange, spans: spans, lines: lines, lineRecords: records),
+      ScanResult(
+        dirtyRange: dirtyRange, spans: spans, lines: lines, lineRecords: records,
+        // Grouping is a pure function of the records, so it runs here for both entry
+        // points and there is no second code path for the incremental case to drift from.
+        // On an incremental scan it groups the window, which is what `ScanResult.blocks`
+        // documents it as.
+        blocks: EscriboBlockGrouper.blocks(from: records, dialect: grammar.blockDialect)),
       states
     )
   }
