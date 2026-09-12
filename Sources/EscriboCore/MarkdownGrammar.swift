@@ -377,6 +377,25 @@ struct MarkdownGrammar: LineGrammar {
   /// CommonMark block grouping — see ``EscriboBlockGrouper/markdownBlocks(from:)``.
   var blockDialect: BlockDialect { .markdown }
 
+  /// Paragraphs join. This is the whole of § 3's behaviour change: `**…**` across a hard
+  /// wrap pairs instead of rendering as literal stars.
+  ///
+  /// Only paragraphs in 0.4.0. Blockquotes and list items need the marker spans separated
+  /// from the inline spans before their content can be re-scanned — a paragraph line is the
+  /// one case with no marker at all, which is why it is the one case that ships first. See
+  /// ``scanParagraph(_:blocks:)``, whose entire span output is the inline pass.
+  var joinsParagraphContent: Bool { true }
+
+  func joinedParagraphSpans(_ pieces: [ContentPiece]) -> [EscriboSpan] {
+    // `kind` and `allowsHardBreak` match `scanParagraph`'s line-based call exactly, so a
+    // one-line paragraph would come back identical either way.
+    MarkdownInline.joinedSpans(of: pieces, kind: .text, allowsHardBreak: true)
+  }
+
+  func containsJoinableInlineSyntax(_ units: [UInt16]) -> Bool {
+    MarkdownInline.containsInlineSyntax(units, 0..<units.count)
+  }
+
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan {
     let line = window.current
 

@@ -194,10 +194,52 @@ protocol LineGrammar {
   /// heard of `Language`. The default is ``BlockDialect/none`` so that no existing test
   /// grammar, and no future grammar without block structure, has to mention it.
   var blockDialect: BlockDialect { get }
+
+  /// Whether a **paragraph** block's inline pass runs over the block's joined content
+  /// rather than line by line (REQUIREMENTS-1.1.0 § 3).
+  ///
+  /// A grammar cannot do this for itself: a block is unbounded in length and a grammar can
+  /// see at most ``lookahead`` lines ahead and none behind, which is a limit the
+  /// convergence engine's forward rule depends on. So the joined pass runs in
+  /// ``IncrementalScanner`` *after* the line loop, and this is how a grammar opts into it.
+  ///
+  /// Default `false`. Fountain deliberately does not opt in — joining a speech would let a
+  /// `*` in a character cue pair with a `*` three lines into the dialogue, and Fountain's
+  /// genuinely multi-line constructs (notes, boneyards) are carried in
+  /// ``LineState/openConstruct`` already, which is the right mechanism for them.
+  var joinsParagraphContent: Bool { get }
+
+  /// The spans for one paragraph block's joined content, in document coordinates, with no
+  /// span crossing a piece boundary.
+  ///
+  /// Called only when ``joinsParagraphContent``, once per paragraph block, with one
+  /// ``ContentPiece`` per line of the block in document order.
+  func joinedParagraphSpans(_ pieces: [ContentPiece]) -> [EscriboSpan]
+
+  /// Whether `units` hold any character that could begin an inline construct.
+  ///
+  /// Asked of every line of a block's run to decide whether the joined pass is worth
+  /// running — and, more importantly, whether the rescan window is worth widening. A run
+  /// with **no** delimiter anywhere cannot have been styled across a line by the previous
+  /// scan either, so nothing about it can be stale and nothing needs re-joining. One
+  /// delimiter is enough to require both: see
+  /// ``IncrementalScanner/joinableRun(containing:in:)``, which explains why the threshold
+  /// is one rather than two and why a predicate over post-edit text must not ask for more.
+  ///
+  /// This is what keeps the rescan window narrow where it matters. Ordinary prose carries
+  /// no delimiters, so an edit in a two-hundred-line paragraph of plain text widens nothing
+  /// and typing costs exactly what it cost in 0.3.0.
+  func containsJoinableInlineSyntax(_ units: [UInt16]) -> Bool
 }
 
 extension LineGrammar {
   var backwardExtent: Int { max(1, lookahead) }
 
   var blockDialect: BlockDialect { .none }
+
+  var joinsParagraphContent: Bool { false }
+
+  func joinedParagraphSpans(_ pieces: [ContentPiece]) -> [EscriboSpan] { [] }
+
+  func containsJoinableInlineSyntax(_ units: [UInt16]) -> Bool { false }
 }

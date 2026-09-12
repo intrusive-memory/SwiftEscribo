@@ -588,6 +588,19 @@ struct MarkdownInlineTests {
 
     // What is left is single-asterisk emphasis over 6..<12, which is CommonMark's reading
     // of `*bold**` and is written out rather than read off the scanner.
+    //
+    // **This fixture is block-scoped as of 0.4.0 and the expectation below is unchanged.**
+    // `intro`, `*bold**`, and `tail` are three consecutive paragraph lines with no blank
+    // between them, so they are ONE paragraph block and the inline pass now runs over
+    // `intro *bold** tail` rather than over `*bold**` alone. The pairing is the same
+    // either way and the numbers were re-derived rather than assumed: joined, the `*` at 6
+    // is preceded by the joining space and followed by `b`, so it is left-flanking and
+    // opens exactly as it did at the start of its own line; the `**` at 11 is preceded by
+    // `d` and followed by the joining space, so it is right-flanking and closes with one
+    // of its two asterisks, leaving the second literal. Only the *scope* of the pass moved.
+    //
+    // The dirty-range assertions above are deliberately inequalities, which is what lets
+    // them keep holding now that the window widens back to the block's first line.
     let line = result.spans.filter { $0.range.lowerBound >= 6 && $0.range.upperBound <= 14 }
     ScanInvariants.expectSameElements(
       line.map(Expected.init),

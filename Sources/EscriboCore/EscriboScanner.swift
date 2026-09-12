@@ -149,6 +149,30 @@ enum ResolvedGrammar: LineGrammar {
     }
   }
 
+  var joinsParagraphContent: Bool {
+    switch self {
+    case .markdown(let grammar): grammar.joinsParagraphContent
+    case .fountain(let grammar): grammar.joinsParagraphContent
+    case .text(let grammar): grammar.joinsParagraphContent
+    }
+  }
+
+  func joinedParagraphSpans(_ pieces: [ContentPiece]) -> [EscriboSpan] {
+    switch self {
+    case .markdown(let grammar): grammar.joinedParagraphSpans(pieces)
+    case .fountain(let grammar): grammar.joinedParagraphSpans(pieces)
+    case .text(let grammar): grammar.joinedParagraphSpans(pieces)
+    }
+  }
+
+  func containsJoinableInlineSyntax(_ units: [UInt16]) -> Bool {
+    switch self {
+    case .markdown(let grammar): grammar.containsJoinableInlineSyntax(units)
+    case .fountain(let grammar): grammar.containsJoinableInlineSyntax(units)
+    case .text(let grammar): grammar.containsJoinableInlineSyntax(units)
+    }
+  }
+
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan {
     switch self {
     case .markdown(let grammar): grammar.scanLine(window, state: state)
