@@ -515,3 +515,304 @@ struct WellOverlayTests {
     #expect(bars(editor).isEmpty)
   }
 }
+
+// MARK: - Playback: progress and highlight rules
+
+/// The pure halves of playback (REQUIREMENTS-1.1.0 § 5.2 Playing, rule 4, D-7): clamping the
+/// host's progress, deciding how the span bar fills, and bounding the spoken range.
+@Suite("Paragraph well — playback rules")
+struct WellPlaybackRuleTests {
+
+  @Test("progress clamps to 0…1: below 0, above 1, NaN, and the infinities")
+  func progressClamps() {
+    #expect(WellProgress.clamped(nil) == nil)
+    #expect(WellProgress.clamped(-0.5) == 0)
+    #expect(WellProgress.clamped(1.5) == 1)
+    #expect(WellProgress.clamped(.nan) == 0, "NaN claims no progress")
+    #expect(WellProgress.clamped(.infinity) == 1)
+    #expect(WellProgress.clamped(-.infinity) == 0)
+    #expect(WellProgress.clamped(0.4) == 0.4)
+    #expect(WellProgress.clamped(0) == 0)
+    #expect(WellProgress.clamped(1) == 1)
+  }
+
+  @Test("Playing fills with the clamped progress, animated, in accent")
+  func playingFillsWithClampedProgress() {
+    let fill = WellPlacement.barFill(role: .playing, progress: 0.3, reduceMotion: false)
+    #expect(fill.isAccent)
+    #expect(fill.fraction == CGFloat(0.3))
+    #expect(fill.duration == WellTiming.progressStep)
+    #expect(fill.duration > 0)
+
+    #expect(
+      WellPlacement.barFill(role: .playing, progress: 7, reduceMotion: false).fraction
+        == CGFloat(1))
+    #expect(
+      WellPlacement.barFill(role: .playing, progress: -2, reduceMotion: false).fraction
+        == CGFloat(0))
+    #expect(
+      WellPlacement.barFill(role: .playing, progress: .nan, reduceMotion: false).fraction
+        == CGFloat(0))
+  }
+
+  @Test("Reduce Motion: the playing bar is already filled in accent, with no animation")
+  func reduceMotionFillsWithoutAnimating() {
+    for progress in [nil, 0, 0.3, 1.5, Double.nan] as [Double?] {
+      let fill = WellPlacement.barFill(role: .playing, progress: progress, reduceMotion: true)
+      #expect(fill == WellBarFill(isAccent: true, fraction: 1, duration: 0))
+    }
+  }
+
+  @Test("Hover and Caret draw the resting track; Finished and progress-less Playing are full")
+  func otherRolesFill() {
+    for role in [WellTracker.Role.hover, .caret] {
+      #expect(
+        WellPlacement.barFill(role: role, progress: 0.5, reduceMotion: false)
+          == WellBarFill(isAccent: false, fraction: 0, duration: 0))
+    }
+    #expect(
+      WellPlacement.barFill(role: .finished, progress: 0.5, reduceMotion: false)
+        == WellBarFill(isAccent: true, fraction: 1, duration: 0))
+    #expect(
+      WellPlacement.barFill(role: .playing, progress: nil, reduceMotion: false)
+        == WellBarFill(isAccent: true, fraction: 1, duration: 0))
+  }
+
+  @Test("The fill is anchored at the top and spans its fraction of the bar")
+  func fillFrameGrowsFromTheTop() {
+    let bounds = CGRect(x: 0, y: 0, width: 2, height: 50)
+    #expect(
+      WellPlacement.fillFrame(barBounds: bounds, fraction: 0.5)
+        == CGRect(x: 0, y: 0, width: 2, height: 25))
+    #expect(WellPlacement.fillFrame(barBounds: bounds, fraction: 3) == bounds)
+    #expect(WellPlacement.fillFrame(barBounds: bounds, fraction: -1).height == CGFloat(0))
+  }
+
+  @Test("A spoken range is drawable only when it fits the document; removal clamps")
+  func spokenRangeBounds() {
+    #expect(WellHighlight.drawableRange(nil, documentLength: 10) == nil)
+    #expect(
+      WellHighlight.drawableRange(NSRange(location: 2, length: 3), documentLength: 10)
+        == NSRange(location: 2, length: 3))
+    #expect(
+      WellHighlight.drawableRange(NSRange(location: 7, length: 3), documentLength: 10)
+        == NSRange(location: 7, length: 3), "ending exactly at the end is inside")
+    #expect(
+      WellHighlight.drawableRange(NSRange(location: 8, length: 3), documentLength: 10) == nil,
+      "a range running past the end is dropped, not clamped onto other words")
+    #expect(
+      WellHighlight.drawableRange(NSRange(location: 20, length: 1), documentLength: 10) == nil)
+    #expect(
+      WellHighlight.drawableRange(NSRange(location: 2, length: 0), documentLength: 10) == nil)
+    #expect(
+      WellHighlight.drawableRange(NSRange(location: NSNotFound, length: 0), documentLength: 10)
+        == nil)
+    #expect(
+      WellHighlight.drawableRange(NSRange(location: Int.max - 1, length: 5), documentLength: 10)
+        == nil, "no overflow on a huge location")
+
+    #expect(
+      WellHighlight.removableRange(NSRange(location: 8, length: 5), documentLength: 10)
+        == NSRange(location: 8, length: 2))
+    #expect(
+      WellHighlight.removableRange(NSRange(location: 12, length: 5), documentLength: 10) == nil)
+    #expect(
+      WellHighlight.removableRange(NSRange(location: 0, length: 3), documentLength: 0) == nil)
+  }
+
+  @Test("The highlight is the accent colour at 25% opacity")
+  func highlightOpacity() {
+    #expect(WellHighlight.opacity == CGFloat(0.25))
+    #expect(WellHighlight.color.cgColor.alpha == CGFloat(0.25))
+  }
+}
+
+// MARK: - Playback: subviews and the text layout manager
+
+extension WellOverlayTests {
+
+  final class HighlightLog {
+    var length = 0
+    var calls: [String] = []
+  }
+
+  /// Replaces the overlay's highlight renderer with one that records its calls.
+  private func recordHighlights(on editor: EscriboTextView) -> HighlightLog {
+    let log = HighlightLog()
+    log.length = Self.document.utf16.count
+    editor.wellOverlay.highlightRenderer = WellHighlightRenderer(
+      documentLength: { log.length },
+      add: { log.calls.append("add \($0.location),\($0.length)") },
+      remove: { log.calls.append("remove \($0.location),\($0.length)") })
+    return log
+  }
+
+  private func backingString(_ editor: EscriboTextView) -> String {
+    #if os(macOS)
+      return editor.textView.textStorage?.string ?? ""
+    #else
+      return editor.textView.textStorage.string
+    #endif
+  }
+
+  private func backingLength(_ editor: EscriboTextView) -> Int {
+    #if os(macOS)
+      return editor.textView.textStorage?.length ?? -1
+    #else
+      return editor.textView.textStorage.length
+    #endif
+  }
+
+  private func backingHasBackgroundColor(_ editor: EscriboTextView, at index: Int) -> Bool {
+    #if os(macOS)
+      let storage = editor.textView.textStorage
+      return storage?.attribute(.backgroundColor, at: index, effectiveRange: nil) != nil
+    #else
+      let storage = editor.textView.textStorage
+      return storage.attribute(.backgroundColor, at: index, effectiveRange: nil) != nil
+    #endif
+  }
+
+  /// How many rendering-attribute runs carry a background colour.
+  private func renderedHighlightRuns(_ manager: NSTextLayoutManager) -> Int {
+    guard let start = manager.textContentManager?.documentRange.location else { return -1 }
+    var runs = 0
+    manager.enumerateRenderingAttributes(from: start, reverse: false) { _, attributes, _ in
+      if attributes[.backgroundColor] != nil { runs += 1 }
+      return true
+    }
+    return runs
+  }
+
+  @Test("spokenRange applied and cleared leaves the backing store's string and length identical")
+  func spokenRangeLeavesTheDocumentByteIdentical() throws {
+    // The real renderer, on the real TextKit 2 stack — no frame, no window, no layout.
+    let (editor, _) = makeEditor()
+    let manager = try #require(editor.textView.textLayoutManager)
+    let first = try block(editor, kind: .paragraph)
+
+    let beforeUnits = Array(backingString(editor).utf16)
+    let beforeLength = backingLength(editor)
+    let beforeBackground = backingHasBackgroundColor(editor, at: 1)
+    try #require(beforeLength == Self.document.utf16.count)
+
+    let word = NSRange(location: 0, length: 3)
+    editor.applyWell(
+      EscriboWell(activeBlock: first.id, progress: 0.2, spokenRange: word),
+      horizontalSizeClass: Self.sizeClass)
+    #expect(editor.wellOverlay.highlightedRange == word)
+    #expect(Array(backingString(editor).utf16) == beforeUnits)
+    #expect(backingLength(editor) == beforeLength)
+    #expect(backingHasBackgroundColor(editor, at: 1) == beforeBackground)
+    #expect(renderedHighlightRuns(manager) >= 1, "the highlight lives on the layout manager")
+
+    editor.applyWell(
+      EscriboWell(activeBlock: first.id, progress: 0.4, spokenRange: nil),
+      horizontalSizeClass: Self.sizeClass)
+    #expect(editor.wellOverlay.highlightedRange == nil)
+    #expect(Array(backingString(editor).utf16) == beforeUnits)
+    #expect(backingLength(editor) == beforeLength)
+    #expect(backingHasBackgroundColor(editor, at: 1) == beforeBackground)
+    #expect(renderedHighlightRuns(manager) == 0)
+
+    // A stale range past the end is dropped before TextKit is asked anything.
+    editor.applyWell(
+      EscriboWell(activeBlock: first.id, spokenRange: NSRange(location: 1000, length: 4)),
+      horizontalSizeClass: Self.sizeClass)
+    #expect(editor.wellOverlay.highlightedRange == nil)
+    #expect(backingLength(editor) == beforeLength)
+  }
+
+  @Test("Moving the highlight removes the old range first; nil and removing the well clear it")
+  func highlightMovesAndClears() {
+    let (editor, _) = makeEditor()
+    let log = recordHighlights(on: editor)
+    let size = Self.sizeClass
+
+    editor.applyWell(
+      EscriboWell(spokenRange: NSRange(location: 0, length: 3)), horizontalSizeClass: size)
+    #expect(log.calls == ["add 0,3"])
+
+    // The same word on the next update — a progress tick — draws nothing again.
+    editor.applyWell(
+      EscriboWell(progress: 0.5, spokenRange: NSRange(location: 0, length: 3)),
+      horizontalSizeClass: size)
+    #expect(log.calls == ["add 0,3"])
+
+    editor.applyWell(
+      EscriboWell(spokenRange: NSRange(location: 16, length: 3)), horizontalSizeClass: size)
+    #expect(log.calls == ["add 0,3", "remove 0,3", "add 16,3"])
+
+    editor.applyWell(EscriboWell(spokenRange: nil), horizontalSizeClass: size)
+    #expect(log.calls == ["add 0,3", "remove 0,3", "add 16,3", "remove 16,3"])
+    #expect(editor.wellOverlay.highlightedRange == nil)
+
+    editor.applyWell(
+      EscriboWell(spokenRange: NSRange(location: 5, length: 1)), horizontalSizeClass: size)
+    editor.applyWell(nil, horizontalSizeClass: size)
+    #expect(Array(log.calls.suffix(2)) == ["add 5,1", "remove 5,1"])
+    #expect(editor.wellOverlay.highlightedRange == nil)
+  }
+
+  @Test("A stale spoken range after the document shrinks draws nothing and does not crash")
+  func staleSpokenRangeIsGuarded() {
+    let (editor, _) = makeEditor()
+    let log = recordHighlights(on: editor)
+    let size = Self.sizeClass
+
+    editor.applyWell(
+      EscriboWell(spokenRange: NSRange(location: 14, length: 5)), horizontalSizeClass: size)
+    #expect(log.calls == ["add 14,5"])
+
+    // An edit shortens the document to 16 units; the host still reports the old word.
+    log.length = 16
+    editor.applyWell(
+      EscriboWell(spokenRange: NSRange(location: 14, length: 5)), horizontalSizeClass: size)
+    #expect(
+      log.calls == ["add 14,5", "remove 14,2"], "the old highlight goes, clamped; nothing new")
+    #expect(editor.wellOverlay.highlightedRange == nil)
+
+    log.length = 0
+    editor.applyWell(
+      EscriboWell(spokenRange: NSRange(location: 0, length: 1)), horizontalSizeClass: size)
+    #expect(log.calls.count == 2)
+  }
+
+  @Test("Reduce Motion: the playing bar appears already filled, not animated")
+  func reduceMotionBarIsAlreadyFilled() throws {
+    let (editor, _) = makeEditor()
+    let first = try block(editor, kind: .paragraph)
+    editor.wellOverlay.reduceMotion = { true }
+    editor.applyWell(
+      EscriboWell(activeBlock: first.id, progress: 0.3), horizontalSizeClass: Self.sizeClass)
+
+    let bar = try #require(bars(editor).first)
+    #expect(bar.renderedFill == WellBarFill(isAccent: true, fraction: 1, duration: 0))
+    #expect(
+      bar.fill.frame == CGRect(x: 0, y: 0, width: bar.bounds.width, height: bar.bounds.height))
+    #expect(bar.fill.frame.height == CGFloat(16), "the 20 pt line less 2 pt top and bottom")
+  }
+
+  @Test("While a block is active its button shows stop.fill and its span bar is accent")
+  func activeBlockShowsStopAndAccent() throws {
+    let (editor, _) = makeEditor()
+    let first = try block(editor, kind: .paragraph)
+    let second = try block(editor, kind: .paragraph, last: true)
+    editor.applyWell(EscriboWell(activeBlock: first.id), horizontalSizeClass: Self.sizeClass)
+    editor.wellOverlay.pointerMoved(to: point(onLine: 4))
+
+    let playing = try #require(buttons(editor).first { $0.block?.id == first.id })
+    let hovered = try #require(buttons(editor).first { $0.block?.id == second.id })
+    #expect(playing.showsStop == true)
+    #expect(hovered.showsStop == false)
+
+    let accentBars = bars(editor).filter { $0.renderedFill?.isAccent == true }
+    #expect(accentBars.count == 1)
+    #expect(accentBars.first?.frame.minY == CGFloat(2), "the active block's bar, on line 0")
+
+    // Playback ends: Finished holds the accent bar, and the button is back to play.
+    editor.applyWell(EscriboWell(activeBlock: nil), horizontalSizeClass: Self.sizeClass)
+    #expect(bars(editor).contains { $0.renderedFill?.isAccent == true }, "Finished holds accent")
+    #expect(buttons(editor).allSatisfy { $0.showsStop == false })
+  }
+}

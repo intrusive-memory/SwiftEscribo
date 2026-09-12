@@ -136,6 +136,14 @@ final class WellOverlay: NSObject {
   /// or `nil`. Only iOS installs one: Caret is a touch state.
   var caretOffset: () -> Int? = { nil }
 
+  /// Draws and removes the spoken-word highlight. ``WellHighlightRenderer/none`` until a
+  /// text view installs its own.
+  var highlightRenderer: WellHighlightRenderer = .none
+
+  /// The range the highlight is currently drawn over, or `nil`. Kept so the next change can
+  /// remove exactly what was drawn before drawing anything new.
+  private(set) var highlightedRange: NSRange?
+
   /// Called when a well button is activated.
   var onAction: (EscriboWellItem, EscriboBlock) -> Void = { _, _ in }
 
@@ -158,6 +166,7 @@ final class WellOverlay: NSObject {
   /// Stores `well`, feeds any change of active block to the tracker, and reconciles.
   func apply(_ well: EscriboWell?) {
     self.well = well
+    updateHighlight(well?.spokenRange)
     guard let well else {
       tracker = WellTracker()
       removeAllSlots()
@@ -225,6 +234,31 @@ final class WellOverlay: NSObject {
     }
   }
 
+  /// Moves the spoken-word highlight to `range`, or removes it for `nil`.
+  ///
+  /// Independent of the lane: the highlight is drawn in the text, so a host playing from an
+  /// iPhone — which reserves no lane at compact width — still gets it.
+  ///
+  /// The previous highlight is always removed before a new one is drawn, so there is never
+  /// more than one. A range that no longer fits the document draws nothing (see
+  /// ``WellHighlight/drawableRange(_:documentLength:)``); the old highlight is still removed,
+  /// since a word that is no longer being spoken must not stay lit.
+  func updateHighlight(_ range: NSRange?) {
+    guard range != nil || highlightedRange != nil else { return }
+    let length = highlightRenderer.documentLength()
+    let next = WellHighlight.drawableRange(range, documentLength: length)
+    guard next != highlightedRange else { return }
+    if let previous = highlightedRange,
+      let removable = WellHighlight.removableRange(previous, documentLength: length)
+    {
+      highlightRenderer.remove(removable)
+    }
+    highlightedRange = next
+    if let next {
+      highlightRenderer.add(next)
+    }
+  }
+
   @objc func wellButtonPressed(_ sender: WellButton) {
     guard let block = sender.block else { return }
     onAction(sender.item, block)
@@ -277,7 +311,9 @@ final class WellOverlay: NSObject {
         host.addSubview(slot.bar)
       }
       slot.bar.frame = WellPlacement.spanBarFrame(blockRect: blockRect, textEdge: textEdge)
-      slot.bar.style(isAccent: isPlaying || presentation.role == .finished)
+      slot.bar.render(
+        WellPlacement.barFill(
+          role: presentation.role, progress: well.progress, reduceMotion: reduceMotion()))
 
       slot.setItems(items, in: host, target: self)
       for (index, button) in slot.buttons.enumerated() {
@@ -401,13 +437,47 @@ extension WellHostView {
 #if os(macOS)
 
   /// The span bar. A type of its own so it can be found among the text view's subviews.
+  ///
+  /// A track with a fill inside it. Flipped, so the fill is anchored at the top on both
+  /// platforms and ``WellPlacement/fillFrame(barBounds:fraction:)`` has one answer.
   final class WellSpanBar: NSView {
 
-    func style(isAccent: Bool) {
-      wantsLayer = true
-      layer?.cornerRadius = WellPlacement.spanBarWidth / 2
+    /// The accent fill, a fraction of the bar's height from the top.
+    let fill = NSView(frame: .zero)
+
+    /// The fill as last rendered.
+    private(set) var renderedFill: WellBarFill?
+
+    override var isFlipped: Bool { true }
+
+    func render(_ barFill: WellBarFill) {
+      if fill.superview == nil {
+        wantsLayer = true
+        layer?.cornerRadius = WellPlacement.spanBarWidth / 2
+        layer?.masksToBounds = true
+        fill.wantsLayer = true
+        addSubview(fill)
+      }
+      // The track: accent but faint while playing, so the whole bar reads as the playing
+      // block's and the fill still shows against it.
       layer?.backgroundColor =
-        (isAccent ? NSColor.controlAccentColor : NSColor.tertiaryLabelColor).cgColor
+        (barFill.isAccent
+        ? NSColor.controlAccentColor.withAlphaComponent(0.3) : NSColor.tertiaryLabelColor).cgColor
+      fill.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+
+      let target = WellPlacement.fillFrame(barBounds: bounds, fraction: barFill.fraction)
+      renderedFill = barFill
+      guard fill.frame != target else { return }
+      guard barFill.duration > 0 else {
+        fill.frame = target
+        return
+      }
+      let fill = self.fill
+      NSAnimationContext.runAnimationGroup { context in
+        context.duration = barFill.duration
+        context.timingFunction = CAMediaTimingFunction(name: .linear)
+        fill.animator().frame = target
+      }
     }
   }
 
@@ -422,7 +492,8 @@ extension WellHostView {
     /// The block this button acts on, refreshed on every reconciliation.
     var block: EscriboBlock?
 
-    private var showsStop: Bool?
+    /// Whether the button shows `stop.fill` — `nil` until first styled.
+    private(set) var showsStop: Bool?
     private var hoverArea: NSTrackingArea?
 
     func configure(item: EscriboWellItem, target: WellOverlay) {
@@ -482,11 +553,39 @@ extension WellHostView {
 #elseif os(iOS)
 
   /// The span bar. A type of its own so it can be found among the text view's subviews.
+  ///
+  /// A track with a fill inside it, anchored at the top.
   final class WellSpanBar: UIView {
 
-    func style(isAccent: Bool) {
-      layer.cornerRadius = WellPlacement.spanBarWidth / 2
-      backgroundColor = isAccent ? .tintColor : .tertiaryLabel
+    /// The accent fill, a fraction of the bar's height from the top.
+    let fill = UIView(frame: .zero)
+
+    /// The fill as last rendered.
+    private(set) var renderedFill: WellBarFill?
+
+    func render(_ barFill: WellBarFill) {
+      if fill.superview == nil {
+        layer.cornerRadius = WellPlacement.spanBarWidth / 2
+        clipsToBounds = true
+        addSubview(fill)
+      }
+      // The track: accent but faint while playing, so the whole bar reads as the playing
+      // block's and the fill still shows against it.
+      backgroundColor =
+        barFill.isAccent ? UIColor.tintColor.withAlphaComponent(0.3) : UIColor.tertiaryLabel
+      fill.backgroundColor = UIColor.tintColor
+
+      let target = WellPlacement.fillFrame(barBounds: bounds, fraction: barFill.fraction)
+      renderedFill = barFill
+      guard fill.frame != target else { return }
+      guard barFill.duration > 0 else {
+        fill.frame = target
+        return
+      }
+      let fill = self.fill
+      UIView.animate(
+        withDuration: barFill.duration, delay: 0, options: [.curveLinear, .beginFromCurrentState],
+        animations: { fill.frame = target })
     }
   }
 
@@ -499,7 +598,8 @@ extension WellHostView {
     /// The block this button acts on, refreshed on every reconciliation.
     var block: EscriboBlock?
 
-    private var showsStop: Bool?
+    /// Whether the button shows `stop.fill` — `nil` until first styled.
+    private(set) var showsStop: Bool?
 
     func configure(item: EscriboWellItem, target: WellOverlay) {
       self.item = item
@@ -556,6 +656,7 @@ extension EscriboTextView {
             in: textView.textLayoutManager, utf16Range: range, origin: textView.textContainerOrigin)
         })
       overlay.reduceMotion = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+      overlay.highlightRenderer = WellHighlight.renderer(for: textView)
     #else
       overlay.geometry = WellGeometry(
         textEdge: { [weak textView] in textView?.textContainerInset.left ?? 0 },
@@ -567,6 +668,7 @@ extension EscriboTextView {
             origin: CGPoint(x: inset.left, y: inset.top))
         })
       overlay.reduceMotion = { UIAccessibility.isReduceMotionEnabled }
+      overlay.highlightRenderer = WellHighlight.renderer(for: textView)
       overlay.caretOffset = { [weak textView] in
         guard let textView, textView.isFirstResponder else { return nil }
         let selection = textView.selectedRange

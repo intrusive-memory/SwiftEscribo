@@ -25,6 +25,31 @@ enum WellTiming {
   static func fadeInDuration(reduceMotion: Bool) -> TimeInterval {
     reduceMotion ? 0 : fadeIn
   }
+
+  /// How long the span bar's fill takes to catch up with a new ``EscriboWell/progress``.
+  ///
+  /// A host reports progress about once a word. Jumping the fill that often reads as a
+  /// stutter; easing each step over a little less than a typical word's duration reads as
+  /// one continuous descent, and never leaves the fill lagging a whole word behind.
+  static let progressStep: TimeInterval = 0.2
+}
+
+// MARK: - Progress
+
+/// The host's ``EscriboWell/progress``, made safe to draw.
+enum WellProgress {
+
+  /// `progress` clamped to `0…1`, or `nil` when the host reports none.
+  ///
+  /// A speech engine's arithmetic is not this package's to trust: a character offset
+  /// divided by a length that has just changed can land below zero, above one, or on NaN.
+  /// NaN is drawn as `0` — no progress claimed — and is handled explicitly because
+  /// `min`/`max` pass a NaN straight through.
+  static func clamped(_ progress: Double?) -> Double? {
+    guard let progress else { return nil }
+    guard !progress.isNaN else { return 0 }
+    return Swift.min(Swift.max(progress, 0), 1)
+  }
 }
 
 // MARK: - The state machine
@@ -221,6 +246,17 @@ struct WellTracker: Equatable {
 
 // MARK: - Placement
 
+/// How a span bar is drawn: its colour, how much of it is filled, and how long the fill
+/// takes to get there. A value, so the Reduce Motion decision is testable without a view.
+struct WellBarFill: Equatable, Sendable {
+  /// Whether the bar is drawn in the accent colour rather than at rest.
+  let isAccent: Bool
+  /// The filled fraction of the bar, `0…1`, from the top.
+  let fraction: CGFloat
+  /// How long to animate to ``fraction``; `0` sets it at once.
+  let duration: TimeInterval
+}
+
 /// Where the well's views go, as pure functions of rects (REQUIREMENTS-1.1.0 § 5.1).
 ///
 /// Pure for the same reason ``WellTracker`` is: the rects come from TextKit in production
@@ -290,6 +326,44 @@ enum WellPlacement {
       y: blockRect.minY + spanBarVerticalInset,
       width: spanBarWidth,
       height: max(0, blockRect.height - 2 * spanBarVerticalInset))
+  }
+
+  /// How the span bar is drawn for a well in `role` (REQUIREMENTS-1.1.0 § 5.2).
+  ///
+  /// - Hover and Caret: the at-rest track, no fill.
+  /// - Playing: an accent bar that fills top to bottom with the clamped `progress`, eased
+  ///   over ``WellTiming/progressStep``. A host that reports no progress gets a full accent
+  ///   bar rather than an empty one — the bar still says which block is playing.
+  /// - Playing under Reduce Motion: already filled, and not animated (rule 4). A fill that
+  ///   creeps down the lane is exactly the motion the setting asks to remove, and a fill that
+  ///   jumps once a word is worse.
+  /// - Finished: full accent, not animated, while it holds.
+  static func barFill(role: WellTracker.Role, progress: Double?, reduceMotion: Bool)
+    -> WellBarFill
+  {
+    switch role {
+    case .hover, .caret:
+      return WellBarFill(isAccent: false, fraction: 0, duration: 0)
+    case .finished:
+      return WellBarFill(isAccent: true, fraction: 1, duration: 0)
+    case .playing:
+      guard !reduceMotion, let clamped = WellProgress.clamped(progress) else {
+        return WellBarFill(isAccent: true, fraction: 1, duration: 0)
+      }
+      return WellBarFill(
+        isAccent: true, fraction: CGFloat(clamped), duration: WellTiming.progressStep)
+    }
+  }
+
+  /// The fill's frame inside a span bar with `barBounds`: anchored at the top and
+  /// `fraction` of the bar's height, so progress reads top to bottom like the text.
+  ///
+  /// In top-left-origin coordinates — the span bar is flipped on macOS so that both
+  /// platforms share this one answer.
+  static func fillFrame(barBounds: CGRect, fraction: CGFloat) -> CGRect {
+    let clamped = Swift.min(Swift.max(fraction, 0), 1)
+    return CGRect(
+      x: 0, y: 0, width: barBounds.width, height: barBounds.height * clamped)
   }
 
   /// The SF Symbol for `item`, or `nil` for an item this package does not know how to draw.

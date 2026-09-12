@@ -101,6 +101,32 @@ Every text view now carries a pointer tracking area (macOS) or a hover gesture r
 (iOS), which are inert without a well. With one, layout is read from TextKit 2 only for the
 blocks a well is drawn beside. iOS at compact width reserves no lane and so draws no well.
 
+#### The paragraph well shows playback: word highlight and progress fill
+
+The well now draws the host's `spokenRange` and `progress` (REQUIREMENTS-1.1.0 § 5.2 Playing,
+D-7). No public API was added.
+
+- **Word highlight.** `spokenRange` is drawn as a TextKit 2 **rendering attribute** —
+  `.backgroundColor`, the accent colour at 25% opacity — on the text view's
+  `textLayoutManager`. It never touches the text storage: no characters, no character
+  attributes, no undo registration, no edited-document state. Each new range removes the
+  previous highlight first; `nil`, or removing the well, clears it. A range that no longer
+  fits the document — a stale word after an edit — draws nothing rather than being clamped
+  onto other text. The highlight is drawn whether or not a lane is reserved, so iOS at compact
+  width still gets it.
+- **Progress fill.** While a block is active its span bar is a faint accent track that fills
+  top to bottom with `progress`, easing each step over 200 ms. `progress` is clamped to
+  `0…1`, and NaN is drawn as `0`. An active block with no `progress` shows a full bar.
+- **Reduce Motion.** The active block's bar appears already filled in accent and does not
+  animate.
+- **Active block.** Its button shows `stop.fill` in the accent colour and its bar is accent
+  (unchanged from the previous entry, now covered by tests); Finished keeps the full accent
+  bar while it holds.
+
+**What an adopter must know:** passing a `spokenRange` is safe at any rate the speech engine
+reports words; a repeated range does no work. Only the `.backgroundColor` rendering attribute
+is ever added or removed, so other rendering attributes over the same text survive.
+
 ### Changed
 
 #### The inline pass runs over a Markdown block's whole content, not line by line
