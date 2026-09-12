@@ -149,19 +149,27 @@ enum ResolvedGrammar: LineGrammar {
     }
   }
 
-  var joinsParagraphContent: Bool {
+  var joinsBlockContent: Bool {
     switch self {
-    case .markdown(let grammar): grammar.joinsParagraphContent
-    case .fountain(let grammar): grammar.joinsParagraphContent
-    case .text(let grammar): grammar.joinsParagraphContent
+    case .markdown(let grammar): grammar.joinsBlockContent
+    case .fountain(let grammar): grammar.joinsBlockContent
+    case .text(let grammar): grammar.joinsBlockContent
     }
   }
 
-  func joinedParagraphSpans(_ pieces: [ContentPiece]) -> [EscriboSpan] {
+  func joinedBlockSpans(_ pieces: [ContentPiece]) -> [EscriboSpan] {
     switch self {
-    case .markdown(let grammar): grammar.joinedParagraphSpans(pieces)
-    case .fountain(let grammar): grammar.joinedParagraphSpans(pieces)
-    case .text(let grammar): grammar.joinedParagraphSpans(pieces)
+    case .markdown(let grammar): grammar.joinedBlockSpans(pieces)
+    case .fountain(let grammar): grammar.joinedBlockSpans(pieces)
+    case .text(let grammar): grammar.joinedBlockSpans(pieces)
+    }
+  }
+
+  func joinedContentKind(for element: ElementKind) -> SpanKind? {
+    switch self {
+    case .markdown(let grammar): grammar.joinedContentKind(for: element)
+    case .fountain(let grammar): grammar.joinedContentKind(for: element)
+    case .text(let grammar): grammar.joinedContentKind(for: element)
     }
   }
 

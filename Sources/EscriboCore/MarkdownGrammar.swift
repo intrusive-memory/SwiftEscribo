@@ -377,19 +377,31 @@ struct MarkdownGrammar: LineGrammar {
   /// CommonMark block grouping — see ``EscriboBlockGrouper/markdownBlocks(from:)``.
   var blockDialect: BlockDialect { .markdown }
 
-  /// Paragraphs join. This is the whole of § 3's behaviour change: `**…**` across a hard
-  /// wrap pairs instead of rendering as literal stars.
+  /// Paragraphs, blockquotes, and list items join. This is the whole of § 3's behaviour
+  /// change: `**…**` across a hard wrap pairs instead of rendering as literal stars.
   ///
-  /// Only paragraphs in 0.4.0. Blockquotes and list items need the marker spans separated
-  /// from the inline spans before their content can be re-scanned — a paragraph line is the
-  /// one case with no marker at all, which is why it is the one case that ships first. See
-  /// ``scanParagraph(_:blocks:)``, whose entire span output is the inline pass.
-  var joinsParagraphContent: Bool { true }
+  /// Headings do not, because a heading is one line — a setext pair's underline has an empty
+  /// content range, so there is nothing of it to join. Tables do not, and never will: a
+  /// header cell's delimiter must not pair with a body cell's.
+  var joinsBlockContent: Bool { true }
 
-  func joinedParagraphSpans(_ pieces: [ContentPiece]) -> [EscriboSpan] {
-    // `kind` and `allowsHardBreak` match `scanParagraph`'s line-based call exactly, so a
-    // one-line paragraph would come back identical either way.
-    MarkdownInline.joinedSpans(of: pieces, kind: .text, allowsHardBreak: true)
+  func joinedBlockSpans(_ pieces: [ContentPiece]) -> [EscriboSpan] {
+    // `allowsHardBreak` is `true` in all three line-based call sites this replaces —
+    // `scanParagraph`, `scanBlockquote`, and `scanListItem` — so a one-line block would
+    // come back identical either way.
+    MarkdownInline.joinedSpans(of: pieces, allowsHardBreak: true)
+  }
+
+  /// The three elements whose lines the inline pass scans as joinable content, with the
+  /// kind each is scanned under. Read straight off the line-based call sites so the joined
+  /// pass cannot drift from them.
+  func joinedContentKind(for element: ElementKind) -> SpanKind? {
+    switch element {
+    case .paragraph: .text
+    case .blockquote: .blockquote
+    case .unorderedListItem, .orderedListItem: .listItem
+    default: nil
+    }
   }
 
   func containsJoinableInlineSyntax(_ units: [UInt16]) -> Bool {
@@ -753,13 +765,13 @@ struct MarkdownGrammar: LineGrammar {
       EscriboSpan(
         range: (base + indent.units)..<(base + cursor), kind: .blockquote, role: .marker)
     ]
-    spans.append(
-      contentsOf: MarkdownInline.spans(
-        in: units, range: cursor..<units.count, base: base, kind: .blockquote,
-        allowsHardBreak: true))
+    let inline = MarkdownInline.spans(
+      in: units, range: cursor..<units.count, base: base, kind: .blockquote,
+      allowsHardBreak: true)
 
     return LineScan(
       spans: spans,
+      inlineSpans: inline,
       element: .blockquote,
       contentRange: (base + cursor)..<line.contentRange.upperBound,
       depth: markers - 1,
@@ -872,13 +884,13 @@ struct MarkdownGrammar: LineGrammar {
           kind: checkbox.checked ? .taskListChecked : .taskListUnchecked,
           role: .marker))
     }
-    spans.append(
-      contentsOf: MarkdownInline.spans(
-        in: units, range: textUnits..<units.count, base: base, kind: .listItem,
-        allowsHardBreak: true))
+    let inline = MarkdownInline.spans(
+      in: units, range: textUnits..<units.count, base: base, kind: .listItem,
+      allowsHardBreak: true)
 
     return LineScan(
       spans: spans,
+      inlineSpans: inline,
       element: ordered ? .orderedListItem : .unorderedListItem,
       contentRange: (base + textUnits)..<line.contentRange.upperBound,
       depth: depth,
@@ -1441,7 +1453,7 @@ struct MarkdownGrammar: LineGrammar {
     var next = blocks
     next.paragraphOpen = true
     return LineScan(
-      spans: MarkdownInline.spans(
+      inlineSpans: MarkdownInline.spans(
         in: line.units, range: 0..<line.units.count, base: line.contentRange.lowerBound,
         kind: .text, allowsHardBreak: true),
       element: .paragraph,

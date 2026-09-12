@@ -59,6 +59,20 @@
 /// One named constant so it is tunable in one place and its reasoning survives.
 let joinedContentLineLimit = 200
 
+/// The block kinds whose content is re-scanned as one run.
+///
+/// Paragraphs, blockquotes, and list items — the three things a writer hard-wraps. A
+/// heading is one line, so there is nothing of it to join; a table must never join,
+/// because a delimiter in a header cell pairing with one in a body cell is not something
+/// CommonMark does; frontmatter and code are not prose. Grouping decides the extents (see
+/// ``EscriboBlockGrouper``) and this decides which of them are eligible.
+///
+/// At file scope rather than on ``IncrementalScanner``, because Swift does not allow a
+/// static stored property in a generic type — and it belongs here anyway: the set is a
+/// property of this file's logic, not of any one grammar instantiation, and building it
+/// once beats rebuilding it per access on the scan path.
+private let joinableBlockKinds: Set<BlockKind> = [.paragraph, .blockquote, .listItem]
+
 struct IncrementalScanner<Grammar: LineGrammar> {
 
   /// The grammar every line is scanned with.
@@ -161,7 +175,7 @@ struct IncrementalScanner<Grammar: LineGrammar> {
     // A block-scoped inline pass makes an edit on any line of a block able to change how
     // every other line of that block pairs, so when the pass will run the window has to
     // cover the whole block — and one line past it on each side, so the block is strictly
-    // interior and `rescanJoinedParagraphs` can tell it was not truncated.
+    // interior and `rescanJoinedBlocks` can tell it was not truncated.
     //
     // **Widen only when the pass will actually run.** `joinableRun` answers that with a
     // scalar walk before anything is rescanned, so a run past the backstop costs one cheap
@@ -173,7 +187,7 @@ struct IncrementalScanner<Grammar: LineGrammar> {
     // would leave the tail's blocks truncated.
     var windowFloor = startLine
     var windowCeiling = 0
-    if grammar.joinsParagraphContent {
+    if grammar.joinsBlockContent {
       let lastLine = max(0, convergence.firstComparableLine - 1)
       let head = joinableRun(
         containing: min(firstEditedLine, max(0, newLineCount - 1)), in: source)
@@ -298,6 +312,11 @@ struct IncrementalScanner<Grammar: LineGrammar> {
     // replaces a whole line's spans and needs to find them. Flattened on the way out, in
     // line order, so the result still tiles `dirtyRange` exactly.
     var lineSpans: [[EscriboSpan]] = []
+    // The marker half of each line's spans, kept untiled so the joined pass can re-tile a
+    // line as `markers + joined inline` and leave its `> ` or `- ` exactly as the grammar
+    // emitted it. Cheap to hold: zero to two small values per line, against the line's own
+    // text, which is deliberately never retained.
+    var lineMarkers: [[EscriboSpan]] = []
     var records: [LineRecord] = []
     var states: [LineState] = []
     var state = incoming
@@ -335,9 +354,10 @@ struct IncrementalScanner<Grammar: LineGrammar> {
           depth: max(0, scan.depth),
           tableAlignments: scan.tableAlignments
         ))
+      lineMarkers.append(scan.spans)
       lineSpans.append(
         SpanTiling.tile(
-          scan.spans,
+          scan.spans + scan.inlineSpans,
           into: current.range,
           contentUnits: current.units,
           contentStart: current.contentRange.lowerBound
@@ -365,8 +385,9 @@ struct IncrementalScanner<Grammar: LineGrammar> {
 
     // Grouping happens once, here, and feeds both the joined inline pass and the result.
     let blocks = EscriboBlockGrouper.blocks(from: records, dialect: grammar.blockDialect)
-    if grammar.joinsParagraphContent {
-      rescanJoinedParagraphs(blocks, records: records, lineSpans: &lineSpans, in: source)
+    if grammar.joinsBlockContent {
+      rescanJoinedBlocks(
+        blocks, records: records, markers: lineMarkers, lineSpans: &lineSpans, in: source)
     }
     let spans = lineSpans.flatMap { $0 }
 
@@ -436,13 +457,10 @@ struct IncrementalScanner<Grammar: LineGrammar> {
     return states
   }
 
-  // MARK: - Reading
-
-  /// Reads one line out of `source` — **one** bulk copy, never one per code unit.
   // MARK: - The joined-content inline pass
 
-  /// Re-scans every paragraph block's inline structure over the block's **joined** content
-  /// and replaces those lines' spans with the result.
+  /// Re-scans every joinable block's inline structure over the block's **joined** content
+  /// and swaps the result in for those lines, leaving their block markers untouched.
   ///
   /// ## Why it runs here and not in the grammar
   ///
@@ -452,49 +470,56 @@ struct IncrementalScanner<Grammar: LineGrammar> {
   /// scanner, by contrast, has every record for the window already built — so this is the
   /// first point at which a block's whole content is knowable.
   ///
-  /// ## Why replacing a paragraph line's spans wholesale is safe
+  /// ## How the markers survive
   ///
-  /// ``MarkdownGrammar/scanParagraph(_:blocks:)`` emits **only** the inline pass's spans —
-  /// no indent span, no marker span, nothing else — so there is nothing on a paragraph line
-  /// to preserve. That is exactly why paragraphs ship first: a blockquote or list-item line
-  /// carries a marker span that would have to be told apart from the inline spans, and
-  /// ``SpanRole/marker`` cannot do it, because the inline pass emits marker-role spans of
-  /// its own for the `**` delimiters.
+  /// Each line is re-tiled as `markers + joined inline spans`, where `markers` is exactly
+  /// what the grammar put in ``LineScan/spans`` for that line and the joined spans replace
+  /// what it put in ``LineScan/inlineSpans``. Nothing infers which is which after the fact,
+  /// because nothing can — see `LineScan.inlineSpans` for why role and kind both fail to
+  /// separate them. For a paragraph the marker array is empty, which is why paragraphs
+  /// could ship a sortie ahead of containers.
   ///
   /// ## What is skipped, and why each skip is safe
   ///
   /// - **Blocks of one line.** Joining one piece reproduces the line-scoped spans exactly,
-  ///   so skipping makes a single-line paragraph **byte-identical** to 0.3.0.
+  ///   so skipping makes a single-line block **byte-identical** to 0.3.0.
   /// - **Blocks the window truncated.** A block that begins at the window's first line, or
-  ///   ends at its last, may well continue outside it — so a full scan would join more
-  ///   lines than are here and joining the fragment would make the two disagree. The
-  ///   document's own edges are exempt, because nothing continues past them. This is a
-  ///   fail-safe rather than a live path: the widening below makes every joinable block
-  ///   strictly interior, so if this guard ever fires it converts an under-widening bug
-  ///   into a loud convergence-gate failure instead of silently wrong spans.
-  /// - **Blocks in a run past the backstop.** Decided by ``joinableRun(containing:)``, the
-  ///   same predicate the rescan window uses, so the two cannot disagree about which blocks
-  ///   join. Degrades to the 0.3.0 reading, never to a broken one.
-  /// - **A block whose content range does not sit inside its line.** Cannot happen; a scan
-  ///   path does not trap, so it leaves the line-scoped spans alone rather than guess.
-  private func rescanJoinedParagraphs(
+  ///   ends at its last, may continue outside it — so a full scan would join more lines
+  ///   than are here, and joining the fragment would make the two disagree. A block is
+  ///   known-complete when it ends where its run ends (runs are blank-delimited, so nothing
+  ///   can extend it) or when the grouper saw the line past it and ended the block there
+  ///   anyway. Same test at the start. A fail-safe rather than a live path: the widening in
+  ///   ``incrementalScan(_:in:)`` makes every joinable block strictly interior, so if this
+  ///   guard fires it turns an under-widening bug into a loud convergence-gate failure
+  ///   instead of silently wrong spans.
+  /// - **Blocks in a run past the backstop.** Decided by ``joinableRun(containing:in:)``,
+  ///   the same predicate the rescan window uses, so the two cannot disagree about which
+  ///   blocks join.
+  /// - **Blocks holding a line with no content at all.** A `>` on its own inside a
+  ///   blockquote is a blank line *within* the container: CommonMark ends the paragraph
+  ///   there, so joining across it would pair delimiters the spec keeps apart. Grouping
+  ///   still puts those lines in one block — that rule is committed, and correct for the
+  ///   well's purposes — so declining here is how the inline pass disagrees with it without
+  ///   changing it. Paragraph blocks never reach this, because a blank line is its own
+  ///   block.
+  /// - **Blocks holding a line the grammar will not name a content kind for.** The honest
+  ///   answer for an element nobody has considered yet.
+  private func rescanJoinedBlocks(
     _ blocks: [EscriboBlock],
     records: [LineRecord],
+    markers: [[EscriboSpan]],
     lineSpans: inout [[EscriboSpan]],
     in source: some UTF16TextSource
   ) {
     guard let windowStart = records.first?.index else { return }
-
     let windowEnd = (records.last?.index).map { $0 + 1 } ?? windowStart
     // One probe per run rather than per block: blocks arrive in ascending order, so a run's
     // blocks are contiguous and the verdict is reused across them. Without this, a document
-    // that is one long non-blank run of many short paragraphs would re-walk the run once
-    // per paragraph on every full scan.
+    // that is one long non-blank run of many short blocks would re-walk the run once per
+    // block on every full scan.
     var probed: JoinableRun?
 
-    for block in blocks where block.kind == .paragraph {
-      // One line joins to itself, so the joined pass would reproduce the line-scoped spans
-      // exactly; skipping keeps a single-line paragraph byte-identical to 0.3.0.
+    for block in blocks where joinableBlockKinds.contains(block.kind) {
       guard block.lines.count > 1 else { continue }
 
       let run: JoinableRun
@@ -506,15 +531,6 @@ struct IncrementalScanner<Grammar: LineGrammar> {
       }
       guard run.isJoinable else { continue }
 
-      // A block the window truncated is not this block: a full scan would join more lines
-      // than are here, and joining the fragment would make the two disagree. A block is
-      // known-complete when it ends where its run ends — runs are blank-delimited, so
-      // nothing can extend it — or when the grouper saw the line past it and ended the
-      // block there anyway. Same test at the start.
-      //
-      // A fail-safe rather than a live path: the widening below sets the window to the run,
-      // so both clauses hold for every joinable block. If this ever fires it turns an
-      // under-widening bug into a loud convergence-gate failure instead of wrong spans.
       let completeAtStart =
         block.lines.lowerBound == run.lines.lowerBound || block.lines.lowerBound > windowStart
       let completeAtEnd =
@@ -522,16 +538,25 @@ struct IncrementalScanner<Grammar: LineGrammar> {
       guard completeAtStart, completeAtEnd else { continue }
 
       var pieces: [ContentPiece] = []
-      var targets: [(slot: Int, lineRange: Range<Int>, units: [UInt16], contentStart: Int)] = []
+      var targets: [JoinTarget] = []
       var usable = true
 
       for lineIndex in block.lines {
         let slot = lineIndex - windowStart
-        guard slot >= 0, slot < records.count, records[slot].index == lineIndex else {
+        guard slot >= 0, slot < records.count, slot < markers.count,
+          records[slot].index == lineIndex,
+          let kind = grammar.joinedContentKind(for: records[slot].element)
+        else {
           usable = false
           break
         }
         let record = records[slot]
+        // A content-free line inside a container is a paragraph break there — see above.
+        // Decline the whole block rather than join across it.
+        guard !record.contentRange.isEmpty else {
+          usable = false
+          break
+        }
         // Re-read rather than retain: holding every line's code units for the window would
         // make a full scan carry the whole document's text, which is the one thing this
         // scanner is careful never to do.
@@ -544,26 +569,47 @@ struct IncrementalScanner<Grammar: LineGrammar> {
         }
         pieces.append(
           ContentPiece(
-            documentRange: record.contentRange, units: Array(line.units[lower..<upper])))
+            documentRange: record.contentRange,
+            units: Array(line.units[lower..<upper]),
+            kind: kind))
         targets.append(
-          (
+          JoinTarget(
             slot: slot, lineRange: record.range, units: line.units,
-            contentStart: line.contentRange.lowerBound
-          ))
+            contentStart: line.contentRange.lowerBound))
       }
       guard usable, pieces.count > 1 else { continue }
 
-      let joined = grammar.joinedParagraphSpans(pieces)
+      let joined = grammar.joinedBlockSpans(pieces)
       for target in targets {
         // Content ranges of distinct lines are disjoint and each sits inside its own line,
-        // so testing the lower bound partitions the joined spans by line exactly.
+        // so testing the lower bound partitions the joined spans by line exactly. The
+        // markers go back in front of them, unchanged.
         lineSpans[target.slot] = SpanTiling.tile(
-          joined.filter { target.lineRange.contains($0.range.lowerBound) },
+          markers[target.slot] + joined.filter { target.lineRange.contains($0.range.lowerBound) },
           into: target.lineRange,
           contentUnits: target.units,
           contentStart: target.contentStart)
       }
     }
+  }
+
+  /// One line of a block the joined pass is about to rewrite.
+  ///
+  /// A named type rather than a tuple: four members is past the point where positional
+  /// access reads clearly, and three of them are integers or ranges that would silently
+  /// accept one another's values.
+  private struct JoinTarget {
+    /// The line's index into the window's parallel arrays.
+    let slot: Int
+
+    /// The line's full extent, terminator included — what the re-tiling must cover.
+    let lineRange: Range<Int>
+
+    /// The line's content code units, for the tiler's surrogate-pair alignment.
+    let units: [UInt16]
+
+    /// The document offset ``units`` begins at.
+    let contentStart: Int
   }
 
   /// What the joined inline pass needs to know about the non-blank run containing `line`:
@@ -687,6 +733,9 @@ struct IncrementalScanner<Grammar: LineGrammar> {
     return index.line(at: line).contentRange.isEmpty
   }
 
+  // MARK: - Reading
+
+  /// Reads one line out of `source` — **one** bulk copy, never one per code unit.
   private func grammarLine(at lineIndex: Int, in source: some UTF16TextSource) -> GrammarLine {
     let line = index.line(at: lineIndex)
     let content = line.contentRange

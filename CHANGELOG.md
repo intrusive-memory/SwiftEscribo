@@ -23,15 +23,15 @@ snapshot, or assert on span output, read the section below before you bump the p
 
 ### Changed
 
-#### The inline pass runs over a Markdown paragraph's whole content, not line by line
+#### The inline pass runs over a Markdown block's whole content, not line by line
 
 Through `0.3.0` the inline scanner ran once per line, so an emphasis, strikethrough, or
 code-span delimiter had to open and close on the same line to pair. `**bold` on one line
 and `text**` on the next produced four literal asterisks on screen — a hard-wrapped
 paragraph could not carry emphasis across the wrap at all.
 
-From `0.4.0` a **paragraph** block's inline pass runs over the block's joined content, so
-the pair pairs:
+From `0.4.0` the inline pass runs over a **paragraph**, a **blockquote**, or a **list
+item**'s joined content, so the pair pairs:
 
 ```markdown
 **bold
@@ -42,34 +42,42 @@ now comes back as one strong run rather than as literal delimiters.
 
 **What an adopter must know:**
 
-- **Paragraphs only, in this release.** Blockquotes, list items, ATX and setext headings,
-  table cells, and code spans inside any of them are still scanned line by line and their
-  span output is unchanged. Tables are excluded permanently — joining a header row to its
-  body rows would pair a delimiter in one cell with a delimiter in another, which
-  CommonMark does not do. Fountain is excluded permanently: joining a speech would let a
-  `*` in a character cue pair with a `*` in the dialogue three lines below it.
+- **Paragraphs, blockquotes, and list items — the three things a writer hard-wraps.** A
+  blockquote joins only across lines **at the same depth**, so a `**` inside `>` cannot
+  pair with one inside `>>`. A list item joins the marker line with its own continuation
+  lines and never across two items, so a `**` in one bullet cannot pair with a `**` in the
+  next. A `>` line with no content after it is a paragraph break inside the quote and is
+  not joined across, matching CommonMark.
+- **Not joined, and unchanged from `0.3.0`:** ATX and setext headings, table cells, code
+  blocks, and frontmatter. Tables are excluded permanently — joining a header row to its
+  body rows would pair a delimiter in one cell with one in another, which CommonMark does
+  not do. Fountain is excluded permanently: joining a speech would let a `*` in a character
+  cue pair with a `*` in the dialogue three lines below it.
+- **Block markers are untouched.** A `> `, a `- `, a `1. `, and a task-list checkbox come
+  back as exactly the spans they did before, with exactly their previous kinds and no
+  emphasis applied to them. Only a line's *content* spans are recomputed.
 - **Spans are still strictly line-based.** A run that crosses a hard wrap comes back as
   one span per line, so `LineRecord`, `EscriboSpan`, and any styler driven by them need no
   change. A line terminator is never inside a styled span.
-- **A one-line paragraph is byte-identical to `0.3.0`.** The joined pass is skipped for
+- **A one-line block is byte-identical to `0.3.0`.** The joined pass is skipped for
   single-line blocks specifically so that a document with no hard-wrapped emphasis sees no
-  change whatsoever.
+  change whatsoever, and so is any block whose content carries no inline delimiter at all.
 - **An unmatched delimiter still cannot style past its own block.** A blank line, a
-  heading, a fence, or any other element bounds the pass, and the block's content is the
-  entire input the matcher is given.
+  heading, a fence, a change of blockquote depth, or the start of the next list item all
+  bound the pass, and the block's content is the entire input the matcher is given.
 - **The dirty range grows, but only where joining can change something.** An edit on any
-  line of a paragraph can change how every other line of it pairs, so an incremental scan
-  widens to cover the whole paragraph before re-running the pass. `ScanResult.dirtyRange`
+  line of a block can change how every other line of it pairs, so an incremental scan
+  widens to cover the whole block before re-running the pass. `ScanResult.dirtyRange`
   has always been permitted to be much larger than the edit; this makes it so more often.
   Two conditions keep the cost bounded, and both are checked *before* anything is
   rescanned:
-  - The paragraph must lie in an unbroken run of at most **200** non-blank lines. A longer
+  - The block must lie in an unbroken run of at most **200** non-blank lines. A longer
     run falls back to line-scoped scanning, and the window is not widened at all — a wall
     of text with no blank line in it costs exactly what it cost in `0.3.0`.
-  - **Some line of the paragraph must carry inline syntax.** A paragraph with no
-    delimiter anywhere in it cannot pair anything, so it is neither joined nor widened —
-    ordinary prose still rescans a handful of lines per keystroke however long the
-    paragraph is, which is what the package's typing-latency budgets require.
+  - **Some line of the block must carry inline syntax.** A block with no delimiter
+    anywhere in it cannot pair anything, so it is neither joined nor widened — ordinary
+    prose still rescans a handful of lines per keystroke however long the block is, which
+    is what the package's typing-latency budgets require.
 
 ## [0.3.0] — 2026-07-29
 

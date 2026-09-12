@@ -1024,6 +1024,13 @@ struct ContentPiece {
 
   /// The piece's code units. Exactly `documentRange.count` of them.
   let units: [UInt16]
+
+  /// The ``SpanKind`` the inline pass would have given this line on its own.
+  ///
+  /// Per piece rather than per block, because a list item's marker line is scanned as
+  /// ``SpanKind/listItem`` and its continuation lines as ``SpanKind/text``. Joining must
+  /// change which delimiters pair, never what kind a line's content is.
+  let kind: SpanKind
 }
 
 extension MarkdownInline {
@@ -1054,7 +1061,13 @@ extension MarkdownInline {
   /// directly in document coordinates, and the joined walk then runs with
   /// `allowsHardBreak: false` because there is nothing left for it to find.
   ///
-  /// **3. Every span is split at piece boundaries.** ``LineRecord`` and the styler are
+  /// **3. Each piece keeps its own ``SpanKind``.** A list item's marker line is scanned as
+  /// `.listItem` and its continuation lines as `.text`, so a run that crosses from one to
+  /// the other comes back as two spans carrying two kinds — exactly what the line-by-line
+  /// pass produced. Block scoping changes which delimiters pair, never what kind a line's
+  /// content is.
+  ///
+  /// **4. Every span is split at piece boundaries.** ``LineRecord`` and the styler are
   /// line-based and stay that way; a span crossing a line comes back as one piece per line.
   /// That is the invariant that keeps block scoping from leaking into every consumer.
   ///
@@ -1066,10 +1079,15 @@ extension MarkdownInline {
   ///   per line, and ``SpanTiling`` sorts.
   static func joinedSpans(
     of pieces: [ContentPiece],
-    kind: SpanKind,
     allowsHardBreak: Bool
   ) -> [EscriboSpan] {
-    guard !pieces.isEmpty else { return [] }
+    guard let first = pieces.first else { return [] }
+    // The walk needs one kind, so it gets the first piece's and every span that took it is
+    // relabelled per piece on the way out. "Took the block kind" is decidable exactly:
+    // links, images, and hard breaks carry kinds of their own, and no block kind is ever
+    // one of those, so equality with `walkKind` identifies the inherited ones and nothing
+    // else.
+    let walkKind = first.kind
 
     var out: [EscriboSpan] = []
     var joined: [UInt16] = []
@@ -1103,7 +1121,7 @@ extension MarkdownInline {
     // `allowsHardBreak: false`: every break was taken out above, and asking the joined
     // walk for one again would find the *last* piece's trailing spaces twice.
     let walked = spans(
-      in: joined, range: 0..<joined.count, base: 0, kind: kind, allowsHardBreak: false)
+      in: joined, range: 0..<joined.count, base: 0, kind: walkKind, allowsHardBreak: false)
 
     for span in walked {
       for (offset, piece) in pieces.enumerated() {
@@ -1115,7 +1133,7 @@ extension MarkdownInline {
         out.append(
           EscriboSpan(
             range: (base + lower - start)..<(base + upper - start),
-            kind: span.kind,
+            kind: span.kind == walkKind ? piece.kind : span.kind,
             style: span.style,
             role: span.role))
       }
