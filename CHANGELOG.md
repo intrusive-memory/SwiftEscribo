@@ -29,7 +29,13 @@ The model and layout reservation for the paragraph well (REQUIREMENTS-1.1.0 § 5
 drawn yet; this release reserves the space and carries the host's state.
 
 ```swift
-public enum EscriboWellItem: Hashable, Sendable { case readAloud }
+public struct EscriboWellItem: Hashable, Sendable {
+  public let rawValue: String
+  public init(rawValue: String)
+}
+extension EscriboWellItem {
+  public static let readAloud = EscriboWellItem(rawValue: "readAloud")
+}
 
 public struct EscriboWell: Equatable, Sendable {
   public var items: [EscriboWellItem]          // default [.readAloud]

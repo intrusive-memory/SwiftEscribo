@@ -13,13 +13,38 @@ import SwiftUI
 
 /// One slot in the paragraph well (REQUIREMENTS-1.1.0 § 5.3).
 ///
-/// The well is a vertical stack of slots and `1.1.0` ships exactly one. Later candidates — a
-/// block-type badge, a drag handle, a note marker — are named in the requirements as
-/// non-goals and are deliberately not declared here: a case nobody draws is a case every
-/// adopter's `switch` has to handle for nothing.
-public enum EscriboWellItem: Hashable, Sendable {
+/// A struct with static members rather than an enum, for the same reason as the vocabulary
+/// types throughout this package: **a public enum is source-breaking to extend.** Every
+/// consumer's exhaustive `switch` stops compiling the day a well item is added, which would
+/// make routine feature work a major release. Static members on a struct still pattern-match
+/// in a `switch` and still require a `default:`, which is exactly the forward compatibility
+/// wanted. Adding a member here is a *minor* release; changing what an existing member is
+/// emitted for is *major*.
+///
+/// Raw values are stable API. Never renumber or respell one.
+///
+/// The well is a vertical stack of slots and `1.1.0` ships exactly one. Later candidates —
+/// a block-type badge, a drag handle, a note marker — are named in the requirements as
+/// non-goals and are deliberately not declared here: omitting a member is not a problem.
+public struct EscriboWellItem: Hashable, Sendable {
+  /// The stable identifier for this item.
+  public let rawValue: String
+
+  /// Creates a well item from a raw value.
+  ///
+  /// Unrecognized items are legal by design, as they are for every other vocabulary in
+  /// this package: a consumer reading well items produced by a newer package resolves an
+  /// unknown item to its default treatment rather than trapping.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+}
+
+extension EscriboWellItem {
+
   /// Read the block aloud. The package draws and tracks the button; the host speaks.
-  case readAloud
+  public static let readAloud = EscriboWellItem(rawValue: "readAloud")
+
 }
 
 /// The host's description of the paragraph well: which slots it holds, which block is
