@@ -41,7 +41,8 @@ struct SpanModelTests {
     kind: .heading,
     lines: 0..<1,
     range: 0..<12,
-    contentRanges: [3..<11]
+    contentRanges: [3..<11],
+    contentLines: [0]
   )
 
   private static let result = ScanResult(

@@ -310,8 +310,19 @@ struct MarkdownBlockGroupingTests {
         previous.range.upperBound == next.range.lowerBound,
         "a UTF-16 gap or overlap between \(previous.kind.rawValue) and \(next.kind.rawValue)")
     }
+    // The `contentLines` alignment contract, stated here as well as in the always-on
+    // harness, because this is the fixture that carries every construct the dialect has
+    // and a reader of this test should see the claim being made.
+    ScanInvariants.checkBlockAlignment(result, "the tiling fixture")
+    #expect(
+      blocks.allSatisfy { $0.contentLines.count == $0.contentRanges.count },
+      "every block's content arrays must have equal count")
+
     for block in blocks {
       #expect(!block.lines.isEmpty, "\(block.kind.rawValue) covers no lines")
+      #expect(
+        block.contentLines.allSatisfy { block.lines.contains($0) },
+        "\(block.kind.rawValue): every content line must be inside the block")
       // Content is inside the block, and markers are excluded by `LineRecord` rather
       // than re-derived here.
       for content in block.contentRanges {
@@ -343,6 +354,60 @@ struct MarkdownBlockGroupingTests {
     #expect(
       result.blocks.first.map { result.lines.contains($0.lines.lowerBound) } == true,
       "a block cannot begin outside the lines the result claims to cover")
+  }
+
+  // MARK: - contentLines
+
+  @Test("contentLines pairs each kept range to the line it came from")
+  func contentLinesPairEachKeptRangeToItsLine() {
+    // The pairing asserted by *decoding*, which is the one check that a slipped-by-one
+    // alignment cannot survive: the text at `contentRanges[i]` must be the text of the
+    // line `contentLines[i]` names, and reading it back is the only way to say so without
+    // re-deriving it from the thing under test.
+    let document = "# Title\n\nfirst line\nsecond line\n\n---"
+    let result = Self.fullScan(document)
+    let units = Array(document.utf16)
+
+    #expect(
+      Self.shape(document) == [
+        Shape(.heading, 0, 1), Shape(.blank, 1, 2), Shape(.paragraph, 2, 4),
+        Shape(.blank, 4, 5), Shape(.thematicBreak, 5, 6),
+      ])
+
+    let spoken = result.blocks.map { block in
+      zip(block.contentLines, block.contentRanges).map { line, range in
+        "\(line):\(String(decoding: units[range], as: UTF16.self))"
+      }
+    }
+    #expect(
+      spoken == [
+        ["0:Title"],
+        [],
+        ["2:first line", "3:second line"],
+        [],
+        [],
+      ])
+  }
+
+  @Test("A block with no content at all has both content arrays empty, not one of them")
+  func contentlessBlocksHaveBothArraysEmpty() {
+    // Blank runs and thematic breaks are the blocks that exist only so that blocks tile.
+    // `contentRanges` was already empty for them; `contentLines` must be too, or a
+    // consumer zipping the two would silently produce nothing for a block that had lines
+    // to report.
+    let result = Self.fullScan("prose\n\n\n***")
+
+    // Stated as whole-array comparisons rather than by subscript: a #expect that fails
+    // does not stop the test, so an index into a shorter-than-expected array would crash
+    // the suite instead of reporting it.
+    #expect(result.blocks.map(\.kind) == [.paragraph, .blank, .thematicBreak])
+    #expect(
+      result.blocks.map(\.contentLines) == [[0], [], []],
+      "a blank run and a thematic break speak nothing")
+    #expect(result.blocks.map(\.contentRanges.isEmpty) == [false, true, true])
+    #expect(
+      result.blocks.map(\.lines) == [0..<1, 1..<3, 3..<4],
+      "…while the blank run still covers both of its lines")
   }
 
   // MARK: - A grammar with no block structure produces nothing

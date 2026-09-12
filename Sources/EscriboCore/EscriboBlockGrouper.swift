@@ -467,9 +467,11 @@ enum EscriboBlockGrouper {
   ///
   /// - Parameter omitted: Elements whose lines are inside the block but whose *content* is
   ///   not. Empty for every Markdown block; the Fountain neutral annotations for the
-  ///   blocks that bridge across one. The line stays inside `lines` and `range` because
-  ///   the tiling invariant requires it, and leaves `contentRanges` because read-aloud
-  ///   must not speak a `[[note]]` buried in a speech.
+  ///   blocks that bridge across one. Such a line stays inside `lines` and `range`, because
+  ///   the tiling invariant requires it, and is absent from **both**
+  ///   ``EscriboBlock/contentRanges`` and ``EscriboBlock/contentLines`` — read-aloud must
+  ///   not speak a `[[note]]` buried in a speech, and a per-line consumer needs to know
+  ///   which line that was.
   @discardableResult
   private static func append(
     _ blocks: inout [EscriboBlock], _ kind: BlockKind, over lines: Range<Int>,
@@ -478,6 +480,14 @@ enum EscriboBlockGrouper {
     guard let first = records[safe: lines.lowerBound], let last = records[safe: lines.upperBound - 1]
     else { return max(lines.upperBound, lines.lowerBound + 1) }
 
+    // One filtered pass, two projections of it. `EscriboBlock.contentRanges` and
+    // `contentLines` must have equal count and must agree element for element; deriving
+    // both from this single array is what makes that true *by construction* rather than
+    // by two filters that happen to be written the same way today.
+    let spoken = records[lines].filter { record in
+      !omitted.contains(record.element) && !record.contentRange.isEmpty
+    }
+
     blocks.append(
       EscriboBlock(
         kind: kind,
@@ -485,10 +495,8 @@ enum EscriboBlockGrouper {
         // cursor: on an incremental scan the window does not begin at line zero.
         lines: first.index..<(last.index + 1),
         range: first.range.lowerBound..<last.range.upperBound,
-        contentRanges: records[lines]
-          .filter { !omitted.contains($0.element) }
-          .map(\.contentRange)
-          .filter { !$0.isEmpty }
+        contentRanges: spoken.map(\.contentRange),
+        contentLines: spoken.map(\.index)
       ))
     return lines.upperBound
   }

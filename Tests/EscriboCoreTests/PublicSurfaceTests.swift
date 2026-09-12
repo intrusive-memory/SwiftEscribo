@@ -191,6 +191,9 @@ struct PublicSurfaceTests {
     #expect(result.blocks.first?.lines == 0..<1)
     #expect(result.blocks.first?.range == 0..<8)
     #expect(result.blocks.first?.contentRanges == [2..<7], "markers excluded, as the record's are")
+    #expect(
+      result.blocks.first?.contentLines == [0],
+      "contentLines is readable from out here and index-aligned with contentRanges")
     #expect(result.blocks.first?.id.line == 0)
     #expect(result.blocks.first?.id.offset == 0)
     #expect(result.blocks.last?.lines.upperBound == 4, "the blocks reach the last line")

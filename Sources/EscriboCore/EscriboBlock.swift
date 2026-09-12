@@ -76,6 +76,39 @@ public struct EscriboBlock: Sendable, Equatable, Identifiable {
   /// speak.
   public let contentRanges: [Range<Int>]
 
+  /// The document line indices whose content is in ``contentRanges``, **index-aligned
+  /// with it**: `contentLines[i]` is the line that `contentRanges[i]` lies on.
+  ///
+  /// The two arrays always have equal count, and that is guaranteed *by construction* —
+  /// both are derived from one filtered pass over the block's records, not assembled
+  /// separately and hoped to agree.
+  ///
+  /// ## Why this exists
+  ///
+  /// ``contentRanges`` is filtered twice: lines with no content at all are dropped, and
+  /// so is the content of a line the block absorbed but must not speak — a `[[note]]` or
+  /// a `/* boneyard */` sitting between a cue and its dialogue. After that filtering
+  /// `contentRanges[i]` no longer corresponds to `lines.lowerBound + i`, so the pairing
+  /// from range back to line is gone. This restores it.
+  ///
+  /// **An absorbed line's index is absent from this array, and that absence is the
+  /// point.** It is how a consumer that needs per-line units — the script preview, which
+  /// paginates one unit per line — learns which lines a block contains but does not
+  /// speak, without hardcoding the annotation vocabulary or inferring the filter's
+  /// behaviour from set membership. `Set(contentLines)` is that answer directly; the
+  /// lines in ``lines`` and not in this array are exactly the ones the block carries for
+  /// tiling and nothing else.
+  ///
+  /// Strictly increasing, and every element is inside ``lines``. Empty when the block has
+  /// no content at all — a blank run, a thematic break — in which case ``contentRanges``
+  /// is empty too.
+  ///
+  /// A **standalone** annotation block is not affected by any of this: a note that *is*
+  /// the block is the block's content, so its line index is present. Only a line absorbed
+  /// into a block of some other kind is omitted. Whether such a block should be read
+  /// aloud at all is a separate question, answered by ``kind``.
+  public let contentLines: [Int]
+
   public var id: ID { ID(line: lines.lowerBound, offset: range.lowerBound) }
 
   /// Creates a block.
@@ -85,12 +118,14 @@ public struct EscriboBlock: Sendable, Equatable, Identifiable {
     kind: BlockKind,
     lines: Range<Int>,
     range: Range<Int>,
-    contentRanges: [Range<Int>]
+    contentRanges: [Range<Int>],
+    contentLines: [Int]
   ) {
     self.kind = kind
     self.lines = lines
     self.range = range
     self.contentRanges = contentRanges
+    self.contentLines = contentLines
   }
 }
 

@@ -241,6 +241,77 @@ enum ScanInvariants {
     #expect(
       !splitsSurrogatePair(at: result.dirtyRange.upperBound, in: units),
       "dirtyRange upper bound splits a surrogate pair — \(note)", sourceLocation: sourceLocation)
+
+    // 6. Blocks, where the dialect produces any.
+    checkBlockAlignment(result, note, sourceLocation: sourceLocation)
+  }
+
+  // MARK: - Blocks
+
+  /// ``EscriboBlock/contentLines``' alignment contract, on every block of `result`.
+  ///
+  /// Part of the always-on harness rather than a test, for the reason stated at the top of
+  /// this file: an invariant asserted once is a test, and an invariant asserted on every
+  /// scan the suite performs is a harness. It therefore runs against every Markdown
+  /// fixture, every Fountain fixture, the hostile corpus, and every step of the
+  /// convergence gate — which is where a filtering bug that only shows up on one
+  /// pathological document would actually be found.
+  ///
+  /// Four claims, and the third is the one the script preview will depend on:
+  ///
+  /// 1. `contentLines.count == contentRanges.count`. The grouper derives both from one
+  ///    filtered pass so this holds by construction; asserted anyway, because "by
+  ///    construction" is a claim about code that can be edited.
+  /// 2. Every line index is inside the block's `lines`, strictly increasing, no repeats.
+  /// 3. `contentRanges[i]` is the content range **of the line `contentLines[i]` names**,
+  ///    checked against that line's own record — the only independent source for it. A
+  ///    pairing that had slipped by one would satisfy every other assertion here.
+  /// 4. The two arrays are empty together or non-empty together.
+  ///
+  /// A dialect that produces no blocks makes this vacuous, which is correct: there is no
+  /// alignment to check.
+  static func checkBlockAlignment(
+    _ result: ScanResult,
+    _ context: @autoclosure () -> String,
+    sourceLocation: SourceLocation = #_sourceLocation
+  ) {
+    guard !result.blocks.isEmpty else { return }
+    let note = context()
+    // `uniquingKeysWith` rather than `uniqueKeysWithValues`: a harness must not trap on
+    // the malformed input it exists to report. Record indices are unique by invariant 4,
+    // which `check` has already asserted by the time this runs.
+    let contentRange = Dictionary(
+      result.lineRecords.map { ($0.index, $0.contentRange) }, uniquingKeysWith: { first, _ in first }
+    )
+
+    for block in result.blocks {
+      let label = "\(block.kind.rawValue) \(block.lines) — \(note)"
+      #expect(
+        block.contentLines.count == block.contentRanges.count,
+        "\(label): contentLines and contentRanges must have equal count",
+        sourceLocation: sourceLocation)
+      #expect(
+        block.contentRanges.isEmpty == block.contentLines.isEmpty,
+        "\(label): content arrays must be empty together or not at all",
+        sourceLocation: sourceLocation)
+      #expect(
+        block.contentLines == block.contentLines.sorted(),
+        "\(label): contentLines must be ascending", sourceLocation: sourceLocation)
+      #expect(
+        Set(block.contentLines).count == block.contentLines.count,
+        "\(label): no line may be listed twice", sourceLocation: sourceLocation)
+
+      for (line, range) in zip(block.contentLines, block.contentRanges) {
+        #expect(
+          block.lines.contains(line),
+          "\(label): content line \(line) is outside the block's lines",
+          sourceLocation: sourceLocation)
+        #expect(
+          contentRange[line] == range,
+          "\(label): the content range paired with line \(line) is not that line's own",
+          sourceLocation: sourceLocation)
+      }
+    }
   }
 
   // MARK: - The painted document

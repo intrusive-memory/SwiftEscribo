@@ -208,6 +208,46 @@ struct FountainBlockGroupingTests {
       String(decoding: Array(source.utf16)[range], as: UTF16.self)
     }
     #expect(spoken == ["BOB", "Hello there.", "Still speaking."])
+
+    // The property Sortie 13 and Sortie 14 will actually rely on: the note's line is in
+    // `lines` and NOT in `contentLines`, and that absence is how a per-line consumer
+    // learns which of a block's lines it must not speak — without hardcoding the
+    // annotation vocabulary or inferring the filter's behaviour.
+    #expect(speech?.contentLines == [0, 1, 3], "line 2 is the note, and it is absent")
+    #expect(speech?.contentLines.contains(2) == false)
+    #expect(speech?.lines.contains(2) == true, "…while the note's line is still in the block")
+
+    // The pairing, decoded, so a slipped-by-one alignment cannot pass.
+    let paired = zip(speech?.contentLines ?? [], spoken).map { "\($0):\($1)" }
+    #expect(paired == ["0:BOB", "1:Hello there.", "3:Still speaking."])
+  }
+
+  @Test("A standalone annotation block keeps its own content — it is the block")
+  func standaloneAnnotationBlocksKeepTheirContent() {
+    // The case worth stating explicitly, because it is the opposite of the one above and
+    // the two are easy to conflate. Content is omitted only when a neutral line is
+    // *absorbed into a block of some other kind*. A note that IS the block is that
+    // block's content, so its line index is present and `contentLines` is NOT empty.
+    // Whether a note block should be read aloud at all is a question about `kind`, not
+    // about content, and it is answered elsewhere.
+    let source = "INT. HOUSE - DAY\nBob waits.\n[[a note]]\n\nCUT TO:"
+    let result = Self.fullScan(source)
+    let units = Array(source.utf16)
+
+    #expect(
+      result.blocks.map(\.kind) == [.sceneHeading, .action, .note, .blank, .transition])
+    #expect(
+      result.blocks.map(\.contentLines) == [[0], [1], [2], [], [4]],
+      "the note block carries its own line; only the blank run carries none")
+
+    let noteBlock = result.blocks.first { $0.kind == .note }
+    #expect(noteBlock?.contentLines == [2], "not empty — nothing absorbed this note")
+    #expect(noteBlock?.contentRanges.count == 1)
+    #expect(
+      (noteBlock?.contentRanges).map { ranges in
+        ranges.map { String(decoding: units[$0], as: UTF16.self) }
+      } == ["a note"],
+      "and its content is the note's text, markers excluded by the record")
   }
 
   @Test("A blank line ends a speech where a note does not — the same document, twice")
@@ -361,8 +401,19 @@ struct FountainBlockGroupingTests {
         previous.range.upperBound == next.range.lowerBound,
         "a UTF-16 gap or overlap between \(previous.kind.rawValue) and \(next.kind.rawValue)")
     }
+    // The `contentLines` alignment contract, stated here as well as in the always-on
+    // harness, because this is the fixture that carries every construct the dialect has
+    // and a reader of this test should see the claim being made.
+    ScanInvariants.checkBlockAlignment(result, "the tiling fixture")
+    #expect(
+      blocks.allSatisfy { $0.contentLines.count == $0.contentRanges.count },
+      "every block's content arrays must have equal count")
+
     for block in blocks {
       #expect(!block.lines.isEmpty, "\(block.kind.rawValue) covers no lines")
+      #expect(
+        block.contentLines.allSatisfy { block.lines.contains($0) },
+        "\(block.kind.rawValue): every content line must be inside the block")
       for content in block.contentRanges {
         #expect(block.range.lowerBound <= content.lowerBound)
         #expect(content.upperBound <= block.range.upperBound)
