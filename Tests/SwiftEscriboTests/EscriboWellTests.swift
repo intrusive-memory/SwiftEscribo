@@ -233,7 +233,7 @@ struct EscriboWellTests {
 
       // Identical windows and scrollers, so the frames agree and the difference is the lane.
       #expect(plain.textView.frame.width == welled.textView.frame.width)
-      #expect(plainWidth - welledWidth == 2 * 28)
+      #expect(plainWidth - welledWidth == CGFloat(2 * 28))
 
       // And the narrower width is the one AppKit's tracking computes for the same view with
       // the widened inset, so the next real resize agrees with it rather than undoing it.
@@ -252,13 +252,13 @@ struct EscriboWellTests {
       #expect(before == trackedWidth(editor))
 
       editor.applyWell(EscriboWell(), horizontalSizeClass: nil)
-      #expect(before - container.size.width == 2 * 28)
+      #expect(before - container.size.width == CGFloat(2 * 28))
       #expect(container.size.width == trackedWidth(editor))
 
       // A playback update carries a new well every frame; the lane is already reserved, so
       // the container must not shrink a second time.
       editor.applyWell(EscriboWell(progress: 0.5), horizontalSizeClass: nil)
-      #expect(before - container.size.width == 2 * 28)
+      #expect(before - container.size.width == CGFloat(2 * 28))
       #expect(container.size.width == trackedWidth(editor))
 
       editor.applyWell(nil, horizontalSizeClass: nil)
