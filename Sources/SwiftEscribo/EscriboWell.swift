@@ -211,9 +211,20 @@ extension EscriboTextView {
   ///
   /// Idempotent and cheap: the inset is written only when the reserved width changes, so a
   /// SwiftUI update pass that carries a new `progress` every frame does no layout work.
+  ///
+  /// The lane is reserved **before** the overlay reconciles, so a well drawn in the same pass
+  /// is placed against the inset it will actually have.
   func applyWell(_ well: EscriboWell?, horizontalSizeClass: WellLane.HorizontalSizeClass?) {
     self.well = well
+    reserveWellLane(for: well, horizontalSizeClass: horizontalSizeClass)
+    wellOverlay.apply(well)
+  }
 
+  /// Adds or releases the lane's width on the text-container inset; see
+  /// ``applyWell(_:horizontalSizeClass:)``.
+  private func reserveWellLane(
+    for well: EscriboWell?, horizontalSizeClass: WellLane.HorizontalSizeClass?
+  ) {
     let lane = WellLane.reservedWidth(for: well, horizontalSizeClass: horizontalSizeClass)
     guard lane != wellLaneWidth else { return }
     let previous = wellLaneWidth

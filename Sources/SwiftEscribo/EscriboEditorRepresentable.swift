@@ -193,6 +193,24 @@ final class EscriboEditorBridge: NSObject {
     func textViewDidChange(_ textView: UITextView) {
       pushToBinding()
     }
+
+    /// The caret moved: the well's Caret state follows it (REQUIREMENTS-1.1.0 § 5.2).
+    ///
+    /// Through the delegate, unlike the well's other inputs, because it is the one UIKit
+    /// reports only here. A text view built without the bridge still draws Hover and Playing.
+    func textViewDidChangeSelection(_ textView: UITextView) {
+      editor?.wellOverlay.caretChanged()
+    }
+
+    /// Becoming first responder is half of the Caret state's trigger.
+    func textViewDidBeginEditing(_ textView: UITextView) {
+      editor?.wellOverlay.caretChanged()
+    }
+
+    /// And resigning it ends the Caret state.
+    func textViewDidEndEditing(_ textView: UITextView) {
+      editor?.wellOverlay.caretChanged()
+    }
   }
 #endif
 

@@ -25,8 +25,8 @@ snapshot, or assert on span output, read the section below before you bump the p
 
 #### The paragraph well: `EscriboWell`, `EscriboWellItem`, and its lane
 
-The model and layout reservation for the paragraph well (REQUIREMENTS-1.1.0 § 5). Nothing is
-drawn yet; this release reserves the space and carries the host's state.
+The model and layout reservation for the paragraph well (REQUIREMENTS-1.1.0 § 5): the space
+it occupies and the host's state it carries. Its drawing and states are the next entry.
 
 ```swift
 public struct EscriboWellItem: Hashable, Sendable {
@@ -68,6 +68,38 @@ public struct EscriboWell: Equatable, Sendable {
 **What an adopter must know:** passing no well changes nothing — the insets and layout are
 exactly `0.3.0`'s. Passing one moves the text column in by the lane width in both live and
 source mode (D-6).
+
+#### The paragraph well draws, and tracks the pointer, the caret, and playback
+
+The well is now drawn as real subviews of the text view, so it scrolls with the text, and it
+follows the state machine in REQUIREMENTS-1.1.0 § 5.2. No public API was added.
+
+- **Anatomy.** A button — 20 × 20 pt on macOS with a 10 pt semibold `play.fill` / `stop.fill`,
+  a 44 × 44 pt hit area on iOS with a 17 pt symbol — centred in the lane and vertically
+  centred on the block's **first** line fragment; and a 2 pt span bar, 4 pt from the text
+  edge and inset 2 pt top and bottom, spanning the block's **full** height, soft-wrapped
+  lines included. At rest `tertiaryLabel`; the playing block's button and bar are the accent
+  colour. macOS buttons keep the arrow cursor and take a `quaternaryLabel` fill on hover.
+  The button's accessibility identifier is `editor.well.readAloud`.
+- **States.** Rest shows nothing — no hairline, no tint. Hover (macOS, iPad pointer) shows
+  the well for the block whose vertical band the pointer is in, across the lane and the
+  text, with a 120 ms fade. Caret (iOS) shows it for the caret's block while the editor is
+  first responder with an insertion point. Playing shows the host's `activeBlock` with a
+  stop button. Finished holds for 400 ms after `activeBlock` returns to `nil`, then goes
+  back to Hover or Rest.
+- **Rules.** Leaving a block hides its well after 150 ms. Typing hides the hover well until
+  the pointer next moves, and a drag-selection hides it for the drag. The playing block's
+  well stays pinned while another block is hovered, so two wells can show at once. Reduce
+  Motion removes the fade. A block the well's `isEligible(_:)` rejects gets no button at
+  all — not a disabled one.
+- **`onWellAction` is now invoked**, with the button's item and its block. The package
+  reports the click; whether that starts, stops, or switches playback is the host's call,
+  made by updating `activeBlock`.
+
+**What an adopter must know:** passing no well still draws nothing and lays nothing out.
+Every text view now carries a pointer tracking area (macOS) or a hover gesture recognizer
+(iOS), which are inert without a well. With one, layout is read from TextKit 2 only for the
+blocks a well is drawn beside. iOS at compact width reserves no lane and so draws no well.
 
 ### Changed
 

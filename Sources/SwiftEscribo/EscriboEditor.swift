@@ -68,8 +68,8 @@ public struct EscriboEditor: View {
   /// The paragraph well, or `nil` for no well and no lane.
   private let well: EscriboWell?
 
-  /// Called with the slot and the block when a well slot is activated. Stored and handed to
-  /// the text view; nothing invokes it until the well draws its button.
+  /// Called with the slot and the block when a well slot is activated — a click or tap on
+  /// the well's button. Handed to the text view, whose well invokes it.
   private let onWellAction: (EscriboWellItem, EscriboBlock) -> Void
 
   /// The system appearance, which selects between a theme pair when `theme` is `nil`.
