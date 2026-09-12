@@ -98,7 +98,10 @@ final class EscriboEditorBridge: NSObject {
     appearance: EscriboAppearance,
     findBar: Bool = false,
     focusOnAppear: Bool = false,
-    handle: EscriboEditorHandle? = nil
+    handle: EscriboEditorHandle? = nil,
+    well: EscriboWell? = nil,
+    onWellAction: @escaping (EscriboWellItem, EscriboBlock) -> Void = { _, _ in },
+    horizontalSizeClass: WellLane.HorizontalSizeClass? = nil
   ) -> EscriboTextView {
     let styler = EscriboStyler(
       environment: EditorStyleEnvironment(theme: theme, mode: mode, appearance: appearance))
@@ -116,6 +119,11 @@ final class EscriboEditorBridge: NSObject {
     handle?.attach(to: editor.coordinator)
 
     editor.textView.delegate = self
+
+    // The well, and with it the lane. `nil` reserves nothing, so the text view keeps exactly
+    // the inset its own initializer gave it.
+    editor.onWellAction = onWellAction
+    editor.applyWell(well, horizontalSizeClass: horizontalSizeClass)
 
     // The initial document arrives through the same four rules every later update uses.
     // Rule 1 makes this free when the host starts from an empty string.
@@ -137,11 +145,19 @@ final class EscriboEditorBridge: NSObject {
     mode: EditorMode,
     theme: EscriboTheme,
     appearance: EscriboAppearance,
-    text incoming: String
+    text incoming: String,
+    well: EscriboWell? = nil,
+    onWellAction: @escaping (EscriboWellItem, EscriboBlock) -> Void = { _, _ in },
+    horizontalSizeClass: WellLane.HorizontalSizeClass? = nil
   ) {
     guard let editor else { return }
     editor.applyConfiguration(
       language: language, mode: mode, theme: theme, appearance: appearance)
+    // The well arrives on every pass — its progress and spoken range are live host state —
+    // and the lane is rewritten only when its width changes (a well added or removed, or an
+    // iOS size-class change), so a pass that carries only new progress does no layout work.
+    editor.onWellAction = onWellAction
+    editor.applyWell(well, horizontalSizeClass: horizontalSizeClass)
     editor.applyExternalText(incoming)
   }
 
@@ -218,6 +234,14 @@ final class EscriboEditorBridge: NSObject {
     /// the editor does.
     let handle: EscriboEditorHandle?
 
+    /// The paragraph well, or `nil`. Re-applied on every update: its progress and spoken
+    /// range are live host state. macOS has no size class; its lane is always 28 pt.
+    let well: EscriboWell?
+
+    /// The host's well-action callback, re-stored on every update so it never targets a
+    /// stale view graph.
+    let onWellAction: (EscriboWellItem, EscriboBlock) -> Void
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
@@ -225,14 +249,15 @@ final class EscriboEditorBridge: NSObject {
     func makeNSView(context: Context) -> NSScrollView {
       context.coordinator.makeEditor(
         language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
-        focusOnAppear: focusOnAppear, handle: handle
+        focusOnAppear: focusOnAppear, handle: handle, well: well, onWellAction: onWellAction
       ).scrollView
     }
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
       context.coordinator.text = $text
       context.coordinator.update(
-        language: language, mode: mode, theme: theme, appearance: appearance, text: text)
+        language: language, mode: mode, theme: theme, appearance: appearance, text: text,
+        well: well, onWellAction: onWellAction)
     }
   }
 
@@ -270,6 +295,15 @@ final class EscriboEditorBridge: NSObject {
     /// the editor does.
     let handle: EscriboEditorHandle?
 
+    /// The paragraph well, or `nil`. Re-applied on every update, together with the
+    /// horizontal size class read from the environment, so a rotation or a split-view resize
+    /// that crosses compact ↔ regular adds or removes the lane (D-5).
+    let well: EscriboWell?
+
+    /// The host's well-action callback, re-stored on every update so it never targets a
+    /// stale view graph.
+    let onWellAction: (EscriboWellItem, EscriboBlock) -> Void
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
@@ -277,14 +311,17 @@ final class EscriboEditorBridge: NSObject {
     func makeUIView(context: Context) -> UITextView {
       context.coordinator.makeEditor(
         language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
-        focusOnAppear: focusOnAppear, handle: handle
+        focusOnAppear: focusOnAppear, handle: handle, well: well, onWellAction: onWellAction,
+        horizontalSizeClass: WellLane.HorizontalSizeClass(context.environment.horizontalSizeClass)
       ).textView
     }
 
     func updateUIView(_ uiView: UITextView, context: Context) {
       context.coordinator.text = $text
       context.coordinator.update(
-        language: language, mode: mode, theme: theme, appearance: appearance, text: text)
+        language: language, mode: mode, theme: theme, appearance: appearance, text: text,
+        well: well, onWellAction: onWellAction,
+        horizontalSizeClass: WellLane.HorizontalSizeClass(context.environment.horizontalSizeClass))
     }
   }
 

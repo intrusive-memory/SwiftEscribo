@@ -65,6 +65,13 @@ public struct EscriboEditor: View {
   /// The host's handle on the live editor, or `nil`.
   private let handle: EscriboEditorHandle?
 
+  /// The paragraph well, or `nil` for no well and no lane.
+  private let well: EscriboWell?
+
+  /// Called with the slot and the block when a well slot is activated. Stored and handed to
+  /// the text view; nothing invokes it until the well draws its button.
+  private let onWellAction: (EscriboWellItem, EscriboBlock) -> Void
+
   /// The system appearance, which selects between a theme pair when `theme` is `nil`.
   @Environment(\.colorScheme) private var colorScheme
 
@@ -119,6 +126,19 @@ public struct EscriboEditor: View {
   ///
   ///     Defaulted to `nil` so a host that asks the editor nothing writes nothing, and so
   ///     every pre-0.4.0 call site keeps compiling unchanged.
+  ///   - well: The paragraph well (REQUIREMENTS-1.1.0 § 5): its slots, the playing block,
+  ///     its progress, the spoken word, and which block kinds are eligible. Supplying one
+  ///     reserves the well's lane in the text view's text-container inset — 28 pt on macOS,
+  ///     symmetric, so the right margin gains the same; 44 pt on iOS at regular width,
+  ///     left-only; **none** on iOS at compact width (D-5). The lane is added to the inset
+  ///     the text view already uses.
+  ///
+  ///     Defaulted to `nil`, which reserves nothing: an adopter that does not mention the
+  ///     well gets exactly the insets and layout it had before `0.4.0`. Pass a fresh value on
+  ///     every update — progress and the spoken range are the host's to report.
+  ///   - onWellAction: Called with the slot and the block when a well slot is activated.
+  ///     The package draws and tracks; the host acts — for `.readAloud`, it speaks. Defaulted
+  ///     to a no-op so every pre-0.4.0 call site keeps compiling unchanged.
   public init(
     text: Binding<String>,
     language: Language,
@@ -126,7 +146,9 @@ public struct EscriboEditor: View {
     theme: EscriboTheme? = nil,
     findBar: Bool = false,
     focusOnAppear: Bool = false,
-    handle: EscriboEditorHandle? = nil
+    handle: EscriboEditorHandle? = nil,
+    well: EscriboWell? = nil,
+    onWellAction: @escaping (EscriboWellItem, EscriboBlock) -> Void = { _, _ in }
   ) {
     self._text = text
     self.language = language
@@ -135,6 +157,8 @@ public struct EscriboEditor: View {
     self.findBar = findBar
     self.focusOnAppear = focusOnAppear
     self.handle = handle
+    self.well = well
+    self.onWellAction = onWellAction
   }
 
   public var body: some View {
@@ -147,6 +171,8 @@ public struct EscriboEditor: View {
       appearance: appearance,
       findBar: findBar,
       focusOnAppear: focusOnAppear,
-      handle: handle)
+      handle: handle,
+      well: well,
+      onWellAction: onWellAction)
   }
 }

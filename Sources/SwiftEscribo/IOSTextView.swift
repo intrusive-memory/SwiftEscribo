@@ -71,6 +71,21 @@
     /// type the macOS Representable drives.
     let coordinator: EditorCoordinator
 
+    // MARK: - The paragraph well (REQUIREMENTS-1.1.0 § 5)
+
+    /// The host's well, or `nil`. Written only by ``applyWell(_:horizontalSizeClass:)``,
+    /// which is also what reserves the lane. Nothing draws from it yet.
+    var well: EscriboWell?
+
+    /// The lane width currently added to the text-container inset — `0` until a well is
+    /// applied. Kept so the next ``applyWell(_:horizontalSizeClass:)`` can subtract exactly
+    /// what it added, leaving any inset set by anything else intact.
+    var wellLaneWidth: CGFloat = 0
+
+    /// The host's well-action callback. Stored, not yet invoked: the button that calls it
+    /// arrives with the well's drawing.
+    var onWellAction: (EscriboWellItem, EscriboBlock) -> Void = { _, _ in }
+
     /// Builds the view over `styler`.
     ///
     /// - Parameters:

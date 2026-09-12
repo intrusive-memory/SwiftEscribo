@@ -21,6 +21,48 @@ this release **changes the spans a scan returns for text that has not changed**,
 a behaviour change an adopter has to read rather than a feature to opt into. If you cache,
 snapshot, or assert on span output, read the section below before you bump the pin.
 
+### Added
+
+#### The paragraph well: `EscriboWell`, `EscriboWellItem`, and its lane
+
+The model and layout reservation for the paragraph well (REQUIREMENTS-1.1.0 § 5). Nothing is
+drawn yet; this release reserves the space and carries the host's state.
+
+```swift
+public enum EscriboWellItem: Hashable, Sendable { case readAloud }
+
+public struct EscriboWell: Equatable, Sendable {
+  public var items: [EscriboWellItem]          // default [.readAloud]
+  public var activeBlock: EscriboBlock.ID?
+  public var progress: Double?                 // 0…1
+  public var spokenRange: NSRange?             // UTF-16, document space
+  public var eligibleKinds: Set<BlockKind>?    // nil = every kind
+  public init(items:activeBlock:progress:spokenRange:eligibleKinds:)  // all defaulted
+  public func isEligible(_ block: EscriboBlock) -> Bool
+}
+```
+
+- **`well:` and `onWellAction:` on `EscriboEditor.init`**, trailing the parameter list:
+  `well: EscriboWell? = nil` and
+  `onWellAction: @escaping (EscriboWellItem, EscriboBlock) -> Void = { _, _ in }`. Both are
+  defaulted, so every existing call site compiles unchanged. The package draws and tracks;
+  the host acts. The package does not import AVFoundation.
+- **Eligibility is the host's data.** `eligibleKinds` names the block kinds that get a well;
+  its default, `nil`, admits every kind, so the package encodes no language rule. A block
+  with no content (an empty `contentRanges` — a blank run, a thematic break) is never
+  eligible, whatever the set.
+- **The lane is reserved in the text view's text-container inset, and only when a well is
+  supplied.** macOS: 28 pt on `NSTextView.textContainerInset.width`, which is symmetric, so
+  the usable container width shrinks by 56 pt and the right margin balances the left. iOS:
+  44 pt on `UITextView.textContainerInset.left` at a **regular** horizontal size class, and
+  **none at compact** (D-5); the size class is read from the SwiftUI environment on every
+  update, so crossing compact ↔ regular adds or removes the lane. The lane is added to the
+  inset the text view already has, never substituted for it.
+
+**What an adopter must know:** passing no well changes nothing — the insets and layout are
+exactly `0.3.0`'s. Passing one moves the text column in by the lane width in both live and
+source mode (D-6).
+
 ### Changed
 
 #### The inline pass runs over a Markdown block's whole content, not line by line
