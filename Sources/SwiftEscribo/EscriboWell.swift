@@ -201,26 +201,15 @@ extension EscriboTextView {
       textView.textContainerInset = NSSize(
         width: inset.width - previous + lane, height: inset.height)
 
-      // A container that tracks the view's width is resized by AppKit only when the view's
-      // *frame* changes — to the frame's width minus twice the inset width — so a new inset
-      // alone leaves a live editor laid out at its old width until the next resize. Restate
-      // it now by moving the container's own width by exactly the inset change on both
-      // edges, which lands on the same number AppKit's tracking would compute.
-      //
-      // Derived from the container rather than re-derived from `textView.frame` on purpose:
-      // this is the same "subtract what was reserved, add what is reserved" arithmetic as
-      // the inset above, it reads no view geometry, and so it can be proven without
-      // resizing a text view. Resizing a windowless TextKit 2 `NSTextView` drives layout
-      // and font resolution, and doing that in the test process hung the macOS test run
-      // against the concurrent off-main font suites.
-      //
-      // Skipped for an unsized container (width 0, as `makeTextView()` leaves it), which
-      // AppKit sizes correctly — inset included — when the view first gets a frame.
-      if let container = textView.textContainer, container.widthTracksTextView,
-        container.size.width > 0
-      {
-        let width = max(0, container.size.width - 2 * (lane - previous))
-        container.size = NSSize(width: width, height: container.size.height)
+      // A container that tracks the view's width is resized by AppKit when the *frame*
+      // changes; restate that width now so a live editor whose well appears or disappears
+      // reflows at once rather than on the next resize. Skipped for an unsized view, which
+      // AppKit will size correctly when it gets a frame.
+      if let container = textView.textContainer, container.widthTracksTextView {
+        let usable = textView.frame.width - 2 * textView.textContainerInset.width
+        if usable > 0 {
+          container.size = NSSize(width: usable, height: container.size.height)
+        }
       }
     #else
       // Left-only: `UIEdgeInsets`, and `UITextView` resizes its tracking container itself.

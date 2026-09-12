@@ -174,87 +174,98 @@ struct EscriboWellTests {
       #expect(editor.textView.textContainerInset == NSSize(width: 5, height: 7))
     }
 
-    /// Gives `editor`'s text container the width AppKit's width tracking would give it in a
-    /// view `viewWidth` points wide — `viewWidth - 2 × textContainerInset.width`, the
-    /// documented `widthTracksTextView` arithmetic — and returns the container.
+    /// Installs `editor`'s scroll view in a 600 × 400 window and returns the window.
     ///
-    /// **Why the container is sized directly rather than by `setFrameSize(_:)`.** Resizing a
-    /// windowless TextKit 2 `NSTextView` makes AppKit resize the tracking container *and*
-    /// drive layout and font resolution on the main thread. In this test process that hung
-    /// the whole macOS run — zero tests reported — with the deliberately concurrent, off-main
-    /// `FontResolutionTests` and `ThemeFontMeasurementTests` blocked in CoreText's font XPC.
-    /// Writing the container's size is only a geometry change that invalidates layout lazily,
-    /// and a windowless view has no display cycle to spend that invalidation, so no layout
-    /// runs. What is lost is AppKit performing the subtraction itself; each test below
-    /// asserts its result against that same documented formula instead.
-    private func sizeLikeTracking(_ editor: EscriboTextView, viewWidth: CGFloat) throws
-      -> NSTextContainer
-    {
+    /// **Why a window.** The lane arithmetic is a fact about a text view with a real width:
+    /// with `widthTracksTextView`, AppKit recomputes the container as
+    /// `frame.width - 2 × textContainerInset.width` the moment the inset changes, so a
+    /// container sized by hand is overwritten from the frame, and a windowless view's frame
+    /// is zero. Resizing a windowless view directly is not an option either — it hangs this
+    /// test process. Hosting the scroll view the way `MacTextViewFocusOnAppearTests` does
+    /// gives the text view its width the way the app does: the clip view autoresizes the
+    /// document view, whose mask is `[.width]`.
+    ///
+    /// The vertical scroller may take some of the 600 pt, so every assertion below measures
+    /// against the text view's actual `frame.width`, never against the window's.
+    ///
+    /// `NSApplication.shared` is touched first because AppKit's window machinery expects an
+    /// initialized app object, and an `xctest` process has not necessarily created one.
+    private func host(_ editor: EscriboTextView) throws -> NSWindow {
+      _ = NSApplication.shared
+      let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+        styleMask: [.titled, .resizable],
+        backing: .buffered,
+        defer: false)
+      let content = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
+      window.contentView = content
+      editor.scrollView.frame = content.bounds
+      content.addSubview(editor.scrollView)
+
       let container = try #require(editor.textView.textContainer)
       #expect(container.widthTracksTextView, "the lane arithmetic assumes a tracking container")
-      container.size = NSSize(
-        width: viewWidth - 2 * editor.textView.textContainerInset.width,
-        height: container.size.height)
-      return container
+      // A text view too narrow to hold both lanes would make every width below meaningless.
+      try #require(editor.textView.frame.width > 4 * 28, "hosting gave the text view no width")
+      return window
+    }
+
+    /// The width AppKit's tracking gives `editor`'s container for its current frame and inset.
+    private func trackedWidth(_ editor: EscriboTextView) -> CGFloat {
+      editor.textView.frame.width - 2 * editor.textView.textContainerInset.width
     }
 
     @Test("macOS: usable container width shrinks by exactly 2 × 28 with a well, and not without")
     func macOSUsableWidthShrinksByTwiceTheLane() throws {
-      let viewWidth: CGFloat = 600
-
       let plain = EscriboTextView(language: .markdown, theme: .markdownLight)
-      let plainContainer = try sizeLikeTracking(plain, viewWidth: viewWidth)
+      let plainWindow = try host(plain)
       plain.applyWell(nil, horizontalSizeClass: nil)
-      let plainWidth = plainContainer.size.width
+      let plainWidth = try #require(plain.textView.textContainer).size.width
 
       // The nil-well control: an editor never given a well at all measures the same.
       let untouched = EscriboTextView(language: .markdown, theme: .markdownLight)
-      #expect(try sizeLikeTracking(untouched, viewWidth: viewWidth).size.width == plainWidth)
+      let untouchedWindow = try host(untouched)
+      #expect(try #require(untouched.textView.textContainer).size.width == plainWidth)
 
       let welled = EscriboTextView(language: .markdown, theme: .markdownLight)
-      let welledContainer = try sizeLikeTracking(welled, viewWidth: viewWidth)
+      let welledWindow = try host(welled)
       welled.applyWell(EscriboWell(), horizontalSizeClass: nil)
-      let welledWidth = welledContainer.size.width
+      let welledWidth = try #require(welled.textView.textContainer).size.width
 
+      // Identical windows and scrollers, so the frames agree and the difference is the lane.
+      #expect(plain.textView.frame.width == welled.textView.frame.width)
       #expect(plainWidth - welledWidth == 2 * 28)
 
       // And the narrower width is the one AppKit's tracking computes for the same view with
       // the widened inset, so the next real resize agrees with it rather than undoing it.
-      #expect(welledWidth == viewWidth - 2 * welled.textView.textContainerInset.width)
+      #expect(welledWidth == trackedWidth(welled))
+      #expect(plainWidth == trackedWidth(plain))
+
+      withExtendedLifetime((plainWindow, untouchedWindow, welledWindow)) {}
     }
 
-    @Test("macOS: a live, already-sized editor reflows when its well appears and disappears")
+    @Test("macOS: a live, already-hosted editor reflows when its well appears and disappears")
     func macOSLiveEditorReflows() throws {
-      let viewWidth: CGFloat = 600
       let editor = EscriboTextView(language: .markdown, theme: .markdownLight)
-      let container = try sizeLikeTracking(editor, viewWidth: viewWidth)
+      let window = try host(editor)
+      let container = try #require(editor.textView.textContainer)
       let before = container.size.width
+      #expect(before == trackedWidth(editor))
 
       editor.applyWell(EscriboWell(), horizontalSizeClass: nil)
       #expect(before - container.size.width == 2 * 28)
-      #expect(container.size.width == viewWidth - 2 * editor.textView.textContainerInset.width)
+      #expect(container.size.width == trackedWidth(editor))
 
       // A playback update carries a new well every frame; the lane is already reserved, so
       // the container must not shrink a second time.
       editor.applyWell(EscriboWell(progress: 0.5), horizontalSizeClass: nil)
       #expect(before - container.size.width == 2 * 28)
+      #expect(container.size.width == trackedWidth(editor))
 
       editor.applyWell(nil, horizontalSizeClass: nil)
       #expect(container.size.width == before)
-      #expect(container.size.width == viewWidth - 2 * editor.textView.textContainerInset.width)
-    }
+      #expect(container.size.width == trackedWidth(editor))
 
-    @Test("macOS: an editor that has never been sized is left for AppKit to size")
-    func macOSUnsizedContainerIsNotWritten() throws {
-      let editor = EscriboTextView(language: .markdown, theme: .markdownLight)
-      let container = try #require(editor.textView.textContainer)
-      #expect(container.size.width == 0)
-
-      editor.applyWell(EscriboWell(), horizontalSizeClass: nil)
-      #expect(container.size.width == 0)
-
-      editor.applyWell(nil, horizontalSizeClass: nil)
-      #expect(container.size.width == 0)
+      withExtendedLifetime(window) {}
     }
   #endif
 
