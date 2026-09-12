@@ -62,24 +62,36 @@ public struct FontTraits: OptionSet, Hashable, Sendable {
 /// 2. No test can accidentally assert a resolved family name (D-4), because the family
 ///    name is not in this type. It appears for the first and only time inside
 ///    ``FontResolver``.
-/// `internal`: nothing in the 1.0 public surface (REQUIREMENTS.md § What is public in
-/// 1.0) exposes a resolved font, and nothing becomes public speculatively.
-struct FontSpec: Hashable, Sendable {
+/// ## Public from 0.4.0, and why that is not a speculative widening
+///
+/// Through 0.3.0 this was `internal`, on the rule that "nothing in the 1.0 public surface
+/// (REQUIREMENTS.md § What is public in 1.0) exposes a resolved font, and nothing becomes
+/// public speculatively." It is public now because 0.4.0 publishes
+/// ``EscriboTheme/columnAdvance(for:)`` and ``EscriboTheme/emWidth(for:)``, and a public
+/// method cannot take an internal parameter type. The widening is therefore *forced by a
+/// caller that exists*, not speculative: Escribir measures its own screenplay page today
+/// with a transcribed copy of ``FontResolver``, and the point of publishing the
+/// measurement is to delete that copy.
+///
+/// Note what is still **not** public: `FontResolver`, `FontGeometry`, and every family
+/// name in the chain. A consumer can ask for a measurement and cannot ask which face
+/// produced it, which is exactly the D-4 boundary the internal rule was protecting.
+public struct FontSpec: Hashable, Sendable {
 
   /// The family the theme asked for.
-  var family: FontFamilyRole
+  public var family: FontFamilyRole
 
   /// The union of every trait the composition stages contributed.
-  var traits: FontTraits
+  public var traits: FontTraits
 
   /// The point size, already scaled by the line's element and the current font metrics.
   ///
   /// Set **per line, never per span** — see ``EscriboStyler``. Two spans on the same line
   /// always carry the same value here, which is Architecture §3 expressed as data.
-  var pointSize: Double
+  public var pointSize: Double
 
   /// Creates a font specification.
-  init(family: FontFamilyRole, traits: FontTraits = [], pointSize: Double) {
+  public init(family: FontFamilyRole, traits: FontTraits = [], pointSize: Double) {
     self.family = family
     self.traits = traits
     self.pointSize = pointSize

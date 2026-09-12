@@ -62,6 +62,9 @@ public struct EscriboEditor: View {
   /// Whether the editor takes the caret when it is installed. macOS only; a no-op on iOS.
   private let focusOnAppear: Bool
 
+  /// The host's handle on the live editor, or `nil`.
+  private let handle: EscriboEditorHandle?
+
   /// The system appearance, which selects between a theme pair when `theme` is `nil`.
   @Environment(\.colorScheme) private var colorScheme
 
@@ -108,13 +111,22 @@ public struct EscriboEditor: View {
   ///     the iOS no-op is a *decision*, not a gap. `becomeFirstResponder()` on a
   ///     `UITextView` raises the software keyboard, and doing that the instant a document
   ///     opens is an interruption rather than a convenience.
+  ///   - handle: A handle the editor points at the live document, so a host can ask which
+  ///     block is under a point or on screen **without casting to `NSTextView` or
+  ///     `UITextView`** (REQUIREMENTS-1.1.0 § 4.3). Hold it in `@StateObject`; it is empty
+  ///     until the editor is installed and empties again when the editor goes away, and
+  ///     every query on it answers `nil` or `[]` rather than trapping in either state.
+  ///
+  ///     Defaulted to `nil` so a host that asks the editor nothing writes nothing, and so
+  ///     every pre-0.4.0 call site keeps compiling unchanged.
   public init(
     text: Binding<String>,
     language: Language,
     mode: EditorMode = .live,
     theme: EscriboTheme? = nil,
     findBar: Bool = false,
-    focusOnAppear: Bool = false
+    focusOnAppear: Bool = false,
+    handle: EscriboEditorHandle? = nil
   ) {
     self._text = text
     self.language = language
@@ -122,6 +134,7 @@ public struct EscriboEditor: View {
     self.theme = theme
     self.findBar = findBar
     self.focusOnAppear = focusOnAppear
+    self.handle = handle
   }
 
   public var body: some View {
@@ -133,6 +146,7 @@ public struct EscriboEditor: View {
       theme: theme ?? .builtIn(language: language, appearance: appearance),
       appearance: appearance,
       findBar: findBar,
-      focusOnAppear: focusOnAppear)
+      focusOnAppear: focusOnAppear,
+      handle: handle)
   }
 }

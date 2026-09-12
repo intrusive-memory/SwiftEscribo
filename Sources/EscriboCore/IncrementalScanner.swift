@@ -414,7 +414,10 @@ struct IncrementalScanner<Grammar: LineGrammar> {
         // points and there is no second code path for the incremental case to drift from.
         // On an incremental scan it groups the window, which is what `ScanResult.blocks`
         // documents it as.
-        blocks: blocks),
+        blocks: blocks,
+        // The document, not the window: a consumer splicing this result into its own
+        // document-wide picture needs the denominator to compute a line delta from.
+        documentLineCount: lineCount),
       states
     )
   }

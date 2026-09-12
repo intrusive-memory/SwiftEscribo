@@ -97,7 +97,8 @@ final class EscriboEditorBridge: NSObject {
     theme: EscriboTheme,
     appearance: EscriboAppearance,
     findBar: Bool = false,
-    focusOnAppear: Bool = false
+    focusOnAppear: Bool = false,
+    handle: EscriboEditorHandle? = nil
   ) -> EscriboTextView {
     let styler = EscriboStyler(
       environment: EditorStyleEnvironment(theme: theme, mode: mode, appearance: appearance))
@@ -108,6 +109,11 @@ final class EscriboEditorBridge: NSObject {
       let editor = EscriboTextView(language: language, styler: styler)
     #endif
     self.editor = editor
+
+    // The host's handle, if it passed one, now points at the coordinator this editor owns.
+    // Done here rather than in `EscriboTextView` because this is the one place that knows
+    // both the freshly built editor and the host's parameters.
+    handle?.attach(to: editor.coordinator)
 
     editor.textView.delegate = self
 
@@ -207,6 +213,11 @@ final class EscriboEditorBridge: NSObject {
     /// state changed.
     let focusOnAppear: Bool
 
+    /// The host's handle, or `nil`. Construction-time only, like `findBar`: a handle points
+    /// at the coordinator the editor is built with, and that coordinator lives as long as
+    /// the editor does.
+    let handle: EscriboEditorHandle?
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
@@ -214,7 +225,7 @@ final class EscriboEditorBridge: NSObject {
     func makeNSView(context: Context) -> NSScrollView {
       context.coordinator.makeEditor(
         language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
-        focusOnAppear: focusOnAppear
+        focusOnAppear: focusOnAppear, handle: handle
       ).scrollView
     }
 
@@ -254,6 +265,11 @@ final class EscriboEditorBridge: NSObject {
     /// reason `findBar` does: so ``EscriboEditor``'s `body` is one unfenced expression.
     let focusOnAppear: Bool
 
+    /// The host's handle, or `nil`. Construction-time only, like `findBar`: a handle points
+    /// at the coordinator the editor is built with, and that coordinator lives as long as
+    /// the editor does.
+    let handle: EscriboEditorHandle?
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
@@ -261,7 +277,7 @@ final class EscriboEditorBridge: NSObject {
     func makeUIView(context: Context) -> UITextView {
       context.coordinator.makeEditor(
         language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
-        focusOnAppear: focusOnAppear
+        focusOnAppear: focusOnAppear, handle: handle
       ).textView
     }
 

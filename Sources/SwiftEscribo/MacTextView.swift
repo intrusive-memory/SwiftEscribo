@@ -79,6 +79,15 @@
       // The exact wiring EditorCoordinator's own doc comment specifies: bind the
       // marked-text closure, then run the first full scan.
       coordinator.hasMarkedText = { [weak textView] in textView?.hasMarkedText() ?? false }
+      // The geometry seam (§ 4.3). `characterIndexForInsertion(at:)` is AppKit's own
+      // closest-position call and is TextKit-version agnostic — it answers from whichever
+      // layout the view has, which here is always `NSTextLayoutManager`. Closest-position
+      // is exactly the contract `utf16Offset` asks for: a point in the well's lane, left of
+      // the text and outside the container, resolves to the start of the line at that `y`.
+      coordinator.utf16Offset = { [weak textView] point in
+        guard let textView else { return nil }
+        return textView.characterIndexForInsertion(at: point)
+      }
       coordinator.restyleEverything()
 
       // Sortie 25. Return goes through `EscriboTextView.handleReturnKey()`, which either

@@ -111,6 +111,35 @@ public struct EscriboBlock: Sendable, Equatable, Identifiable {
 
   public var id: ID { ID(line: lines.lowerBound, offset: range.lowerBound) }
 
+  /// This block moved `lineDelta` lines and `offsetDelta` UTF-16 code units later in the
+  /// document.
+  ///
+  /// What a consumer maintaining its own document-wide picture needs in order to keep the
+  /// blocks an edit did not touch, instead of rescanning to rediscover them. An edit adds
+  /// or removes code units — and, when it involves a newline, lines — and everything after
+  /// it moves by exactly those two amounts. The editor's block cache is the first caller;
+  /// ``ScanResult/documentLineCount`` is how it computes `lineDelta`, and the text system's
+  /// own change-in-length is `offsetDelta`.
+  ///
+  /// Shifts ``lines``, ``range``, ``contentRanges``, and ``contentLines`` together, so the
+  /// index alignment between the last two survives — and so does ``id``, which is derived
+  /// from the first two and therefore moves with the block rather than being invalidated by
+  /// it.
+  ///
+  /// Pure arithmetic, with no reference to any document: a caller shifting by the wrong
+  /// amount gets a block describing the wrong place rather than a trap. Negative deltas are
+  /// legal and are what a deletion produces.
+  public func shifted(byLines lineDelta: Int, byOffset offsetDelta: Int) -> EscriboBlock {
+    EscriboBlock(
+      kind: kind,
+      lines: (lines.lowerBound + lineDelta)..<(lines.upperBound + lineDelta),
+      range: (range.lowerBound + offsetDelta)..<(range.upperBound + offsetDelta),
+      contentRanges: contentRanges.map {
+        ($0.lowerBound + offsetDelta)..<($0.upperBound + offsetDelta)
+      },
+      contentLines: contentLines.map { $0 + lineDelta })
+  }
+
   /// Creates a block.
   ///
   /// `internal` on purpose — see the type's discussion.

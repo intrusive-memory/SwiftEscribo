@@ -168,4 +168,51 @@ public struct EscriboTheme: Equatable, Sendable {
       markerOpacity: 1
     )
   }
+
+  // MARK: - Font measurement (0.4.0)
+
+  /// The advance width of **one character**, in points, for `spec`'s resolved face.
+  ///
+  /// The unit a monospaced measure is counted in: a sixty-character column is sixty of
+  /// these. Published in 0.4.0 so that a host laying out a screenplay page — or a Markdown
+  /// measure — asks the package that already owns the font chain instead of transcribing
+  /// it. Escribir has exactly such a transcription today, and deleting it is the point.
+  ///
+  /// ## Why this is a measurement and not a constant
+  ///
+  /// The value is the output of whichever face the D-4 chain resolves to on *this* machine:
+  /// Courier Prime if it is installed, then Courier New, then Courier, then the system's
+  /// own monospaced face. A test that asserted a point number would be asserting which
+  /// font the machine happened to have. Assert the relationships instead — that it is
+  /// positive, that it scales linearly with ``FontSpec/pointSize``, and that it is very
+  /// nearly `0.6` of the point size for a monospaced spec, which is Courier's ratio and
+  /// the same `0.6` the unmeasurable-glyph fallback uses.
+  ///
+  /// Resolved through ``FontResolver`` — the one chain — rather than measured here, so the
+  /// published number is the same number the styler lays out with.
+  ///
+  /// Total: every branch of the chain ends at a real face, and a face with no glyph for
+  /// the probe falls back to a fraction of the point size rather than to zero, because a
+  /// zero advance collapses every margin on the page and does so silently.
+  public func columnAdvance(for spec: FontSpec) -> Double {
+    FontResolver.geometry(of: FontResolver.font(for: spec)).advanceWidth
+  }
+
+  /// The width of one **em**, in points, for `spec`'s resolved face.
+  ///
+  /// An em is historically the width of the letter `m`, and that is literally how this is
+  /// measured. The distinction from ``columnAdvance(for:)`` is the whole reason both
+  /// exist:
+  ///
+  /// - For a **monospaced** spec the two agree, because every glyph in a monospaced face
+  ///   has the same advance. A caller measuring a screenplay page may use either.
+  /// - For a **proportional** spec they differ, and `columnAdvance` becomes meaningless
+  ///   while this stays useful: an em is the unit proportional type is spaced in, so a
+  ///   Markdown measure expressed in ems survives a change of body face and one expressed
+  ///   in character advances does not.
+  ///
+  /// Same chain, same totality guarantees, same reason not to assert a point constant.
+  public func emWidth(for spec: FontSpec) -> Double {
+    FontResolver.advanceWidth(of: FontResolver.font(for: spec), for: FontResolver.emProbe)
+  }
 }

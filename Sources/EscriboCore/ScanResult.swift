@@ -65,6 +65,26 @@ public struct ScanResult: Equatable, Sendable {
   /// an offset-to-block lookup be a search with no fallback path.
   public let blocks: [EscriboBlock]
 
+  /// How many lines the **whole document** has, as the scanner's line index counts them.
+  ///
+  /// The one field here that describes the document rather than the scan. Everything else
+  /// is scoped to ``lines`` or ``dirtyRange``; this is the denominator those are a fraction
+  /// of.
+  ///
+  /// ## Why a consumer needs it
+  ///
+  /// A caller retaining its own document-wide picture — the editor's block cache is the
+  /// first — has to splice each incremental result into what it already holds, and a splice
+  /// needs the **line delta**: an edit that adds or removes a newline moves every line
+  /// after it, so blocks past the rescanned window must shift before they are kept.
+  /// Comparing this against the value from the previous scan is the only way to know by how
+  /// much. Without it a consumer can only detect that its cache *might* be stale, never
+  /// repair it, and must re-scan the document to answer anything.
+  ///
+  /// A document ending in a terminator has a final empty line, and it is counted — the same
+  /// convention ``lines`` uses, arrived at from the same line index.
+  public let documentLineCount: Int
+
   /// Creates a scan result.
   ///
   /// `internal` on purpose: a result is scanner output, and ``LineRecord`` is not
@@ -74,12 +94,14 @@ public struct ScanResult: Equatable, Sendable {
     spans: [EscriboSpan],
     lines: Range<Int>,
     lineRecords: [LineRecord],
-    blocks: [EscriboBlock] = []
+    blocks: [EscriboBlock] = [],
+    documentLineCount: Int = 0
   ) {
     self.dirtyRange = dirtyRange
     self.spans = spans
     self.lines = lines
     self.lineRecords = lineRecords
     self.blocks = blocks
+    self.documentLineCount = documentLineCount
   }
 }
