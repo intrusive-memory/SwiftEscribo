@@ -62,6 +62,16 @@ public struct EscriboEditor: View {
   /// Whether the editor takes the caret when it is installed. macOS only; a no-op on iOS.
   private let focusOnAppear: Bool
 
+  /// The host's handle on the live editor, or `nil`.
+  private let handle: EscriboEditorHandle?
+
+  /// The paragraph well, or `nil` for no well and no lane.
+  private let well: EscriboWell?
+
+  /// Called with the slot and the block when a well slot is activated — a click or tap on
+  /// the well's button. Handed to the text view, whose well invokes it.
+  private let onWellAction: (EscriboWellItem, EscriboBlock) -> Void
+
   /// The system appearance, which selects between a theme pair when `theme` is `nil`.
   @Environment(\.colorScheme) private var colorScheme
 
@@ -108,13 +118,37 @@ public struct EscriboEditor: View {
   ///     the iOS no-op is a *decision*, not a gap. `becomeFirstResponder()` on a
   ///     `UITextView` raises the software keyboard, and doing that the instant a document
   ///     opens is an interruption rather than a convenience.
+  ///   - handle: A handle the editor points at the live document, so a host can ask which
+  ///     block is under a point or on screen **without casting to `NSTextView` or
+  ///     `UITextView`** (REQUIREMENTS-1.1.0 § 4.3). Hold it in `@StateObject`; it is empty
+  ///     until the editor is installed and empties again when the editor goes away, and
+  ///     every query on it answers `nil` or `[]` rather than trapping in either state.
+  ///
+  ///     Defaulted to `nil` so a host that asks the editor nothing writes nothing, and so
+  ///     every pre-0.4.0 call site keeps compiling unchanged.
+  ///   - well: The paragraph well (REQUIREMENTS-1.1.0 § 5): its slots, the playing block,
+  ///     its progress, the spoken word, and which block kinds are eligible. Supplying one
+  ///     reserves the well's lane in the text view's text-container inset — 28 pt on macOS,
+  ///     symmetric, so the right margin gains the same; 44 pt on iOS at regular width,
+  ///     left-only; **none** on iOS at compact width (D-5). The lane is added to the inset
+  ///     the text view already uses.
+  ///
+  ///     Defaulted to `nil`, which reserves nothing: an adopter that does not mention the
+  ///     well gets exactly the insets and layout it had before `0.4.0`. Pass a fresh value on
+  ///     every update — progress and the spoken range are the host's to report.
+  ///   - onWellAction: Called with the slot and the block when a well slot is activated.
+  ///     The package draws and tracks; the host acts — for `.readAloud`, it speaks. Defaulted
+  ///     to a no-op so every pre-0.4.0 call site keeps compiling unchanged.
   public init(
     text: Binding<String>,
     language: Language,
     mode: EditorMode = .live,
     theme: EscriboTheme? = nil,
     findBar: Bool = false,
-    focusOnAppear: Bool = false
+    focusOnAppear: Bool = false,
+    handle: EscriboEditorHandle? = nil,
+    well: EscriboWell? = nil,
+    onWellAction: @escaping (EscriboWellItem, EscriboBlock) -> Void = { _, _ in }
   ) {
     self._text = text
     self.language = language
@@ -122,6 +156,9 @@ public struct EscriboEditor: View {
     self.theme = theme
     self.findBar = findBar
     self.focusOnAppear = focusOnAppear
+    self.handle = handle
+    self.well = well
+    self.onWellAction = onWellAction
   }
 
   public var body: some View {
@@ -133,6 +170,9 @@ public struct EscriboEditor: View {
       theme: theme ?? .builtIn(language: language, appearance: appearance),
       appearance: appearance,
       findBar: findBar,
-      focusOnAppear: focusOnAppear)
+      focusOnAppear: focusOnAppear,
+      handle: handle,
+      well: well,
+      onWellAction: onWellAction)
   }
 }

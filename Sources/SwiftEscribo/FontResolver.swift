@@ -51,6 +51,14 @@ struct FontResolver {
   /// guarantee and the property the tests assert in place of a family name.
   private static let advanceProbe: Unicode.Scalar = "0"
 
+  /// The character whose advance stands for one **em** of a proportional face.
+  ///
+  /// Typography's own definition: an em is historically the width of the letter `m`. For a
+  /// monospaced face it measures the same as ``advanceProbe`` — every glyph does — which is
+  /// why ``EscriboTheme/columnAdvance(for:)`` and ``EscriboTheme/emWidth(for:)`` agree
+  /// there and diverge for the body face.
+  static let emProbe: Unicode.Scalar = "m"
+
   private var cache: [FontSpec: PlatformFont] = [:]
 
   private var geometries: [FontSpec: FontGeometry] = [:]
@@ -69,9 +77,23 @@ struct FontResolver {
   /// this runs inside a text-view callback where neither has a useful meaning.
   mutating func font(for spec: FontSpec) -> PlatformFont {
     if let cached = cache[spec] { return cached }
-    let resolved = apply(spec.traits, to: baseFont(for: spec))
+    let resolved = Self.font(for: spec)
     cache[spec] = resolved
     return resolved
+  }
+
+  /// The concrete face for `spec`, with no cache in front of it.
+  ///
+  /// The same resolution the instance method performs — chain, fallback, traits — lifted
+  /// out so that a value type with nowhere to put a cache can still measure. ``EscriboTheme``
+  /// is that caller: it is `Equatable` and `Sendable`, so it cannot hold a mutable
+  /// resolver, and a published measurement that resolved its face by a *second* route
+  /// would be a second D-4 chain with its own way of being wrong.
+  ///
+  /// Uncached on purpose. A caller on the styling hot path uses the instance method and
+  /// gets the cache; a caller measuring a page once per layout does not need one.
+  static func font(for spec: FontSpec) -> PlatformFont {
+    apply(spec.traits, to: baseFont(for: spec))
   }
 
   /// The measurements paragraph geometry converts against, for `spec`'s face.
@@ -91,7 +113,7 @@ struct FontResolver {
   }
 
   /// The untraited face for `spec`'s family and size.
-  private func baseFont(for spec: FontSpec) -> PlatformFont {
+  private static func baseFont(for spec: FontSpec) -> PlatformFont {
     let size = CGFloat(spec.pointSize)
     switch spec.family {
     case .monospaced:
@@ -176,7 +198,7 @@ struct FontResolver {
   /// symbolic traits differently and disagree about which half of the round trip is
   /// failable. Both fall back to the untraited face rather than to nothing — a heading
   /// that lost its bold is a cosmetic defect; a heading that lost its font is not.
-  private func apply(_ traits: FontTraits, to font: PlatformFont) -> PlatformFont {
+  private static func apply(_ traits: FontTraits, to font: PlatformFont) -> PlatformFont {
     guard !traits.isEmpty else { return font }
     var symbolic: PlatformSymbolicTraits = []
     #if canImport(AppKit)

@@ -47,6 +47,23 @@
     /// The platform-neutral coordinator, adopted unchanged (Sortie 9).
     let coordinator: EditorCoordinator
 
+    // MARK: - The paragraph well (REQUIREMENTS-1.1.0 § 5)
+
+    /// The host's well, or `nil`. Written only by ``applyWell(_:horizontalSizeClass:)``,
+    /// which is also what reserves the lane and hands the well to ``wellOverlay``.
+    var well: EscriboWell?
+
+    /// Draws the well as subviews of ``textView`` and tracks which blocks show one.
+    let wellOverlay = WellOverlay()
+
+    /// The lane width currently added to the text-container inset — `0` until a well is
+    /// applied. Kept so the next ``applyWell(_:horizontalSizeClass:)`` can subtract exactly
+    /// what it added, leaving any inset set by anything else intact.
+    var wellLaneWidth: CGFloat = 0
+
+    /// The host's well-action callback, invoked by a well button with its item and block.
+    var onWellAction: (EscriboWellItem, EscriboBlock) -> Void = { _, _ in }
+
     /// Builds the view over `styler`.
     ///
     /// - Parameters:
@@ -79,7 +96,20 @@
       // The exact wiring EditorCoordinator's own doc comment specifies: bind the
       // marked-text closure, then run the first full scan.
       coordinator.hasMarkedText = { [weak textView] in textView?.hasMarkedText() ?? false }
+      // The geometry seam (§ 4.3). `characterIndexForInsertion(at:)` is AppKit's own
+      // closest-position call and is TextKit-version agnostic — it answers from whichever
+      // layout the view has, which here is always `NSTextLayoutManager`. Closest-position
+      // is exactly the contract `utf16Offset` asks for: a point in the well's lane, left of
+      // the text and outside the container, resolves to the start of the line at that `y`.
+      coordinator.utf16Offset = { [weak textView] point in
+        guard let textView else { return nil }
+        return textView.characterIndexForInsertion(at: point)
+      }
       coordinator.restyleEverything()
+
+      // The paragraph well. Inert until a well is applied: with none, the overlay draws
+      // nothing and every input it is fed returns at once.
+      installWellOverlay()
 
       // Sortie 25. Return goes through `EscriboTextView.handleReturnKey()`, which either
       // performs the whole rewrite as one trip through the input path or declines and lets

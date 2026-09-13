@@ -5,14 +5,21 @@ import Foundation
   import AppKit
 
   /// The edit-kind option set, spelled as the AppKit SDK vends it.
-  typealias TextStorageEditActions = NSTextStorageEditActions
+  ///
+  /// `public` for the same reason the delegate method below is, and with the same caveat:
+  /// it appears in the signature of a public `@objc` protocol witness, so it has to be
+  /// visible wherever that witness is. It is an alias for an SDK type a consumer already
+  /// has, not a vocabulary this package is asking anyone to learn.
+  public typealias TextStorageEditActions = NSTextStorageEditActions
 #elseif canImport(UIKit)
   import UIKit
 
   /// The same option set, which the UIKit SDK renames with `NS_SWIFT_NAME` and AppKit
   /// does not. One `typealias` rather than a branched method body: the difference is how
   /// the two SDKs spell a type, not anything the coordinator does about it.
-  typealias TextStorageEditActions = NSTextStorage.EditActions
+  ///
+  /// `public` for the reason given on the AppKit spelling above.
+  public typealias TextStorageEditActions = NSTextStorage.EditActions
 #endif
 
 // The one file in the editor layer that names a UI framework.
@@ -20,9 +27,16 @@ import Foundation
 // `NSTextStorage` and `NSTextStorageDelegate` live in AppKit on macOS and UIKit on iOS;
 // there is no Foundation spelling of either. Everything platform-bound about the
 // coordinator is therefore concentrated here, in three small conformances, so that
-// `EditorCoordinator.swift` imports nothing but Foundation and `EscriboCore` and the
-// claim "the coordinator is platform-neutral" is checkable by `grep` rather than by
-// argument.
+// `EditorCoordinator.swift` imports nothing but Foundation, CoreGraphics, and
+// `EscriboCore` — and the claim "the coordinator is platform-neutral" stays checkable by
+// `grep` rather than by argument.
+//
+// CoreGraphics joined that list in 0.4.0, for `CGPoint` and `CGRect` in the block queries
+// (REQUIREMENTS-1.1.0 § 4.3). It is not a UI framework and it names no text system: it
+// supplies two coordinate structs, and the *resolution* of a point to an offset stays on
+// the far side of the seam, in a closure each view supplies. A `CGPoint` in the
+// coordinator's API is a geometry value; an `NSTextLayoutManager` in its stored state
+// would have been a platform shape, which is the line this keeps.
 //
 // Note what is *not* here: no branch on behavior. The conditional import picks the
 // framework the type is vended from, and the one conditional `typealias` exists because
@@ -100,8 +114,21 @@ extension EditorCoordinator: NSTextStorageDelegate {
   /// policy about restyling and not a fact about the notification — and because putting
   /// it here would put it on the platform-specific side of the seam, where each
   /// Representable would have to remember it separately.
+  ///
+  /// ## `public` is a consequence of the conformance, not API
+  ///
+  /// `NSTextStorageDelegate` is a public `@objc` protocol, so a public conforming type's
+  /// witness must be public too. **Nothing should call this.** It is the text system's
+  /// entry point and nobody else's: calling it by hand would report an edit that did not
+  /// happen and rescan a document against a line index that still describes the old one.
+  ///
+  /// The alternative — an internal forwarding shim conforming on the coordinator's behalf —
+  /// was rejected deliberately. This is the edit hot path, reached on every keystroke; a
+  /// second object and an extra hop to hide one symbol is the wrong trade, and `@objc`
+  /// dispatch means the shim would not buy real encapsulation anyway. Every Swift library
+  /// that wraps AppKit has symbols like this one in its surface.
   @objc
-  func textStorage(
+  public func textStorage(
     _ textStorage: NSTextStorage,
     didProcessEditing editedMask: TextStorageEditActions,
     range editedRange: NSRange,

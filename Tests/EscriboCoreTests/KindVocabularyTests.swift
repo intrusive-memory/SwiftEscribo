@@ -26,6 +26,7 @@ struct KindVocabularyTests {
     #expect(requireSendable(Language.markdown) == .markdown)
     #expect(requireSendable(StyleSet.strong) == .strong)
     #expect(requireSendable(SpanRole.content) == .content)
+    #expect(requireSendable(BlockKind.paragraph) == .paragraph)
   }
 
   @Test("Every vocabulary type is Hashable, and so usable as a styler cache key")
@@ -35,6 +36,7 @@ struct KindVocabularyTests {
     _ = requireHashable(Language.fountain)
     _ = requireHashable(StyleSet([.strong, .emphasis]))
     _ = requireHashable(SpanRole.marker)
+    _ = requireHashable(BlockKind.paragraph)
 
     // The styler's cache is keyed by the whole triple; if any leg lost its
     // conformance this would stop compiling.
@@ -53,11 +55,13 @@ struct KindVocabularyTests {
     #expect(requireEquatable(Language.markdown, Language(rawValue: "markdown")))
     #expect(requireEquatable(StyleSet.underline, StyleSet(rawValue: 1 << 4)))
     #expect(requireEquatable(SpanRole.marker, SpanRole(rawValue: "marker")))
+    #expect(requireEquatable(BlockKind.speech, BlockKind(rawValue: "speech")))
 
     #expect(SpanKind.text != SpanKind.heading)
     #expect(ElementKind.codeFence != ElementKind.codeBlock)
     #expect(Language.markdown != Language.fountain)
     #expect(SpanRole.content != SpanRole.marker)
+    #expect(BlockKind.paragraph != BlockKind.action)
   }
 
   // MARK: - Construction and extensibility
@@ -240,5 +244,67 @@ struct KindVocabularyTests {
   )
   func spanRoleRawValues(role: SpanRole, expected: String) {
     #expect(role.rawValue == expected)
+  }
+
+  // MARK: - BlockKind (SwiftEscribo 0.4.0)
+
+  /// Every member of ``BlockKind``, paired with its raw value.
+  ///
+  /// This table is the **only** guard the block vocabulary has. `BlockKind` is a struct
+  /// with static members, not an enum, so there is no exhaustive `switch` anywhere for the
+  /// compiler to break when a member is added or respelled — the trade that buys source
+  /// compatibility costs exactly this, and paying it here is the point. A member added to
+  /// `EscriboBlock.swift` and not added below is caught by the count assertion; a member
+  /// *respelled* is caught by its own row.
+  static let blockKindRawValueTable: [(BlockKind, String)] = [
+    // Markdown (§ 4.1)
+    (BlockKind.paragraph, "paragraph"),
+    (BlockKind.heading, "heading"),
+    (BlockKind.listItem, "listItem"),
+    (BlockKind.blockquote, "blockquote"),
+    (BlockKind.codeBlock, "codeBlock"),
+    (BlockKind.table, "table"),
+    (BlockKind.frontmatter, "frontmatter"),
+    (BlockKind.thematicBreak, "thematicBreak"),
+    (BlockKind.blank, "blank"),
+    // Fountain (§ 4.2)
+    (BlockKind.sceneHeading, "sceneHeading"),
+    (BlockKind.action, "action"),
+    (BlockKind.speech, "speech"),
+    (BlockKind.transition, "transition"),
+    (BlockKind.centered, "centered"),
+    (BlockKind.lyrics, "lyrics"),
+    (BlockKind.note, "note"),
+    (BlockKind.boneyard, "boneyard"),
+    (BlockKind.section, "section"),
+    (BlockKind.synopsis, "synopsis"),
+    (BlockKind.pageBreak, "pageBreak"),
+    (BlockKind.titlePage, "titlePage"),
+  ]
+
+  @Test("The block vocabulary is exactly the twenty-one members both dialects declare")
+  func blockKindTableIsExhaustive() {
+    // Nine Markdown members and twelve Fountain ones, counted by hand from
+    // `Sources/EscriboCore/EscriboBlock.swift`. There is no compiler check behind this
+    // number, which is why it is asserted rather than assumed.
+    #expect(Self.blockKindRawValueTable.count == 21)
+    #expect(Set(Self.blockKindRawValueTable.map(\.0)).count == 21, "no member listed twice")
+    #expect(Set(Self.blockKindRawValueTable.map(\.1)).count == 21, "no raw value listed twice")
+  }
+
+  @Test("BlockKind raw values are stable", arguments: blockKindRawValueTable)
+  func blockKindRawValues(kind: BlockKind, expected: String) {
+    #expect(kind.rawValue == expected)
+  }
+
+  @Test("An unrecognized block kind is constructible and equal only to itself")
+  func unrecognizedBlockKindsAreLegal() {
+    // The forward-compatibility property the struct shape exists for: a consumer reading
+    // blocks from a newer core meets a kind this version has never heard of, and must be
+    // able to hold and compare it rather than trap.
+    let future = BlockKind(rawValue: "figure")
+    #expect(future.rawValue == "figure")
+    #expect(future == BlockKind(rawValue: "figure"))
+    #expect(!Self.blockKindRawValueTable.map(\.0).contains(future))
   }
 }

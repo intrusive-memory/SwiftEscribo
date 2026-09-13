@@ -157,6 +157,61 @@ struct CaretLineContext: Equatable {
       if tabKeyHandler?() == true { return }
       super.insertTab(sender)
     }
+
+    // MARK: The paragraph well's inputs (REQUIREMENTS-1.1.0 § 5.2)
+
+    /// The well drawn into this view, which these overrides feed. Weak: the editor owns it.
+    ///
+    /// Overrides here rather than a delegate for the reason the Return key gives above — the
+    /// pointer, the keyboard, and a drag reach this object whether or not SwiftUI built it.
+    weak var wellOverlay: WellOverlay?
+
+    /// The tracking area that delivers pointer moves across the whole visible text view,
+    /// which is what makes a block's vertical band span the lane *and* the text.
+    private var wellTrackingArea: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+      super.updateTrackingAreas()
+      if let wellTrackingArea { removeTrackingArea(wellTrackingArea) }
+      let area = NSTrackingArea(
+        rect: .zero,
+        options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+        owner: self, userInfo: nil)
+      addTrackingArea(area)
+      wellTrackingArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+      super.mouseMoved(with: event)
+      wellOverlay?.pointerMoved(to: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+      super.mouseExited(with: event)
+      guard event.trackingArea === wellTrackingArea else { return }
+      wellOverlay?.pointerMoved(to: nil)
+    }
+
+    /// Typing hides the well, as the system hides the cursor; the next pointer move brings
+    /// it back.
+    override func keyDown(with event: NSEvent) {
+      wellOverlay?.typed()
+      super.keyDown(with: event)
+    }
+
+    /// `NSTextView` tracks a drag-selection inside `mouseDown(with:)` and returns on mouse-up,
+    /// so the call to `super` *is* the drag, and bracketing it is exact.
+    override func mouseDown(with event: NSEvent) {
+      wellOverlay?.dragBegan()
+      super.mouseDown(with: event)
+      wellOverlay?.dragEnded()
+    }
+
+    /// A resize reflows the text, so every placed well may be beside the wrong line.
+    override func setFrameSize(_ newSize: NSSize) {
+      super.setFrameSize(newSize)
+      wellOverlay?.layoutDidChange()
+    }
   }
 
 #elseif os(iOS)
@@ -191,9 +246,33 @@ struct CaretLineContext: Equatable {
     var tabKeyHandler: (@MainActor () -> Bool)?
 
     override func insertText(_ text: String) {
+      wellOverlay?.typed()
       if text == "\n", returnKeyHandler?() == true { return }
       if text == "\t", tabKeyHandler?() == true { return }
       super.insertText(text)
+    }
+
+    // MARK: The paragraph well's inputs (REQUIREMENTS-1.1.0 § 5.2)
+
+    /// The well drawn into this view, which these overrides feed. Weak: the editor owns it.
+    /// The iPad pointer arrives through a hover recognizer the editor installs, and the
+    /// caret through the view delegate.
+    weak var wellOverlay: WellOverlay?
+
+    /// The width the well was last placed for. `layoutSubviews` runs on every scroll, and a
+    /// scroll moves the well with its superview for free; only a width change reflows text.
+    private var wellLayoutWidth: CGFloat = 0
+
+    override func deleteBackward() {
+      wellOverlay?.typed()
+      super.deleteBackward()
+    }
+
+    override func layoutSubviews() {
+      super.layoutSubviews()
+      guard bounds.width != wellLayoutWidth else { return }
+      wellLayoutWidth = bounds.width
+      wellOverlay?.layoutDidChange()
     }
   }
 

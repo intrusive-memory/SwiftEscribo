@@ -74,7 +74,8 @@ struct LineWindow {
 /// reviewed cheaply.
 struct LineScan {
 
-  /// The spans this line contributes.
+  /// The spans this line contributes that are **not** the inline pass's output: block
+  /// markers, indents, fence and delimiter runs, table pipes.
   ///
   /// They need not cover the line and need not be sorted: gaps are filled with
   /// ``SpanKind/text``, overlaps are trimmed, and anything outside the line is clipped.
@@ -82,6 +83,28 @@ struct LineScan {
   /// exactly how "malformed constructs degrade to text" is implemented — by doing
   /// nothing.
   var spans: [EscriboSpan]
+
+  /// Exactly what the inline pass produced for this line's content, kept apart from
+  /// ``spans`` so the scanner can replace it without disturbing the markers around it.
+  ///
+  /// ## Why this is a separate array and not a role or a flag
+  ///
+  /// The joined-content pass (REQUIREMENTS-1.1.0 § 3) re-scans a whole block's content at
+  /// once and has to swap the result in for every line of the block, leaving each line's
+  /// `> `, `- `, or checkbox exactly as the grammar emitted it. Telling the two apart after
+  /// the fact is impossible: ``SpanRole/marker`` does not separate them, because the inline
+  /// pass emits marker-role spans of its own for the `**` delimiters, just as an ATX
+  /// heading's closing `#` run is a marker. Nor does ``SpanKind``, since a blockquote's
+  /// marker and its content deliberately carry the same kind. So the split has to be made
+  /// where the knowledge is — here, at the point of production.
+  ///
+  /// Populated only by the paths whose blocks can be joined: paragraphs, blockquotes, and
+  /// list items. A heading is one line and a table cell must never pair across a row, so
+  /// those paths keep emitting into ``spans`` and are never re-scanned.
+  ///
+  /// The engine tiles ``spans`` and this together, so a grammar that ignores it is
+  /// unaffected.
+  var inlineSpans: [EscriboSpan]
 
   /// The line's classification.
   var element: ElementKind
@@ -110,6 +133,7 @@ struct LineScan {
 
   init(
     spans: [EscriboSpan] = [],
+    inlineSpans: [EscriboSpan] = [],
     element: ElementKind,
     contentRange: Range<Int>? = nil,
     depth: Int = 0,
@@ -117,6 +141,7 @@ struct LineScan {
     tableAlignments: [TableAlignment] = []
   ) {
     self.spans = spans
+    self.inlineSpans = inlineSpans
     self.element = element
     self.contentRange = contentRange
     self.depth = depth
@@ -185,8 +210,73 @@ protocol LineGrammar {
   /// malformed construct is scanned as text and, if it is multi-line, carried in the
   /// returned state until the end of the document.
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan
+
+  /// Which block-grouping vocabulary this grammar's line records group under
+  /// (REQUIREMENTS-1.1.0 § 4).
+  ///
+  /// A property of the grammar rather than of the ``Language`` because the grouper runs
+  /// inside ``IncrementalScanner``, which is generic over this protocol and has never
+  /// heard of `Language`. The default is ``BlockDialect/none`` so that no existing test
+  /// grammar, and no future grammar without block structure, has to mention it.
+  var blockDialect: BlockDialect { get }
+
+  /// Whether a joinable block's inline pass runs over the block's joined content rather
+  /// than line by line (REQUIREMENTS-1.1.0 § 3).
+  ///
+  /// A grammar cannot do this for itself: a block is unbounded in length and a grammar can
+  /// see at most ``lookahead`` lines ahead and none behind, which is a limit the
+  /// convergence engine's forward rule depends on. So the joined pass runs in
+  /// ``IncrementalScanner`` *after* the line loop, and this is how a grammar opts into it.
+  ///
+  /// Default `false`. Fountain deliberately does not opt in — joining a speech would let a
+  /// `*` in a character cue pair with a `*` three lines into the dialogue, and Fountain's
+  /// genuinely multi-line constructs (notes, boneyards) are carried in
+  /// ``LineState/openConstruct`` already, which is the right mechanism for them.
+  var joinsBlockContent: Bool { get }
+
+  /// The spans for one joinable block's content, in document coordinates, with no span
+  /// crossing a piece boundary.
+  ///
+  /// Called only when ``joinsBlockContent``, once per joinable block, with one
+  /// ``ContentPiece`` per content-carrying line of the block in document order.
+  func joinedBlockSpans(_ pieces: [ContentPiece]) -> [EscriboSpan]
+
+  /// The ``SpanKind`` this grammar's inline pass gives a line classified `element`, or
+  /// `nil` when such a line is not joinable content.
+  ///
+  /// Per **line**, not per block, and that is the point: a list item's marker line is
+  /// inline-scanned as ``SpanKind/listItem`` while its continuation lines are scanned as
+  /// ``SpanKind/text``, so joining the item must reproduce both rather than pick one.
+  /// Returning `nil` for any line of a block takes that block out of the joined pass, which
+  /// is how an element nobody has thought about yet declines safely.
+  func joinedContentKind(for element: ElementKind) -> SpanKind?
+
+  /// Whether `units` hold any character that could begin an inline construct.
+  ///
+  /// Asked of every line of a block's run to decide whether the joined pass is worth
+  /// running — and, more importantly, whether the rescan window is worth widening. A run
+  /// with **no** delimiter anywhere cannot have been styled across a line by the previous
+  /// scan either, so nothing about it can be stale and nothing needs re-joining. One
+  /// delimiter is enough to require both: see
+  /// ``IncrementalScanner/joinableRun(containing:in:)``, which explains why the threshold
+  /// is one rather than two and why a predicate over post-edit text must not ask for more.
+  ///
+  /// This is what keeps the rescan window narrow where it matters. Ordinary prose carries
+  /// no delimiters, so an edit in a two-hundred-line paragraph of plain text widens nothing
+  /// and typing costs exactly what it cost in 0.3.0.
+  func containsJoinableInlineSyntax(_ units: [UInt16]) -> Bool
 }
 
 extension LineGrammar {
   var backwardExtent: Int { max(1, lookahead) }
+
+  var blockDialect: BlockDialect { .none }
+
+  var joinsBlockContent: Bool { false }
+
+  func joinedBlockSpans(_ pieces: [ContentPiece]) -> [EscriboSpan] { [] }
+
+  func joinedContentKind(for element: ElementKind) -> SpanKind? { nil }
+
+  func containsJoinableInlineSyntax(_ units: [UInt16]) -> Bool { false }
 }

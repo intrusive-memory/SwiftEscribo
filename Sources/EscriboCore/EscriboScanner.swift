@@ -141,6 +141,46 @@ enum ResolvedGrammar: LineGrammar {
     }
   }
 
+  var blockDialect: BlockDialect {
+    switch self {
+    case .markdown(let grammar): grammar.blockDialect
+    case .fountain(let grammar): grammar.blockDialect
+    case .text(let grammar): grammar.blockDialect
+    }
+  }
+
+  var joinsBlockContent: Bool {
+    switch self {
+    case .markdown(let grammar): grammar.joinsBlockContent
+    case .fountain(let grammar): grammar.joinsBlockContent
+    case .text(let grammar): grammar.joinsBlockContent
+    }
+  }
+
+  func joinedBlockSpans(_ pieces: [ContentPiece]) -> [EscriboSpan] {
+    switch self {
+    case .markdown(let grammar): grammar.joinedBlockSpans(pieces)
+    case .fountain(let grammar): grammar.joinedBlockSpans(pieces)
+    case .text(let grammar): grammar.joinedBlockSpans(pieces)
+    }
+  }
+
+  func joinedContentKind(for element: ElementKind) -> SpanKind? {
+    switch self {
+    case .markdown(let grammar): grammar.joinedContentKind(for: element)
+    case .fountain(let grammar): grammar.joinedContentKind(for: element)
+    case .text(let grammar): grammar.joinedContentKind(for: element)
+    }
+  }
+
+  func containsJoinableInlineSyntax(_ units: [UInt16]) -> Bool {
+    switch self {
+    case .markdown(let grammar): grammar.containsJoinableInlineSyntax(units)
+    case .fountain(let grammar): grammar.containsJoinableInlineSyntax(units)
+    case .text(let grammar): grammar.containsJoinableInlineSyntax(units)
+    }
+  }
+
   func scanLine(_ window: LineWindow, state: LineState) -> LineScan {
     switch self {
     case .markdown(let grammar): grammar.scanLine(window, state: state)

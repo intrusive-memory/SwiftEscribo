@@ -97,7 +97,11 @@ final class EscriboEditorBridge: NSObject {
     theme: EscriboTheme,
     appearance: EscriboAppearance,
     findBar: Bool = false,
-    focusOnAppear: Bool = false
+    focusOnAppear: Bool = false,
+    handle: EscriboEditorHandle? = nil,
+    well: EscriboWell? = nil,
+    onWellAction: @escaping (EscriboWellItem, EscriboBlock) -> Void = { _, _ in },
+    horizontalSizeClass: WellLane.HorizontalSizeClass? = nil
   ) -> EscriboTextView {
     let styler = EscriboStyler(
       environment: EditorStyleEnvironment(theme: theme, mode: mode, appearance: appearance))
@@ -109,7 +113,17 @@ final class EscriboEditorBridge: NSObject {
     #endif
     self.editor = editor
 
+    // The host's handle, if it passed one, now points at the coordinator this editor owns.
+    // Done here rather than in `EscriboTextView` because this is the one place that knows
+    // both the freshly built editor and the host's parameters.
+    handle?.attach(to: editor.coordinator)
+
     editor.textView.delegate = self
+
+    // The well, and with it the lane. `nil` reserves nothing, so the text view keeps exactly
+    // the inset its own initializer gave it.
+    editor.onWellAction = onWellAction
+    editor.applyWell(well, horizontalSizeClass: horizontalSizeClass)
 
     // The initial document arrives through the same four rules every later update uses.
     // Rule 1 makes this free when the host starts from an empty string.
@@ -131,11 +145,19 @@ final class EscriboEditorBridge: NSObject {
     mode: EditorMode,
     theme: EscriboTheme,
     appearance: EscriboAppearance,
-    text incoming: String
+    text incoming: String,
+    well: EscriboWell? = nil,
+    onWellAction: @escaping (EscriboWellItem, EscriboBlock) -> Void = { _, _ in },
+    horizontalSizeClass: WellLane.HorizontalSizeClass? = nil
   ) {
     guard let editor else { return }
     editor.applyConfiguration(
       language: language, mode: mode, theme: theme, appearance: appearance)
+    // The well arrives on every pass — its progress and spoken range are live host state —
+    // and the lane is rewritten only when its width changes (a well added or removed, or an
+    // iOS size-class change), so a pass that carries only new progress does no layout work.
+    editor.onWellAction = onWellAction
+    editor.applyWell(well, horizontalSizeClass: horizontalSizeClass)
     editor.applyExternalText(incoming)
   }
 
@@ -170,6 +192,24 @@ final class EscriboEditorBridge: NSObject {
     /// argument instead of wrapped in a `Notification`.
     func textViewDidChange(_ textView: UITextView) {
       pushToBinding()
+    }
+
+    /// The caret moved: the well's Caret state follows it (REQUIREMENTS-1.1.0 § 5.2).
+    ///
+    /// Through the delegate, unlike the well's other inputs, because it is the one UIKit
+    /// reports only here. A text view built without the bridge still draws Hover and Playing.
+    func textViewDidChangeSelection(_ textView: UITextView) {
+      editor?.wellOverlay.caretChanged()
+    }
+
+    /// Becoming first responder is half of the Caret state's trigger.
+    func textViewDidBeginEditing(_ textView: UITextView) {
+      editor?.wellOverlay.caretChanged()
+    }
+
+    /// And resigning it ends the Caret state.
+    func textViewDidEndEditing(_ textView: UITextView) {
+      editor?.wellOverlay.caretChanged()
     }
   }
 #endif
@@ -207,6 +247,19 @@ final class EscriboEditorBridge: NSObject {
     /// state changed.
     let focusOnAppear: Bool
 
+    /// The host's handle, or `nil`. Construction-time only, like `findBar`: a handle points
+    /// at the coordinator the editor is built with, and that coordinator lives as long as
+    /// the editor does.
+    let handle: EscriboEditorHandle?
+
+    /// The paragraph well, or `nil`. Re-applied on every update: its progress and spoken
+    /// range are live host state. macOS has no size class; its lane is always 28 pt.
+    let well: EscriboWell?
+
+    /// The host's well-action callback, re-stored on every update so it never targets a
+    /// stale view graph.
+    let onWellAction: (EscriboWellItem, EscriboBlock) -> Void
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
@@ -214,14 +267,15 @@ final class EscriboEditorBridge: NSObject {
     func makeNSView(context: Context) -> NSScrollView {
       context.coordinator.makeEditor(
         language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
-        focusOnAppear: focusOnAppear
+        focusOnAppear: focusOnAppear, handle: handle, well: well, onWellAction: onWellAction
       ).scrollView
     }
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
       context.coordinator.text = $text
       context.coordinator.update(
-        language: language, mode: mode, theme: theme, appearance: appearance, text: text)
+        language: language, mode: mode, theme: theme, appearance: appearance, text: text,
+        well: well, onWellAction: onWellAction)
     }
   }
 
@@ -254,6 +308,20 @@ final class EscriboEditorBridge: NSObject {
     /// reason `findBar` does: so ``EscriboEditor``'s `body` is one unfenced expression.
     let focusOnAppear: Bool
 
+    /// The host's handle, or `nil`. Construction-time only, like `findBar`: a handle points
+    /// at the coordinator the editor is built with, and that coordinator lives as long as
+    /// the editor does.
+    let handle: EscriboEditorHandle?
+
+    /// The paragraph well, or `nil`. Re-applied on every update, together with the
+    /// horizontal size class read from the environment, so a rotation or a split-view resize
+    /// that crosses compact ↔ regular adds or removes the lane (D-5).
+    let well: EscriboWell?
+
+    /// The host's well-action callback, re-stored on every update so it never targets a
+    /// stale view graph.
+    let onWellAction: (EscriboWellItem, EscriboBlock) -> Void
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
@@ -261,14 +329,17 @@ final class EscriboEditorBridge: NSObject {
     func makeUIView(context: Context) -> UITextView {
       context.coordinator.makeEditor(
         language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
-        focusOnAppear: focusOnAppear
+        focusOnAppear: focusOnAppear, handle: handle, well: well, onWellAction: onWellAction,
+        horizontalSizeClass: WellLane.HorizontalSizeClass(context.environment.horizontalSizeClass)
       ).textView
     }
 
     func updateUIView(_ uiView: UITextView, context: Context) {
       context.coordinator.text = $text
       context.coordinator.update(
-        language: language, mode: mode, theme: theme, appearance: appearance, text: text)
+        language: language, mode: mode, theme: theme, appearance: appearance, text: text,
+        well: well, onWellAction: onWellAction,
+        horizontalSizeClass: WellLane.HorizontalSizeClass(context.environment.horizontalSizeClass))
     }
   }
 

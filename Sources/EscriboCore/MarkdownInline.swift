@@ -334,7 +334,7 @@ enum MarkdownInline {
   /// The fast path exists because most lines of most documents contain none, and the walk
   /// allocates one attribute per code unit. Linear, no allocation, and it answers `false`
   /// for the common case before anything is allocated at all.
-  private static func containsInlineSyntax(_ units: [UInt16], _ range: Range<Int>) -> Bool {
+  static func containsInlineSyntax(_ units: [UInt16], _ range: Range<Int>) -> Bool {
     for offset in range {
       switch units[offset] {
       case asterisk, underscore, backtick, leftBracket, backslash, tilde, lessThan: return true
@@ -1007,5 +1007,137 @@ private struct InlineWalk {
       start = end
     }
     return spans
+  }
+}
+
+// MARK: - Joined block content
+
+/// One piece of a block's joined content: some code units, and where they sit in the
+/// document.
+///
+/// A block's content is **discontiguous** — a line's content, then a terminator and the
+/// next line's indent, then more content — so a type is needed to carry the mapping that a
+/// single `(units, base)` pair carries for one line.
+struct ContentPiece {
+  /// Where the piece sits in the document, in UTF-16 code units.
+  let documentRange: Range<Int>
+
+  /// The piece's code units. Exactly `documentRange.count` of them.
+  let units: [UInt16]
+
+  /// The ``SpanKind`` the inline pass would have given this line on its own.
+  ///
+  /// Per piece rather than per block, because a list item's marker line is scanned as
+  /// ``SpanKind/listItem`` and its continuation lines as ``SpanKind/text``. Joining must
+  /// change which delimiters pair, never what kind a line's content is.
+  let kind: SpanKind
+}
+
+extension MarkdownInline {
+
+  /// Scans a block's content as **one run of text** rather than line by line, and returns
+  /// the spans in document coordinates, split at piece boundaries.
+  ///
+  /// This is what makes `**…**` opened on one line and closed on the next render paired
+  /// rather than as literal stars (REQUIREMENTS-1.1.0 § 3). It does not replace
+  /// ``spans(in:range:base:kind:allowsHardBreak:)`` — headings, blockquotes, list items,
+  /// and table cells all still use that, and its contract is unchanged.
+  ///
+  /// ## Three things this has to get right that the line-based entry point does not
+  ///
+  /// **1. Pieces are joined with a space.** A CommonMark soft line break is Unicode
+  /// whitespace for the delimiter-flanking rules, and concatenating the pieces bare would
+  /// lose that. The difference is observable: `a *` followed by `b*` has, in the real
+  /// document, an asterisk flanked by a space on the left and a newline on the right —
+  /// neither left- nor right-flanking, so literal. Concatenated bare it becomes `a *b*`
+  /// and pairs, which is not what CommonMark says. Joined with a space it stays literal, as
+  /// it should. A space rather than a newline because every whitespace predicate in this
+  /// file already knows about spaces, and a rendered soft break *is* a space.
+  ///
+  /// **2. Hard breaks are decided per piece, before joining.** A hard break is two trailing
+  /// spaces or a trailing backslash — a property of where a *line* ends, and the joined
+  /// buffer has no line ends in it. So each piece's break is taken out of its body exactly
+  /// as ``spans(in:range:base:kind:allowsHardBreak:)`` takes it out of a line's, emitted
+  /// directly in document coordinates, and the joined walk then runs with
+  /// `allowsHardBreak: false` because there is nothing left for it to find.
+  ///
+  /// **3. Each piece keeps its own ``SpanKind``.** A list item's marker line is scanned as
+  /// `.listItem` and its continuation lines as `.text`, so a run that crosses from one to
+  /// the other comes back as two spans carrying two kinds — exactly what the line-by-line
+  /// pass produced. Block scoping changes which delimiters pair, never what kind a line's
+  /// content is.
+  ///
+  /// **4. Every span is split at piece boundaries.** ``LineRecord`` and the styler are
+  /// line-based and stay that way; a span crossing a line comes back as one piece per line.
+  /// That is the invariant that keeps block scoping from leaking into every consumer.
+  ///
+  /// An unmatched opener cannot style past the block, because the walk is handed exactly
+  /// the block's content and its output tiles exactly that.
+  ///
+  /// - Returns: Spans in **document** coordinates, none crossing a piece boundary, together
+  ///   covering exactly the pieces' content. Not necessarily sorted — the caller tiles
+  ///   per line, and ``SpanTiling`` sorts.
+  static func joinedSpans(
+    of pieces: [ContentPiece],
+    allowsHardBreak: Bool
+  ) -> [EscriboSpan] {
+    guard let first = pieces.first else { return [] }
+    // The walk needs one kind, so it gets the first piece's and every span that took it is
+    // relabelled per piece on the way out. "Took the block kind" is decidable exactly:
+    // links, images, and hard breaks carry kinds of their own, and no block kind is ever
+    // one of those, so equality with `walkKind` identifies the inherited ones and nothing
+    // else.
+    let walkKind = first.kind
+
+    var out: [EscriboSpan] = []
+    var joined: [UInt16] = []
+    // Where each piece's *body* begins in `joined`, and how long it is. The body is the
+    // piece minus its hard break, so these are not derivable from the pieces alone.
+    var bodyStarts: [Int] = []
+    var bodyLengths: [Int] = []
+    joined.reserveCapacity(pieces.reduce(pieces.count) { $0 + $1.units.count })
+
+    for (offset, piece) in pieces.enumerated() {
+      if offset > 0 { joined.append(space) }
+
+      let whole = 0..<piece.units.count
+      let hardBreak = allowsHardBreak ? hardBreakRange(piece.units, whole) : nil
+      let body = whole.lowerBound..<(hardBreak?.lowerBound ?? whole.upperBound)
+
+      bodyStarts.append(joined.count)
+      bodyLengths.append(body.count)
+      joined.append(contentsOf: piece.units[body])
+
+      if let hardBreak {
+        let base = piece.documentRange.lowerBound
+        out.append(
+          EscriboSpan(
+            range: (base + hardBreak.lowerBound)..<(base + hardBreak.upperBound),
+            kind: .hardBreak,
+            role: .marker))
+      }
+    }
+
+    // `allowsHardBreak: false`: every break was taken out above, and asking the joined
+    // walk for one again would find the *last* piece's trailing spaces twice.
+    let walked = spans(
+      in: joined, range: 0..<joined.count, base: 0, kind: walkKind, allowsHardBreak: false)
+
+    for span in walked {
+      for (offset, piece) in pieces.enumerated() {
+        let start = bodyStarts[offset]
+        let lower = max(span.range.lowerBound, start)
+        let upper = min(span.range.upperBound, start + bodyLengths[offset])
+        guard lower < upper else { continue }
+        let base = piece.documentRange.lowerBound
+        out.append(
+          EscriboSpan(
+            range: (base + lower - start)..<(base + upper - start),
+            kind: span.kind == walkKind ? piece.kind : span.kind,
+            style: span.style,
+            role: span.role))
+      }
+    }
+    return out
   }
 }

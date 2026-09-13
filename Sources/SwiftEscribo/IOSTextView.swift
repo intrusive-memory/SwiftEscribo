@@ -71,6 +71,23 @@
     /// type the macOS Representable drives.
     let coordinator: EditorCoordinator
 
+    // MARK: - The paragraph well (REQUIREMENTS-1.1.0 § 5)
+
+    /// The host's well, or `nil`. Written only by ``applyWell(_:horizontalSizeClass:)``,
+    /// which is also what reserves the lane and hands the well to ``wellOverlay``.
+    var well: EscriboWell?
+
+    /// Draws the well as subviews of ``textView`` and tracks which blocks show one.
+    let wellOverlay = WellOverlay()
+
+    /// The lane width currently added to the text-container inset — `0` until a well is
+    /// applied. Kept so the next ``applyWell(_:horizontalSizeClass:)`` can subtract exactly
+    /// what it added, leaving any inset set by anything else intact.
+    var wellLaneWidth: CGFloat = 0
+
+    /// The host's well-action callback, invoked by a well button with its item and block.
+    var onWellAction: (EscriboWellItem, EscriboBlock) -> Void = { _, _ in }
+
     /// Builds the view over `styler`.
     ///
     /// - Parameters:
@@ -93,7 +110,21 @@
       // marked-text closure, then run the first full scan. DL-55: the iOS half of the
       // question is a property, not a method.
       coordinator.hasMarkedText = { [weak textView] in textView?.markedTextRange != nil }
+      // The geometry seam (§ 4.3), and the same asymmetry as `hasMarkedText`: AppKit spells
+      // closest-position as one call returning an index, UIKit as a `UITextPosition` plus
+      // an offset. Both are `UITextInput`/`NSTextView` API rather than layout-manager API,
+      // so both are TextKit-version agnostic and both already clamp a point outside the
+      // text to the nearest position — which is what makes a point in the well's lane
+      // resolve by its `y`.
+      coordinator.utf16Offset = { [weak textView] point in
+        guard let textView, let position = textView.closestPosition(to: point) else { return nil }
+        return textView.offset(from: textView.beginningOfDocument, to: position)
+      }
       coordinator.restyleEverything()
+
+      // The paragraph well. Inert until a well is applied: with none, the overlay draws
+      // nothing and every input it is fed returns at once.
+      installWellOverlay()
 
       // Sortie 25, wired identically to macOS. UIKit spells the Return key as
       // `insertText("\n")` where AppKit spells it `insertNewline(_:)`; both land on the same

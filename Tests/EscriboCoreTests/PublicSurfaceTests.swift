@@ -176,11 +176,27 @@ struct PublicSurfaceTests {
     let text = "# Title\na | b\n|:-|-:|\n"
     let result = scanner.fullScan(text)
 
-    // ScanResult: all four members.
+    // ScanResult: all five members.
     #expect(result.dirtyRange == 0..<22)
     #expect(result.lines == 0..<4)
     #expect(result.lineRecords.count == 4)
     #expect(!result.spans.isEmpty)
+
+    // `blocks` is readable from out here, and so is every member of an `EscriboBlock`.
+    // Asserted as the tiling property rather than as a block count, so this stays a
+    // statement about the public surface and leaves the grouping rules to the suite that
+    // owns them.
+    #expect(!result.blocks.isEmpty)
+    #expect(result.blocks.first?.kind == .heading, "line 0 is `# Title`")
+    #expect(result.blocks.first?.lines == 0..<1)
+    #expect(result.blocks.first?.range == 0..<8)
+    #expect(result.blocks.first?.contentRanges == [2..<7], "markers excluded, as the record's are")
+    #expect(
+      result.blocks.first?.contentLines == [0],
+      "contentLines is readable from out here and index-aligned with contentRanges")
+    #expect(result.blocks.first?.id.line == 0)
+    #expect(result.blocks.first?.id.offset == 0)
+    #expect(result.blocks.last?.lines.upperBound == 4, "the blocks reach the last line")
 
     // LineRecord: index, range, contentRange, element, depth, startState, tableAlignments.
     let heading = result.lineRecords[0]
