@@ -11,7 +11,7 @@ SwiftEscribo.
 
 ## Current version
 
-**`0.4.1`** — the version this tree was released as. Between releases this line carries
+**`0.4.1-dev`** — the post-`v0.4.1` development cycle. Between releases this line carries
 a `-dev` suffix (`X.Y.Z-dev`), which the next release strips. README's install snippet
 always names the last resolvable release, never a `-dev` marker.
 
