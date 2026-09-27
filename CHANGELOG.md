@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo Changelog
-updated: 2026-09-12
+updated: 2026-09-27
 ---
 
 # Changelog
@@ -11,6 +11,12 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.4.1] — 2026-09-27
+
+A **patch**: no API is added, removed, or renamed. It does change the spans a Fountain
+scan returns for lines that contain emphasis — read the note below if you snapshot span
+output.
 
 ### Fixed
 
