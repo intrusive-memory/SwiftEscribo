@@ -12,7 +12,7 @@ SwiftEscribo.
 ## Current version
 
 **`0.4.1`** — the version this tree was released as. Between releases this line carries
-a `-dev` suffix (`0.4.1-dev`), which the next release strips. README's install snippet
+a `-dev` suffix (`X.Y.Z-dev`), which the next release strips. README's install snippet
 always names the last resolvable release, never a `-dev` marker.
 
 The marker lives here rather than in a `Sources/` constant on purpose. Sortie 30
