@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo Changelog
-updated: 2026-09-12
+updated: 2026-09-27
 ---
 
 # Changelog
@@ -11,6 +11,35 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.4.1] — 2026-09-27
+
+A **patch**: no API is added, removed, or renamed. It does change the spans a Fountain
+scan returns for lines that contain emphasis — read the note below if you snapshot span
+output.
+
+### Fixed
+
+#### Fountain inline emphasis
+
+The Fountain grammar now scans `*italics*`, `**bold**`, `***bold italics***`,
+`_underline_`, and the `\*` / `\_` / `\\` escapes. Before this, every Fountain line came
+back as one content span and the delimiters were indistinguishable from text, so a
+consumer that strips markers (a script preview, a PDF export) printed the stars.
+
+Emphasis is scanned on **action, dialogue, parentheticals, lyrics, and centered text**,
+one line at a time (Fountain emphasis never crosses a line break). The line's content
+span is split the way `MarkdownInline` splits a Markdown paragraph: the delimiters become
+`.marker` spans and the text between them carries `.emphasis`, `.strong`, or `.underline`,
+with the markers carrying the style of the pair they close. The span **kind** is
+unchanged — emphasis inside dialogue is still `.dialogue`. Delimiters inside a note or a
+boneyard are never syntax, and a star or underscore that flanks nothing (`2 * 3`,
+`snake_case`) stays text.
+
+**What an adopter must know:** Fountain lines containing emphasis now return more spans
+than they did in `0.4.0`. `EscriboStyler` already dims markers and applies style bits, so
+the editor italicizes with no change on the adopter's side; anything that snapshots
+Fountain span output will see the new pieces.
 
 ## [0.4.0] — 2026-09-12
 
