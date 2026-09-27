@@ -351,9 +351,16 @@ struct FountainGrammar: LineGrammar {
         ?? dialogue(line, state: state)
         ?? action(line)
 
+    // Emphasis before the overlay, so the overlay cuts the notes and boneyards out of the
+    // emphasis pieces exactly as it cuts them out of a plain content span; the covered
+    // ranges are passed in so that a `*` inside a note or the `*` of `/*` is never syntax.
+    let emphasized = FountainEmphasis.applied(
+      to: scan, units: line.units, base: line.contentRange.lowerBound,
+      covered: regions.covered)
+
     return withState(
-      overlaid(scan, with: regions), after: line, state: state, region: regions.endRegion,
-      titlePage: leading)
+      overlaid(emphasized, with: regions), after: line, state: state,
+      region: regions.endRegion, titlePage: leading)
   }
 
   // MARK: - YAML frontmatter

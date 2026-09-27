@@ -1,8 +1,8 @@
 fixture episode_01
 utf16 27190
 lines 886
-spans 1497
-digest db78ff8460ea5e63
+spans 1511
+digest fc8e7078d6fb6708
 --- records (count element depth) ---
 1 titlePageKey 0
 1 titlePageValue 0
@@ -888,9 +888,15 @@ digest db78ff8460ea5e63
 1 blank 0
 1 sceneHeading 0
 --- span kinds (kind/role/style count) ---
-action/content/0 140
-centered/content/0 5
+action/content/0 139
+action/content/17 1
+action/marker/1 2
+action/marker/17 2
+centered/content/1 1
+centered/content/16 4
 centered/marker/0 10
+centered/marker/1 2
+centered/marker/16 8
 character/content/0 143
 characterExtension/content/0 15
 dialogue/content/0 173
