@@ -673,7 +673,8 @@ extension WellOverlayTests {
     #endif
   }
 
-  /// How many rendering-attribute runs carry a background colour.
+  /// How many rendering-attribute runs carry a background colour — which must stay **zero**:
+  /// a layer-backed TextKit 2 text view never paints those on screen (see `WellHighlight`).
   private func renderedHighlightRuns(_ manager: NSTextLayoutManager) -> Int {
     guard let start = manager.textContentManager?.documentRange.location else { return -1 }
     var runs = 0
@@ -684,9 +685,15 @@ extension WellOverlayTests {
     return runs
   }
 
+  /// The highlight views among the text view's subviews.
+  private func highlightViews(_ editor: EscriboTextView) -> [WellHighlightView] {
+    editor.textView.subviews.compactMap { $0 as? WellHighlightView }
+  }
+
   @Test("spokenRange applied and cleared leaves the backing store's string and length identical")
   func spokenRangeLeavesTheDocumentByteIdentical() throws {
-    // The real renderer, on the real TextKit 2 stack — no frame, no window, no layout.
+    // The real renderer, on the real TextKit 2 stack — no frame, no window; the renderer lays
+    // out the one paragraph it needs.
     let (editor, _) = makeEditor()
     let manager = try #require(editor.textView.textLayoutManager)
     let first = try block(editor, kind: .paragraph)
@@ -704,7 +711,8 @@ extension WellOverlayTests {
     #expect(Array(backingString(editor).utf16) == beforeUnits)
     #expect(backingLength(editor) == beforeLength)
     #expect(backingHasBackgroundColor(editor, at: 1) == beforeBackground)
-    #expect(renderedHighlightRuns(manager) >= 1, "the highlight lives on the layout manager")
+    #expect(renderedHighlightRuns(manager) == 0, "never a rendering attribute: not painted")
+    #expect(highlightViews(editor).count == 1, "the highlight is one view over the glyphs")
 
     editor.applyWell(
       EscriboWell(activeBlock: first.id, progress: 0.4, spokenRange: nil),
@@ -714,6 +722,7 @@ extension WellOverlayTests {
     #expect(backingLength(editor) == beforeLength)
     #expect(backingHasBackgroundColor(editor, at: 1) == beforeBackground)
     #expect(renderedHighlightRuns(manager) == 0)
+    #expect(highlightViews(editor).isEmpty, "clearing the range removes the view")
 
     // A stale range past the end is dropped before TextKit is asked anything.
     editor.applyWell(
