@@ -225,19 +225,37 @@ final class WellOverlay: NSObject {
   /// inside the text view's own resize, and asking TextKit for layout from there would lay
   /// out against a frame that is still changing.
   func layoutDidChange() {
-    guard !slots.isEmpty, !isLayoutReconcilePending else { return }
+    guard !slots.isEmpty || highlightedRange != nil, !isLayoutReconcilePending else { return }
     isLayoutReconcilePending = true
     Task { @MainActor [weak self] in
       guard let self else { return }
       self.isLayoutReconcilePending = false
       self.reconcile()
+      self.repositionHighlight()
     }
+  }
+
+  /// Puts the highlight back over glyphs that a relayout moved.
+  ///
+  /// The highlight is a view placed from TextKit's segment geometry (see ``WellHighlight``),
+  /// so unlike a text attribute it does not follow the text on its own when the view resizes
+  /// or the zoom changes. `add` is idempotent for the production renderer, which moves its one
+  /// view; a test renderer that records calls sees an extra `add` only after a layout change.
+  func repositionHighlight() {
+    guard let highlightedRange else { return }
+    let length = highlightRenderer.documentLength()
+    guard let range = WellHighlight.drawableRange(highlightedRange, documentLength: length)
+    else {
+      updateHighlight(nil)
+      return
+    }
+    highlightRenderer.add(range)
   }
 
   /// Moves the spoken-word highlight to `range`, or removes it for `nil`.
   ///
-  /// Independent of the lane: the highlight is drawn in the text, so a host playing from an
-  /// iPhone — which reserves no lane at compact width — still gets it.
+  /// Independent of the lane: the highlight is placed over the glyphs themselves, so a host
+  /// playing from an iPhone — which reserves no lane at compact width — still gets it.
   ///
   /// The previous highlight is always removed before a new one is drawn, so there is never
   /// more than one. A range that no longer fits the document draws nothing (see

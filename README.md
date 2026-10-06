@@ -79,7 +79,7 @@ breaking change.
 ## Installing it
 
 ```swift
-.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.4.1"))
+.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.4.2"))
 ```
 
 Then depend on whichever products you need — they are independent:
@@ -93,7 +93,7 @@ Then depend on whichever products you need — they are independent:
 **Note the `.upToNextMinor`.** This is a `0.x` release: the API is complete and
 audited but not yet frozen, and SwiftPM treats the **minor** as the breaking axis
 below `1.0`. SwiftPM does **not** apply that rule to `.upToNextMajor`:
-`.upToNextMajor(from: "0.4.1")` resolves to `>=0.4.1 <1.0.0`, so it will pick up a
+`.upToNextMajor(from: "0.4.2")` resolves to `>=0.4.2 <1.0.0`, so it will pick up a
 breaking `0.5.0` without asking. Pin with `.upToNextMinor`.
 [CHANGELOG.md § Stability](CHANGELOG.md#stability) has the full statement of what
 `0.x` reserves and what reaching `1.0` requires.
