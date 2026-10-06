@@ -102,10 +102,22 @@
       try #require(editor.coordinator.documentBlocks.first { $0.kind == kind })
     }
 
-    private func expectCovers(_ frame: CGRect, _ glyphs: CGRect, _ label: String) {
-      #expect(abs(frame.minX - glyphs.minX) <= 1, "\(label) left: \(frame) vs \(glyphs)")
-      #expect(abs(frame.maxX - glyphs.maxX) <= 1, "\(label) right: \(frame) vs \(glyphs)")
-      #expect(abs(frame.midY - glyphs.midY) <= 1, "\(label) line: \(frame) vs \(glyphs)")
+    /// `frame` sits on `glyphs`: same line, edges within `tolerance`.
+    ///
+    /// 3 pt, not 1: the question is "over the word, rather than in the lane or on the
+    /// wrong line" — a lane miss is tens of points, a line miss a full line height. CI's
+    /// macOS runner resolves the theme's face to a different font than this machine and
+    /// its advances land the edge about 1.4 pt away from the measurement; a tolerance
+    /// tighter than that tests the runner's fonts, not the highlight.
+    private func expectCovers(
+      _ frame: CGRect, _ glyphs: CGRect, _ label: String, tolerance: CGFloat = 3
+    ) {
+      #expect(
+        abs(frame.minX - glyphs.minX) <= tolerance, "\(label) left: \(frame) vs \(glyphs)")
+      #expect(
+        abs(frame.maxX - glyphs.maxX) <= tolerance, "\(label) right: \(frame) vs \(glyphs)")
+      #expect(
+        abs(frame.midY - glyphs.midY) <= tolerance, "\(label) line: \(frame) vs \(glyphs)")
     }
 
     @Test("A Markdown word's highlight is one view framed on its glyphs, and no attribute")
