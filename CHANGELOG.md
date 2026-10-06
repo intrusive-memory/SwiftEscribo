@@ -12,6 +12,31 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.2] — 2026-10-05
+
+A **patch**: no API is added, removed, or renamed.
+
+### Fixed
+
+#### The spoken-word highlight never appeared on screen
+
+`EscriboWell.spokenRange` was drawn as a `.backgroundColor` *rendering attribute* on the
+text layout manager. A layer-backed `NSTextView` on the TextKit 2 stack paints its
+fragments through a path that never draws rendering-attribute backgrounds on screen — the
+attribute sat on the manager over the right range, a forced `draw(_:)` painted it, and the
+composited window never did. On a Fountain speech the same path left a stray accent square
+in the well lane beside the cue.
+
+The highlight is now a `WellHighlightView` the overlay places over the glyphs from
+TextKit's `.standard` segment geometry — the same source the span bar uses — with one
+sublayer per line segment, re-placed after a layout change. It is still never a
+text-storage attribute: the document is untouched, undo is untouched, and copies carry
+nothing.
+
+**What an adopter must know:** nothing changes at the API. A host that looked for the
+highlight as a rendering attribute (a test, say) will no longer find one; look for a
+`WellHighlightView` among the text view's subviews instead.
+
 ## [0.4.1] — 2026-09-27
 
 A **patch**: no API is added, removed, or renamed. It does change the spans a Fountain
