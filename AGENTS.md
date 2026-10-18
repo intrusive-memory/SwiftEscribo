@@ -217,6 +217,22 @@ An unknown `SpanKind` resolves to the base style. Never `fatalError` in a `defau
 - **`LineState` is public but opaque.** Exposing its shape freezes the scanner's
   internals and makes every convergence fix a breaking change.
 
+## Queryable Codemap
+
+A prebuilt [graphify](https://pypi.org/project/graphifyy/) knowledge graph of this
+codebase lives in [`graphify-out/`](graphify-out/) (2754 nodes · 5901 edges). **Prefer
+querying it before grepping** for architecture or "what connects to what" questions:
+
+```bash
+graphify query "How does X flow through the system?"
+graphify path "TypeA" "TypeB"      # shortest path between two nodes
+graphify explain "SomeType"        # plain-language node explanation
+```
+
+Human-readable summary: [`graphify-out/GRAPH_REPORT.md`](graphify-out/GRAPH_REPORT.md).
+Refresh after significant changes with `/codemap` (or
+`graphify . --backend claude-cli`).
+
 ## Testing
 
 `make test-core` is the fast inner loop — pure functions over strings, no UI, no
