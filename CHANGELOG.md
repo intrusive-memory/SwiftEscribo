@@ -12,6 +12,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.3] — 2026-10-17
+
+A **patch** by the consumer's pin, not by the letter of semver: one role is **added** and nothing is removed or renamed, so every existing caller is unaffected.
+
+### Added
+
+#### `FontFamilyRole.serif`
+
+A third family role beside `.body` and `.monospaced`: the system's serif design — New York
+on Apple platforms — for a consumer that lets the reader choose a serif body face.
+`FontResolver` resolves it through the system font's descriptor with `.serif` design and
+falls back to the plain system font where the platform declines, so the role is total like
+the other two. Bold and italic apply to it the way they apply to every role. No face is
+named, and `.body` and the monospaced chain are untouched.
+
 ## [0.4.2] — 2026-10-05
 
 A **patch**: no API is added, removed, or renamed.
