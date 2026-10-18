@@ -12,6 +12,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.4] — 2026-10-18
+
+A **patch**: one construction-time default changes and nothing is added, removed or renamed. Hosts that pin `.upToNextMinor` pick it up without a code change.
+
 ### Changed
 
 - Writing Tools is now **off by default** on both platforms: `EscriboTextView` sets
