@@ -177,6 +177,15 @@
       // relying on the system default.
       textView.isContinuousSpellCheckingEnabled = true
 
+      // Writing Tools is off, and it is off here rather than left to a host. It is the same
+      // class of feature as the four flags above — a system affordance that rewrites the
+      // user's source — with one extra cost: on macOS 26 it also paints a "Write with Siri"
+      // prompt into every empty paragraph the caret lands in, which in a screenplay is every
+      // new block. A Fountain or Markdown source is a program, not prose: Writing Tools
+      // "proofreading" a scene heading rewrites a marker. `.none` removes the affordance,
+      // the context-menu entry and the Edit ▸ Writing Tools items for this view at once.
+      textView.writingToolsBehavior = .none
+
       // Find. The **bar**, not the panel: `usesFindBar` selects the accessory that slides in
       // at the top of the enclosing `NSScrollView` over the floating find panel, which is a
       // separate window that covers the document and loses the editor's scroll position.

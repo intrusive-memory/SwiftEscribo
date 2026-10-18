@@ -26,6 +26,14 @@
       #expect(editor.textView.autocorrectionType == .no)
     }
 
+    /// The same opt-out the macOS half makes, asserted on the iOS view so the two
+    /// Representables ship one behaviour.
+    @Test("Writing Tools is disabled by default")
+    func writingToolsIsOff() {
+      let editor = EscriboTextView(language: .markdown, theme: .markdownLight)
+      #expect(editor.textView.writingToolsBehavior == .none)
+    }
+
     @Test("Spell checking stays on, decoupled from the autocorrect-off default")
     func spellCheckingStaysOn() {
       let editor = EscriboTextView(language: .markdown, theme: .markdownLight)

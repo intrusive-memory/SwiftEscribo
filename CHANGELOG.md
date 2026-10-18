@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo Changelog
-updated: 2026-10-17
+updated: 2026-10-18
 ---
 
 # Changelog
@@ -11,6 +11,15 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Changed
+
+- Writing Tools is now **off by default** on both platforms: `EscriboTextView` sets
+  `writingToolsBehavior = .none` at construction, on macOS and iOS alike. It belongs with
+  the text-system hygiene rule — a system feature that rewrites the user's source — and on
+  macOS 26 it also removes the "Write with Siri" prompt that appeared in every empty
+  paragraph the caret entered. There is no opt-in; a host that wants Writing Tools in a
+  Fountain or Markdown source is asking for marker corruption.
 
 ## [0.4.3] — 2026-10-17
 

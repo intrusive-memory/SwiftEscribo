@@ -191,6 +191,12 @@
       // explicitly rather than left to an autocorrect-coupled default.
       textView.spellCheckingType = .yes
 
+      // Writing Tools is off for the reason the macOS half gives at the same point: it is a
+      // system feature that rewrites the user's source, and the source is a program. Stated
+      // on both platforms so the shipped behaviour is one behaviour, not a per-platform
+      // default the host has to know about.
+      textView.writingToolsBehavior = .none
+
       // Self-scrolling — the whole reason this type has no `scrollView` member.
       textView.isScrollEnabled = true
 

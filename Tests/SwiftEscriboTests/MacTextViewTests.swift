@@ -33,6 +33,15 @@
       #expect(editor.textView.isContinuousSpellCheckingEnabled == true)
     }
 
+    /// Writing Tools is a source-rewriting system feature like the four flags above, and on
+    /// macOS 26 it also plants a "Write with Siri" prompt in every empty paragraph. The
+    /// package turns it off at construction; no host should have to know the property exists.
+    @Test("Writing Tools is disabled by default")
+    func writingToolsIsOff() {
+      let editor = EscriboTextView(language: .markdown, theme: .markdownLight)
+      #expect(editor.textView.writingToolsBehavior == .none)
+    }
+
     @Test("The text view sits on the TextKit 2 stack")
     func textKit2StackIsGuaranteed() {
       let editor = EscriboTextView(language: .markdown, theme: .markdownLight)
@@ -128,6 +137,7 @@
       #expect(editor.textView.isAutomaticTextReplacementEnabled == false)
       #expect(editor.textView.isAutomaticSpellingCorrectionEnabled == false)
       #expect(editor.textView.isContinuousSpellCheckingEnabled == true)
+      #expect(editor.textView.writingToolsBehavior == .none)
       #expect(editor.textView.isRichText == false)
       #expect(editor.textView.allowsUndo == true)
       #expect(editor.textView.textLayoutManager != nil)
