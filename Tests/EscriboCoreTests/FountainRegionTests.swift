@@ -527,15 +527,18 @@ struct FountainRegionTests {
     // `Notes:` with a lone-tab value has a value record under it; `Notes:` with nothing
     // under it has none. That is the difference the writer round-trips on — one re-emits
     // the tab, the other re-emits a bare key.
-    #expect(withEmptyValue.lineRecords.map(\.element) == [
-      .titlePageKey, .titlePageKey, .titlePageValue, .blank, .sceneHeading,
-    ])
-    #expect(withNoValueLine.lineRecords.map(\.element) == [
-      .titlePageKey, .titlePageKey, .blank, .sceneHeading,
-    ])
-    #expect(withoutTheKey.lineRecords.map(\.element) == [
-      .titlePageKey, .blank, .sceneHeading,
-    ])
+    #expect(
+      withEmptyValue.lineRecords.map(\.element) == [
+        .titlePageKey, .titlePageKey, .titlePageValue, .blank, .sceneHeading,
+      ])
+    #expect(
+      withNoValueLine.lineRecords.map(\.element) == [
+        .titlePageKey, .titlePageKey, .blank, .sceneHeading,
+      ])
+    #expect(
+      withoutTheKey.lineRecords.map(\.element) == [
+        .titlePageKey, .blank, .sceneHeading,
+      ])
 
     // Both `Notes` records have an empty content range — the key line always does, because
     // its value is below it — so emptiness of the *key* record is not the discriminator.

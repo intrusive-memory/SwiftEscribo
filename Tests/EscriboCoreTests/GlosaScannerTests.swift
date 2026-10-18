@@ -103,7 +103,8 @@ struct GlosaScannerTests {
 
   // MARK: - A tag pair with prose inside it
 
-  @Test("An opening and closing tag pair both yield their tag name; prose between them stays note text")
+  @Test(
+    "An opening and closing tag pair both yield their tag name; prose between them stays note text")
   func openingAndClosingTagPairSurroundProse() {
     let source = "[[<SceneContext>a hallway, dim light</SceneContext>]]"
     let result = FountainGrammarTests.fullScan(source)
@@ -119,7 +120,9 @@ struct GlosaScannerTests {
 
   // MARK: - No false positives on ordinary note prose
 
-  @Test("A `<` in ordinary note prose, not followed by a letter or `/`, is not mistaken for a directive")
+  @Test(
+    "A `<` in ordinary note prose, not followed by a letter or `/`, is not mistaken for a directive"
+  )
   func lessThanInProseIsNotADirective() {
     let source = "[[5 < 3 is false]]"
     let result = FountainGrammarTests.fullScan(source)
@@ -187,7 +190,8 @@ struct GlosaScannerTests {
       "lineRecords", "glosa directive typed")
 
     #expect(FountainRegionTests.texts(.glosaTag, in: fullResult, of: edited) == ["pause"])
-    #expect(FountainRegionTests.texts(.glosaAttributeName, in: fullResult, of: edited) == ["length"])
+    #expect(
+      FountainRegionTests.texts(.glosaAttributeName, in: fullResult, of: edited) == ["length"])
     #expect(FountainRegionTests.texts(.glosaAttributeValue, in: fullResult, of: edited) == ["2s"])
   }
 }

@@ -163,7 +163,8 @@ struct FountainWriterTitlePageTests {
   /// `Abstract`, and the expected list below was read off the committed bytes with `awk`,
   /// not produced by this scanner. A writer that reordered the page, dropped an
   /// unrecognized key, or normalized its casing changes this list.
-  @Test("The vendored screenplays' arbitrary keys survive in order",
+  @Test(
+    "The vendored screenplays' arbitrary keys survive in order",
     arguments: ["spanish", "episode_10"])
   func vendoredScreenplayKeysSurvive(name: String) {
     guard let fixture = fountainCorpus.first(where: { $0.name == name }), fixture.loaded else {
@@ -441,7 +442,8 @@ struct FountainWriterKeySpanTests {
   /// colon, or started one code unit late fails (1); a writer that lost a key or reordered
   /// the page fails (3). The comparison is `==` over `[String]`, so a dropped key, an
   /// added one, and a reordered pair are all distinguishable in the failure message.
-  @Test("Key and value spans, the oracle, and the writer agree on every fixture",
+  @Test(
+    "Key and value spans, the oracle, and the writer agree on every fixture",
     arguments: fountainCorpus)
   func theSpanRouteCarriesEveryByte(fixture: FountainFixture) {
     guard fixture.loaded else {
@@ -607,7 +609,8 @@ struct FountainWriterIdempotenceTests {
   /// usually are — so it exercises the *preservation* half of the fixed point and barely
   /// touches the *normalization* half. These do the opposite: every one of them is changed
   /// by the first write, and the second write must then leave it exactly alone.
-  @Test("The writer is a fixed point on every deliberately non-canonical document",
+  @Test(
+    "The writer is a fixed point on every deliberately non-canonical document",
     arguments: nonCanonicalWriterDocuments)
   func fixedPointOnNonCanonicalDocuments(document: WriterDocument) {
     let once = FountainWriterHarness.roundTrip(document.text)
@@ -623,7 +626,8 @@ struct FountainWriterIdempotenceTests {
   /// Stated as an assertion rather than as a claim in a comment, per document, so that a
   /// document which quietly became canonical — because someone rewrote it, or because the
   /// writer stopped normalizing something — turns the gate red instead of hollowing it out.
-  @Test("Every gate document is actually changed by the first write",
+  @Test(
+    "Every gate document is actually changed by the first write",
     arguments: nonCanonicalWriterDocuments)
   func identityCannotPassTheGate(document: WriterDocument) {
     let once = FountainWriterHarness.roundTrip(document.text)
@@ -661,7 +665,8 @@ struct FountainWriterIdempotenceTests {
   /// amendment 3a permits — **classifications**, never records — and it catches the one
   /// failure mode a byte comparison cannot describe: a writer that is a stable fixed point
   /// on some document it has already turned into a different screenplay.
-  @Test("A non-canonical document classifies the same after being written",
+  @Test(
+    "A non-canonical document classifies the same after being written",
     arguments: nonCanonicalWriterDocuments)
   func writingPreservesClassificationOnEveryGateDocument(document: WriterDocument) {
     let written = FountainWriterHarness.roundTrip(document.text)

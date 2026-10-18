@@ -1,12 +1,11 @@
-import Foundation
-import Testing
-
 // Deliberately NOT `@testable`. Every other file in this target uses `@testable import
 // EscriboProject`, which means every assertion any of them makes about `appSections` and
 // `extraKeys` would keep passing with both properties `internal` — which is exactly the
 // state Sortie 30 found them in (DL-157). This file is the one that sees the module the
 // way a host app does.
 import EscriboProject
+import Foundation
+import Testing
 
 /// The unknown-key accessors, reached from outside the module.
 ///
@@ -113,8 +112,9 @@ struct ProjectPublicSurfaceTests {
       ProjectFrontMatter.self, from: try encoder.encode(project))
 
     #expect(reDecoded.appSections.keys.sorted() == ["myApp"])
-    #expect(try #require(reDecoded.appSections["myApp"]).decode([String: String].self)
-      == ["theme": "dark"])
+    #expect(
+      try #require(reDecoded.appSections["myApp"]).decode([String: String].self)
+        == ["theme": "dark"])
     #expect(reDecoded.cast?.first?.extraKeys.keys.sorted() == ["bio"])
     #expect(try #require(reDecoded.cast?.first?.extraKeys["bio"]).decode(String.self) == "a man")
   }

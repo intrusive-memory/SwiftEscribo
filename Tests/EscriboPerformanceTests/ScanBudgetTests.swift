@@ -127,7 +127,8 @@ struct PerformanceSuite {
       report("cold-scan", timing)
       observe(
         "cold-scan-vs-10ms-target",
-        String(format: "%.3f ms measured, %.1f%% of the 10 ms target", timing.bestMS,
+        String(
+          format: "%.3f ms measured, %.1f%% of the 10 ms target", timing.bestMS,
           timing.bestMS / 10.0 * 100))
       observe(
         "cold-scan-throughput",

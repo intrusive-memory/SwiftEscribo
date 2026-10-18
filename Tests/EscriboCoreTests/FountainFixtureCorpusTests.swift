@@ -256,7 +256,8 @@ struct FountainFixtureCorpusTests {
   /// fixture someone re-saved through an editor that trimmed a trailing terminator all
   /// change one of these two numbers, and all of them would otherwise present as a
   /// mysterious golden-snapshot failure much later.
-  @Test("Every fixture loads from `Bundle.module` at exactly its committed size",
+  @Test(
+    "Every fixture loads from `Bundle.module` at exactly its committed size",
     arguments: fountainCorpus)
   func fixtureLoadsFromTheBundle(fixture: FountainFixture) {
     #expect(fixture.loaded, "\(fixture.name) was not found in Bundle.module")
@@ -290,7 +291,8 @@ struct FountainFixtureCorpusTests {
   // MARK: Full scan
 
   /// Every fixture scans, produces one record per line, and satisfies every invariant.
-  @Test("Every fixture full-scans and satisfies every `ScanResult` invariant",
+  @Test(
+    "Every fixture full-scans and satisfies every `ScanResult` invariant",
     arguments: fountainCorpus)
   func fixtureFullScans(fixture: FountainFixture) {
     let result = FountainFixtures.fullScan(fixture)
@@ -312,7 +314,8 @@ struct FountainFixtureCorpusTests {
   /// generator happens to reach. The comparison is over `spans` and `lineRecords` as
   /// whole arrays, plus the scanner's own per-line start states, so a single wrong offset
   /// anywhere in an 886-line screenplay fails it.
-  @Test("Inserting a fixture into an empty document equals scanning it in one pass",
+  @Test(
+    "Inserting a fixture into an empty document equals scanning it in one pass",
     arguments: fountainCorpus)
   func insertingTheWholeDocumentEqualsAFullScan(fixture: FountainFixture) {
     var incremental = IncrementalScanner(grammar: FountainGrammar())
@@ -348,7 +351,8 @@ struct FountainFixtureCorpusTests {
   /// noticing that a line is classified wrong. What it adds over the gate's synthetic
   /// corpus is scale and real content — an 886-line screenplay with a title page, forced
   /// headings, sections, and 320 blank lines — not correctness.
-  @Test("The adversarial edit sequence converges on every fixture",
+  @Test(
+    "The adversarial edit sequence converges on every fixture",
     arguments: fountainCorpus, fixtureGateSeeds)
   func adversarialEditsConvergeOnEveryFixture(fixture: FountainFixture, seed: UInt64) {
     let steps = GateEditGenerator.sequence(seed: seed, from: fixture.text)
@@ -366,7 +370,8 @@ struct FountainFixtureCorpusTests {
   /// is reported, which is how a golden is regenerated after an intentional grammar
   /// change: read the diff, decide the change was meant, copy the file over the committed
   /// one.
-  @Test("Every fixture matches its committed golden span/record snapshot",
+  @Test(
+    "Every fixture matches its committed golden span/record snapshot",
     arguments: fountainCorpus)
   func fixtureMatchesItsGoldenSnapshot(fixture: FountainFixture) {
     let result = FountainFixtures.fullScan(fixture)
@@ -419,7 +424,8 @@ struct FountainFixtureCorpusTests {
   /// and `grep -c '^$'` is two hundred and three. Neither file contains a `/*`, so no
   /// blank line is inside a boneyard and none of the fifty notes spans a line — which is
   /// what makes the two counts comparable to the scanner's classification at all.
-  @Test("The drill screenplays carry exactly fifty notes and 203 blank lines each",
+  @Test(
+    "The drill screenplays carry exactly fifty notes and 203 blank lines each",
     arguments: ["episode_10", "spanish"])
   func drillScreenplaysHaveTheNotesAndBlanksTheyWereCountedToHave(name: String) {
     guard let fixture = fountainCorpus.first(where: { $0.name == name }) else {

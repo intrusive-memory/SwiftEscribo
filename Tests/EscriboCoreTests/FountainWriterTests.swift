@@ -421,7 +421,8 @@ struct FountainWriterCorpusTests {
   ///
   /// The line count is asserted separately from the shape so a writer that dropped a line
   /// says so plainly rather than as a thousand-element array mismatch.
-  @Test("Every fixture writes back with its line count and every classification intact",
+  @Test(
+    "Every fixture writes back with its line count and every classification intact",
     arguments: fountainCorpus)
   func writingAFixturePreservesEveryClassification(fixture: FountainFixture) {
     guard fixture.loaded else {

@@ -156,12 +156,14 @@ enum GlosaScanner {
     let nameEnd = offset
 
     var spans: [EscriboSpan] = [
-      EscriboSpan(range: (base + start)..<(base + nameStart), kind: .glosaPunctuation, role: .marker),
+      EscriboSpan(
+        range: (base + start)..<(base + nameStart), kind: .glosaPunctuation, role: .marker),
       EscriboSpan(range: (base + nameStart)..<(base + nameEnd), kind: .glosaTag),
     ]
 
     if closing {
-      return closeClosingTag(units, nameEnd: nameEnd, start: start, limit: limit, base: base, spans: spans)
+      return closeClosingTag(
+        units, nameEnd: nameEnd, start: start, limit: limit, base: base, spans: spans)
     }
 
     // Attributes, zero or more, each `name = "value"` with arbitrary whitespace around
@@ -281,7 +283,8 @@ enum GlosaScanner {
           range: (base + beforeClose)..<(base + offset), kind: .glosaPunctuation, role: .marker))
     }
     spans.append(
-      EscriboSpan(range: (base + offset)..<(base + offset + 1), kind: .glosaPunctuation, role: .marker)
+      EscriboSpan(
+        range: (base + offset)..<(base + offset + 1), kind: .glosaPunctuation, role: .marker)
     )
     return DirectiveScan(spans: spans, end: offset + 1)
   }

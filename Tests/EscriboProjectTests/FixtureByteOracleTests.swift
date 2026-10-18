@@ -217,7 +217,8 @@ struct FixtureByteOracleTests {
 
     var diffs: [String] = []
     for (index, pair) in zip(expected, decoded).enumerated() {
-      diffs.append(contentsOf: RawFixture.differences(pair.0, RawFixture.project(pair.1), at: index))
+      diffs.append(
+        contentsOf: RawFixture.differences(pair.0, RawFixture.project(pair.1), at: index))
     }
     #expect(diffs.isEmpty, "\(fixture.name):\n\(diffs.joined(separator: "\n"))")
   }
@@ -271,7 +272,8 @@ struct FixtureByteOracleTests {
   /// compared through `NSDictionary`/`NSArray` equality on the parsed objects, so a value
   /// that came back re-ordered but structurally identical still passes, and one that came
   /// back truncated does not.
-  @Test("Written-back unknown top-level keys match the original bytes",
+  @Test(
+    "Written-back unknown top-level keys match the original bytes",
     arguments: ProjectFixtures.all)
   func encodedUnknownKeysMatchFixtureBytes(_ fixture: ProjectFixture) throws {
     let before = try RawFixture.topLevel(fixture.name)
@@ -326,7 +328,7 @@ struct LiteralCastValueTests {
       #expect(
         cast[0].voiceDescription
           == "Deep authoritative British baritone. Warm, commanding documentary narrator. "
-            + "Rich resonance, measured pacing.")
+          + "Rich resonance, measured pacing.")
 
       // Fields the file does not set must not be invented.
       #expect(cast.allSatisfy { $0.actor == nil })
@@ -390,7 +392,7 @@ struct LiteralCastValueTests {
       #expect(
         cast[0].voiceDescription
           == "Warm, mid-range male voice. Steady pacing with an engaging storytelling tone. "
-            + "Hint of dark humor and irony beneath a smooth, audiobook-quality delivery.")
+          + "Hint of dark humor and irony beneath a smooth, audiobook-quality delivery.")
 
       // Eight members carry an `arc:` note the model has never heard of.
       #expect(cast.filter { !$0.extraKeys.isEmpty }.count == 8)

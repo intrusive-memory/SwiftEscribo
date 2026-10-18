@@ -596,7 +596,8 @@ public final class EditorCoordinator: NSObject {
       // Anything else lies wholly inside the replaced region and is simply dropped.
     }
 
-    return before + result.blocks + after.map { $0.shifted(byLines: lineDelta, byOffset: offsetDelta) }
+    return before + result.blocks
+      + after.map { $0.shifted(byLines: lineDelta, byOffset: offsetDelta) }
   }
 
   // MARK: - Asking the scanner about a block

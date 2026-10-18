@@ -1,13 +1,13 @@
 import EscriboCore
 import Testing
 
+@testable import SwiftEscribo
+
 #if canImport(AppKit)
   import AppKit
 #elseif canImport(UIKit)
   import UIKit
 #endif
-
-@testable import SwiftEscribo
 
 /// Scaffolding for the coordinator suites.
 ///
@@ -555,7 +555,8 @@ struct TextStorageTextSourceTests {
     let storage = NSTextStorage(string: "text")
     var scratch = [UInt16](repeating: 0xFFFF, count: 4)
     scratch.withUnsafeMutableBufferPointer { buffer in
-      storage.copyUTF16CodeUnits(in: 2..<2, into: UnsafeMutableBufferPointer(rebasing: buffer[0..<0]))
+      storage.copyUTF16CodeUnits(
+        in: 2..<2, into: UnsafeMutableBufferPointer(rebasing: buffer[0..<0]))
     }
     #expect(scratch == [0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF])
   }

@@ -281,7 +281,8 @@ enum ScanInvariants {
     // the malformed input it exists to report. Record indices are unique by invariant 4,
     // which `check` has already asserted by the time this runs.
     let contentRange = Dictionary(
-      result.lineRecords.map { ($0.index, $0.contentRange) }, uniquingKeysWith: { first, _ in first }
+      result.lineRecords.map { ($0.index, $0.contentRange) },
+      uniquingKeysWith: { first, _ in first }
     )
 
     for block in result.blocks {

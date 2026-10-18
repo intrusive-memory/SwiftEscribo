@@ -1,13 +1,13 @@
 import EscriboCore
 import Testing
 
+@testable import SwiftEscribo
+
 #if canImport(AppKit)
   import AppKit
 #elseif canImport(UIKit)
   import UIKit
 #endif
-
-@testable import SwiftEscribo
 
 /// Shared scaffolding for the styling suites.
 ///

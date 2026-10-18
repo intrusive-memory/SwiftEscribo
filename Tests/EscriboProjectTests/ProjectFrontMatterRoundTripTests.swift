@@ -413,7 +413,8 @@ struct KnownDefectTests {
   func episodesWithoutSeasonIsLost() throws {
     let confessions = try decode("confessions")
     #expect(confessions.seasons == nil)
-    #expect(confessions.episodes == nil, "if this is now 69, DL-151 has been fixed — update this test")
+    #expect(
+      confessions.episodes == nil, "if this is now 69, DL-151 has been fixed — update this test")
 
     // The committed file really does carry it, so the loss is real and not a fixture that
     // never had the key.
@@ -494,7 +495,9 @@ struct KnownDefectTests {
     let raw = try RawFixture.cast("lazarillo")
     let topLevel = try RawFixture.topLevel("lazarillo")
     let rawObjects = try #require(topLevel["cast"] as? [[String: Any]])
-    let carryingBoth = rawObjects.filter { $0["voicePrompt"] != nil && $0["voiceDescription"] != nil }
+    let carryingBoth = rawObjects.filter {
+      $0["voicePrompt"] != nil && $0["voiceDescription"] != nil
+    }
     #expect(carryingBoth.count == 24, "the fixture no longer exercises DL-159")
     #expect(raw.count == 29)
 

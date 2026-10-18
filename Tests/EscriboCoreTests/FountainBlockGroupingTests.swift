@@ -181,7 +181,8 @@ struct FountainBlockGroupingTests {
     #expect(result.blocks.first?.lines == 0..<4)
     #expect(
       result.blocks.first?.contentRanges.count == 4,
-      "every line of the speech contributes its content — the cue name, the parenthetical, both lines")
+      "every line of the speech contributes its content — the cue name, the parenthetical, both lines"
+    )
   }
 
   @Test("A note inside a speech keeps the block whole but stays out of its content")

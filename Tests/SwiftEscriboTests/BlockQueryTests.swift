@@ -1,13 +1,13 @@
 import EscriboCore
 import Testing
 
+@testable import SwiftEscribo
+
 #if canImport(AppKit)
   import AppKit
 #elseif canImport(UIKit)
   import UIKit
 #endif
-
-@testable import SwiftEscribo
 
 /// ``EditorCoordinator``'s block queries, and the reason they cannot simply read the last
 /// scan's blocks (REQUIREMENTS-1.1.0 § 4.3).
@@ -70,7 +70,9 @@ struct EditorCoordinatorBlockQueryTests {
     // Asserted before anything depends on it: if the offsets below are wrong, every other
     // test in this file fails for a reason that has nothing to do with the queries.
     let editor = CoordinatorFixtures.makeEditor(Self.largeDocument)
-    #expect(editor.storage.length == Self.paragraphStride * 80 - 2, "eighty paragraphs, no trailing blank")
+    #expect(
+      editor.storage.length == Self.paragraphStride * 80 - 2, "eighty paragraphs, no trailing blank"
+    )
 
     let blocks = editor.coordinator.lastBlocks
     #expect(blocks.count == 80 * 2 - 1, "eighty paragraphs and seventy-nine blank separators")
@@ -158,7 +160,8 @@ struct EditorCoordinatorBlockQueryTests {
     #expect(editor.storage.length == 0)
 
     let block = editor.coordinator.block(atUTF16Offset: 0)
-    #expect(block?.kind == .blank, "an empty document is one blank line, and blank lines are blocks")
+    #expect(
+      block?.kind == .blank, "an empty document is one blank line, and blank lines are blocks")
     #expect(block?.range == 0..<0)
     #expect(block?.lines == 0..<1, "one line, empty")
     #expect(block?.contentRanges.isEmpty == true, "…and nothing to speak")
@@ -228,7 +231,8 @@ struct EditorCoordinatorBlockQueryTests {
     // **inside** the window is not automatically safe either. It must come back as the
     // whole paragraph, not as however much of it the window happened to contain.
     let editor = CoordinatorFixtures.makeEditor(Self.largeDocument)
-    editor.storage.replaceCharacters(in: NSRange(location: Self.paragraphStride * 40 + 5, length: 0), with: "X")
+    editor.storage.replaceCharacters(
+      in: NSRange(location: Self.paragraphStride * 40 + 5, length: 0), with: "X")
 
     let block = editor.coordinator.block(atUTF16Offset: Self.paragraphStride * 40 + 5)
     #expect(block?.kind == .paragraph)
@@ -380,7 +384,8 @@ struct EditorCoordinatorBlockQueryTests {
     }
 
     // A viewport over document lines 120 to 125 — paragraphs 40 and 41.
-    let onScreen = editor.coordinator.blocks(in: CGRect(x: 0, y: 120 * 20, width: 600, height: 5 * 20))
+    let onScreen = editor.coordinator.blocks(
+      in: CGRect(x: 0, y: 120 * 20, width: 600, height: 5 * 20))
     #expect(!onScreen.isEmpty)
     #expect(onScreen.first?.lines.lowerBound == Self.expectedLines(ofParagraph: 40).lowerBound)
     #expect(
@@ -431,7 +436,8 @@ struct EditorCoordinatorBlockQueryTests {
     #expect(blocks.map(\.kind) == [.paragraph, .blank, .paragraph])
 
     let first = blocks[0]
-    #expect(EditorCoordinator.block(containing: first.range.lowerBound, in: blocks)?.range == first.range)
+    #expect(
+      EditorCoordinator.block(containing: first.range.lowerBound, in: blocks)?.range == first.range)
     #expect(
       EditorCoordinator.block(containing: first.range.upperBound, in: blocks) != nil,
       "an offset at a block's end resolves, as it does for records")

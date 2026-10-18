@@ -1,12 +1,12 @@
 import Testing
 
+@testable import SwiftEscribo
+
 #if canImport(AppKit)
   import AppKit
 #elseif canImport(UIKit)
   import UIKit
 #endif
-
-@testable import SwiftEscribo
 
 /// The D-4 resolution chain, asserted by the properties 10 CPI geometry depends on rather
 /// than by a family name.

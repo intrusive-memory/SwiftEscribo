@@ -197,7 +197,8 @@ struct FountainInMarkdownTests {
     let text = "```\(info)\nINT. HOUSE - DAY\n```"
     var scanner = IncrementalScanner(grammar: MarkdownGrammar())
     let result = scanner.fullScan(text)
-    ScanInvariants.check(result, text: text, editedRange: nil, "info string \(info.debugDescription)")
+    ScanInvariants.check(
+      result, text: text, editedRange: nil, "info string \(info.debugDescription)")
     #expect(
       result.lineRecords[1].element == (dispatches ? .sceneHeading : .codeBlock),
       "info string \(info.debugDescription)")
@@ -389,7 +390,8 @@ struct FountainInMarkdownTests {
   func editingInsideAFencedBlockConverges(lower: Int, upper: Int, replacement: String) {
     let text = "intro\n```fountain\n\nBOB\nHi there.\nMore speech.\n```\ntail"
     let edited = ScanInvariants.splice(text, lower..<upper, replacement)
-    let note = "edit \(lower..<upper) -> \(replacement.debugDescription) in \(text.debugDescription)"
+    let note =
+      "edit \(lower..<upper) -> \(replacement.debugDescription) in \(text.debugDescription)"
 
     var incremental = IncrementalScanner(grammar: MarkdownGrammar())
     let first = incremental.fullScan(text)
