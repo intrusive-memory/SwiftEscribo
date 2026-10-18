@@ -118,9 +118,31 @@ struct FontResolver {
     switch spec.family {
     case .monospaced:
       return Self.monospacedFont(named: Self.monospacedNames, size: size)
+    case .serif:
+      return Self.serifSystemFont(ofSize: size)
     default:
       return PlatformFont.systemFont(ofSize: size)
     }
+  }
+
+  // MARK: - The serif face
+
+  /// The system font at `size` in its serif design — New York on Apple platforms — or the
+  /// plain system font when the platform declines to supply one.
+  ///
+  /// Name-free, by the same rule as the chain below: the design is requested through the
+  /// system font's descriptor, and which face answers is the platform's business. Both
+  /// halves of the descriptor round trip can decline, and both fall back to the face the
+  /// ``FontFamilyRole/body`` role resolves to — a reader who asked for serif and got the
+  /// body face has a cosmetic defect; one who got no font at all does not.
+  static func serifSystemFont(ofSize size: CGFloat) -> PlatformFont {
+    let system = PlatformFont.systemFont(ofSize: size)
+    guard let descriptor = system.fontDescriptor.withDesign(.serif) else { return system }
+    #if canImport(AppKit)
+      return NSFont(descriptor: descriptor, size: size) ?? system
+    #elseif canImport(UIKit)
+      return UIFont(descriptor: descriptor, size: size)
+    #endif
   }
 
   // MARK: - The chain (D-4)

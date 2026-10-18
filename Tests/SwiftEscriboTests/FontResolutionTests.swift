@@ -98,6 +98,87 @@ struct FontResolutionTests {
     #expect(geometry.lineHeight > 0)
   }
 
+  // MARK: - The serif face
+
+  /// The platform's spelling of the two traits a theme can ask for.
+  static var boldTrait: PlatformSymbolicTraits {
+    #if canImport(AppKit)
+      return .bold
+    #elseif canImport(UIKit)
+      return .traitBold
+    #endif
+  }
+
+  static var italicTrait: PlatformSymbolicTraits {
+    #if canImport(AppKit)
+      return .italic
+    #elseif canImport(UIKit)
+      return .traitItalic
+    #endif
+  }
+
+  static var monospaceTrait: PlatformSymbolicTraits {
+    #if canImport(AppKit)
+      return .monoSpace
+    #elseif canImport(UIKit)
+      return .traitMonoSpace
+    #endif
+  }
+
+  @Test(
+    "A serif spec resolves to a face other than the system body face",
+    arguments: [8.0, 12.0, 24.0])
+  func serifFaceIsNotTheSystemFace(size: Double) {
+    // The same rule as the chain: no face is named. What is observable on every Apple
+    // platform this package ships on is that the serif design answers with a different
+    // family than the plain system font, at the size that was asked for, and that it is a
+    // proportional reading face rather than a second monospaced one.
+    var resolver = FontResolver()
+    let serif = resolver.font(for: FontSpec(family: .serif, pointSize: size))
+    let system = PlatformFont.systemFont(ofSize: CGFloat(size))
+    let (narrow, wide) = Self.narrowAndWideAdvances(serif)
+
+    #expect(serif.familyName != system.familyName)
+    #expect(serif.pointSize == CGFloat(size))
+    #expect(narrow > 0)
+    #expect(narrow != wide, "a serif reading face is proportional")
+    #expect(!serif.fontDescriptor.symbolicTraits.contains(Self.monospaceTrait))
+  }
+
+  @Test("The body role still resolves to the system font")
+  func bodyFaceIsTheSystemFace() {
+    // Adding a role must not move the default: `.body` and every role the resolver does
+    // not know by name are the plain system font, exactly as before.
+    var resolver = FontResolver()
+    let body = resolver.font(for: FontSpec(family: .body, pointSize: 14))
+    let system = PlatformFont.systemFont(ofSize: 14)
+
+    #expect(body.familyName == system.familyName)
+    #expect(body.pointSize == 14)
+  }
+
+  @Test("Traits still apply on a serif spec, and the serif design survives them")
+  func traitsApplyToTheSerifFace() {
+    // The trait path is a second descriptor round trip after the design one. Both
+    // directions are checked: the trait is present, and the family is still not the
+    // system's — a round trip that dropped the design would pass a trait-only check.
+    var resolver = FontResolver()
+    let system = PlatformFont.systemFont(ofSize: 16)
+    let bold = resolver.font(for: FontSpec(family: .serif, traits: .bold, pointSize: 16))
+    let italic = resolver.font(for: FontSpec(family: .serif, traits: .italic, pointSize: 16))
+    let both = resolver.font(
+      for: FontSpec(family: .serif, traits: [.bold, .italic], pointSize: 16))
+
+    #expect(bold.fontDescriptor.symbolicTraits.contains(Self.boldTrait))
+    #expect(italic.fontDescriptor.symbolicTraits.contains(Self.italicTrait))
+    #expect(both.fontDescriptor.symbolicTraits.contains(Self.boldTrait))
+    #expect(both.fontDescriptor.symbolicTraits.contains(Self.italicTrait))
+    for font in [bold, italic, both] {
+      #expect(font.familyName != system.familyName)
+      #expect(font.pointSize == 16)
+    }
+  }
+
   // MARK: - Caching
 
   @Test("Measurements are cached by spec and dropped by the resolver's invalidation")

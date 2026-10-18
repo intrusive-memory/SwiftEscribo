@@ -27,6 +27,14 @@ public struct FontFamilyRole: Hashable, Sendable {
   /// A fixed-advance face. Screenplay geometry at 10 CPI and Markdown code both resolve
   /// here; ``FontResolver`` decides which concrete face that is.
   public static let monospaced = FontFamilyRole(rawValue: "monospaced")
+
+  /// The system's serif design — New York on Apple platforms — for a consumer that lets the
+  /// reader choose a serif body face.
+  ///
+  /// Still name-free: the design is asked for through the system font's descriptor, and
+  /// which face answers is the platform's business. ``FontResolver`` resolves it, and falls
+  /// back to the ``body`` face on a system that cannot supply a serif design.
+  public static let serif = FontFamilyRole(rawValue: "serif")
 }
 
 /// The font traits a theme can ask for, as a set rather than a scalar.
