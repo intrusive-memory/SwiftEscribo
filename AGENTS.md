@@ -44,6 +44,12 @@ archived and worth reading before changing the scanners:
   [Decisions log](docs/complete/fountain-surgeon-01/SUPERVISOR_STATE.md) (190 entries) ·
   [Test cleanup report](docs/complete/fountain-surgeon-01/TEST_CLEANUP_REPORT.md)
 
+Requirements that are written but not built live in `docs/incomplete/`:
+
+- [0.5.0 — the well shows work](docs/incomplete/REQUIREMENTS-0.5.0.md) — busy and failed
+  well states with an indeterminate ring, for a consumer's slow neural voice. Not started;
+  its line citations predate 0.4.1–0.4.4.
+
 **The one thing to know before touching a grammar**: the `incrementalScan == fullScan`
 gate is blind to grammar state *omission* — it passed 288/288 against a Fountain grammar
 that recognized no character cues at all. No grammar claim may rest on a green gate.
