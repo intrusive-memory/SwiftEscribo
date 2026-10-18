@@ -15,12 +15,15 @@ import EscriboCore
 /// ## The tables, in composition order
 ///
 /// 1. ``base`` — family, size, foreground, background.
-/// 2. ``kindStyles`` — per-`SpanKind` overrides. **Absence is legal**: an unrecognized
-///    kind resolves to ``base`` rather than trapping, which is what lets a theme written
-///    against 1.0 keep working when 1.1 adds a Fountain construct.
-/// 3. ``styleStyles`` — per-`StyleSet`-*flag* contributions, applied additively in
+/// 2. ``elementStyles`` — per-`ElementKind` overrides for every span on a line of that
+///    kind, whatever the span's own kind. **Absence is legal** here and in every table
+///    below: an element no theme mentions contributes nothing.
+/// 3. ``kindStyles`` — per-`SpanKind` overrides. An unrecognized kind resolves to the
+///    stages before it rather than trapping, which is what lets a theme written against
+///    1.0 keep working when 1.1 adds a Fountain construct.
+/// 4. ``styleStyles`` — per-`StyleSet`-*flag* contributions, applied additively in
 ///    ascending bit order.
-/// 4. ``markerOpacity`` — the role stage, and the whole of it.
+/// 5. ``markerOpacity`` — the role stage, and the whole of it.
 ///
 /// ``elementSizeScales`` sits outside that sequence on purpose: it is keyed by the
 /// *line's* `ElementKind` and `depth`, not by a span's kind, because point size must vary
@@ -43,10 +46,25 @@ public struct EscriboTheme: Equatable, Sendable {
   /// than failing — a per-keystroke attribute lookup has no useful error to report.
   public var base: TokenStyle
 
-  /// Stage 2. Per-`SpanKind` overrides, sparse by design.
+  /// Stage 2. Per-`ElementKind` overrides, applied to **every span on the line** before the
+  /// span's own kind is consulted. Sparse by design, and empty in most themes.
+  ///
+  /// The one table keyed by the *line's* classification that contributes attributes rather
+  /// than geometry. It exists for a region whose look is a property of the region and not
+  /// of any span in it: a YAML frontmatter line is `key: value` metadata, and the line a
+  /// scanner could not read as `key:` — a nested list item, a `#` comment, a continuation —
+  /// degrades to a plain ``SpanKind/text`` span while still being a line *of the region*.
+  /// A theme that wants the whole region in one face names it here, once, and the span
+  /// kinds inside it keep their colours over that face because stage 3 runs after this one.
+  ///
+  /// Size is **not** this table's to set: ``TokenStyle`` carries no size by design, and
+  /// per-line size lives in ``elementSizeScales``.
+  public var elementStyles: [ElementKind: TokenStyle]
+
+  /// Stage 3. Per-`SpanKind` overrides, sparse by design.
   public var kindStyles: [SpanKind: TokenStyle]
 
-  /// Stage 3. Per-flag contributions, keyed by a **single-bit** `StyleSet`.
+  /// Stage 4. Per-flag contributions, keyed by a **single-bit** `StyleSet`.
   ///
   /// Keyed by individual flags rather than by whole sets so that `[.strong, .inlineCode]`
   /// needs no entry of its own: the styler walks the set bits in ascending order and
@@ -100,6 +118,7 @@ public struct EscriboTheme: Equatable, Sendable {
     name: String,
     baseFontSize: Double,
     base: TokenStyle,
+    elementStyles: [ElementKind: TokenStyle] = [:],
     kindStyles: [SpanKind: TokenStyle] = [:],
     styleStyles: [StyleSet: TokenStyle] = [:],
     elementSizeScales: [ElementKind: [Int: Double]] = [:],
@@ -110,6 +129,7 @@ public struct EscriboTheme: Equatable, Sendable {
     self.name = name
     self.baseFontSize = baseFontSize
     self.base = base
+    self.elementStyles = elementStyles
     self.kindStyles = kindStyles
     self.styleStyles = styleStyles
     self.elementSizeScales = elementSizeScales
@@ -157,6 +177,7 @@ public struct EscriboTheme: Equatable, Sendable {
       name: "\(name) (source)",
       baseFontSize: baseFontSize,
       base: base,
+      elementStyles: [:],
       kindStyles: [:],
       styleStyles: [:],
       elementSizeScales: [:],

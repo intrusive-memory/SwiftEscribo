@@ -28,6 +28,16 @@ import EscriboCore
 /// and not because the body around it happens to be. A host that swaps the base family for
 /// a proportional reading face keeps the guarantee, and the two Markdown themes, whose base
 /// is proportional, reach the same rendering through the same entries.
+///
+/// ## Why the frontmatter region is also an element entry
+///
+/// The span entries above cover what the scanner *recognised*: a key, a value, a fence.
+/// A line inside the region that is not `key:`-shaped — a nested list item, a `#` comment,
+/// a continuation — degrades to a plain `.text` span by `FrontmatterScanning`'s rule, and a
+/// span table cannot reach it without reaching every paragraph too. Every one of those
+/// lines is still classified ``ElementKind/frontmatter``, so all four themes name the region
+/// once in ``elementStyles`` and the whole block reads as one monospaced record, key lines
+/// and the lines between them alike. The span entries keep their colours over that face.
 extension EscriboTheme {
 
   // MARK: - Markdown
@@ -40,6 +50,7 @@ extension EscriboTheme {
       foreground: EscriboColor(red: 0.11, green: 0.11, blue: 0.12),
       family: .body
     ),
+    elementStyles: frontmatterRegion,
     kindStyles: [
       .heading: TokenStyle(
         foreground: EscriboColor(red: 0.05, green: 0.28, blue: 0.63),
@@ -81,6 +92,7 @@ extension EscriboTheme {
       foreground: EscriboColor(red: 0.90, green: 0.90, blue: 0.92),
       family: .body
     ),
+    elementStyles: frontmatterRegion,
     kindStyles: [
       .heading: TokenStyle(
         foreground: EscriboColor(red: 0.48, green: 0.71, blue: 1.0),
@@ -124,6 +136,7 @@ extension EscriboTheme {
       foreground: EscriboColor(red: 0.10, green: 0.10, blue: 0.10),
       family: .monospaced
     ),
+    elementStyles: frontmatterRegion,
     kindStyles: [
       .heading: TokenStyle(
         foreground: EscriboColor(red: 0.16, green: 0.24, blue: 0.44),
@@ -166,6 +179,7 @@ extension EscriboTheme {
       foreground: EscriboColor(red: 0.91, green: 0.90, blue: 0.87),
       family: .monospaced
     ),
+    elementStyles: frontmatterRegion,
     kindStyles: [
       .heading: TokenStyle(
         foreground: EscriboColor(red: 0.62, green: 0.75, blue: 1.0),
@@ -233,6 +247,13 @@ extension EscriboTheme {
   }
 
   // MARK: - Shared tables
+
+  /// The stage-2 table shared by all four language themes: the YAML frontmatter region,
+  /// every line of it, in the monospaced face. The source theme has no entry — it has no
+  /// tables at all — and its base is monospaced already.
+  private static let frontmatterRegion: [ElementKind: TokenStyle] = [
+    .frontmatter: TokenStyle(family: .monospaced)
+  ]
 
   /// ATX heading levels 1…6. Level lives in `LineRecord.depth`, so this is keyed by it.
   private static let headingSizeScale: [Int: Double] = [
