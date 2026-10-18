@@ -1,6 +1,5 @@
-import Foundation
-
 import EscriboCore
+import Foundation
 
 // MARK: - The document under measurement
 

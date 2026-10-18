@@ -1,13 +1,13 @@
 import EscriboCore
 import Testing
 
+@testable import SwiftEscribo
+
 #if canImport(AppKit)
   import AppKit
 #elseif canImport(UIKit)
   import UIKit
 #endif
-
-@testable import SwiftEscribo
 
 /// Sortie 27: the Fountain and Markdown paragraph-geometry **rule sets**, populated onto
 /// the Sortie 8 geometry layer in `BuiltInThemes.swift`.
@@ -22,7 +22,9 @@ struct GeometryRuleSetTests {
 
   // MARK: - Fountain: character cue, dialogue, and parenthetical margins
 
-  @Test("A character cue and a dialogue line get different headIndents, both from the resolved advance width")
+  @Test(
+    "A character cue and a dialogue line get different headIndents, both from the resolved advance width"
+  )
   func cueAndDialogueHaveDifferentHeadIndents() {
     let theme = EscriboTheme.fountainLight
     let styler = EscriboStyler(theme: theme)
@@ -109,7 +111,9 @@ struct GeometryRuleSetTests {
 
   // MARK: - Markdown: heading size scale vs. paragraph geometry
 
-  @Test("A heading's marker span and its content span resolve to the same point size despite the heading's size scale")
+  @Test(
+    "A heading's marker span and its content span resolve to the same point size despite the heading's size scale"
+  )
   func headingMarkerAndContentShareOnePointSize() throws {
     let theme = EscriboTheme.markdownLight
     let result = StylingFixtures.scan("## Heading text\n")
@@ -131,7 +135,9 @@ struct GeometryRuleSetTests {
     // Architecture §3: size varies per line, never within a line. Markers are never
     // resized, even though the line's own size scale is very much in effect.
     #expect(marker.font.pointSize == content.font.pointSize)
-    #expect(marker.font.pointSize == theme.baseFontSize * theme.sizeScale(for: .heading, depth: headingLine.depth))
+    #expect(
+      marker.font.pointSize == theme.baseFontSize
+        * theme.sizeScale(for: .heading, depth: headingLine.depth))
   }
 
   // MARK: - Markdown: list and blockquote indents keyed by (ElementKind, depth)
@@ -205,10 +211,12 @@ struct GeometryRuleSetTests {
     let markdownStyle = markdownMetrics.paragraphStyle(in: geometry)
 
     #expect(type(of: fountainStyle) == type(of: markdownStyle))
-    #expect(GeometryChecks.isClose(
-      fountainStyle.headIndent, fountainMetrics.leftIndentChars * geometry.advanceWidth))
-    #expect(GeometryChecks.isClose(
-      markdownStyle.headIndent, markdownMetrics.leftIndentChars * geometry.advanceWidth))
+    #expect(
+      GeometryChecks.isClose(
+        fountainStyle.headIndent, fountainMetrics.leftIndentChars * geometry.advanceWidth))
+    #expect(
+      GeometryChecks.isClose(
+        markdownStyle.headIndent, markdownMetrics.leftIndentChars * geometry.advanceWidth))
   }
 
   // MARK: - Geometry stays theme-controlled and switchable off, for the populated themes too

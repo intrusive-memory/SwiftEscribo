@@ -292,7 +292,8 @@ struct MarkdownContainerSpanTests {
     //   line 3: ">> q* here**"  — range 33..<45   depth 1
     let result = Self.fullScan("> **bold *x\n> y* more\n>> text *p\n>> q* here**")
 
-    #expect(result.lineRecords.map(\.element) == [.blockquote, .blockquote, .blockquote, .blockquote])
+    #expect(
+      result.lineRecords.map(\.element) == [.blockquote, .blockquote, .blockquote, .blockquote])
     #expect(result.lineRecords.map(\.depth) == [0, 0, 1, 1])
     #expect(
       result.blocks.map(\.lines) == [0..<2, 2..<4],

@@ -35,7 +35,8 @@ struct WellTrackerTests {
 
   private let t0: TimeInterval = 1000
 
-  private func shown(_ block: EscriboBlock.ID, _ role: WellTracker.Role) -> WellTracker.Presentation {
+  private func shown(_ block: EscriboBlock.ID, _ role: WellTracker.Role) -> WellTracker.Presentation
+  {
     WellTracker.Presentation(block: block, role: role)
   }
 
@@ -46,7 +47,8 @@ struct WellTrackerTests {
     #expect(tracker.nextDeadline == nil)
   }
 
-  @Test("Hover shows the pointer's block at once, and fades in over 120 ms unless motion is reduced")
+  @Test(
+    "Hover shows the pointer's block at once, and fades in over 120 ms unless motion is reduced")
   func hoverShowsImmediately() throws {
     let ids = Self.paragraphIDs()
     let a = try #require(ids.first)
@@ -246,7 +248,8 @@ struct WellPlacementTests {
       CGRect(x: 40, y: 136, width: 250, height: 18),
     ]
     #expect(
-      WellPlacement.blockRect(enclosing: fragments) == CGRect(x: 40, y: 100, width: 300, height: 54))
+      WellPlacement.blockRect(enclosing: fragments) == CGRect(x: 40, y: 100, width: 300, height: 54)
+    )
     #expect(WellPlacement.blockRect(enclosing: []) == nil)
   }
 
@@ -269,7 +272,8 @@ struct WellPlacementTests {
   func symbolsAndIdentifiers() {
     #expect(WellPlacement.symbolName(for: .readAloud, isPlaying: false) == "play.fill")
     #expect(WellPlacement.symbolName(for: .readAloud, isPlaying: true) == "stop.fill")
-    #expect(WellPlacement.symbolName(for: EscriboWellItem(rawValue: "future"), isPlaying: false) == nil)
+    #expect(
+      WellPlacement.symbolName(for: EscriboWellItem(rawValue: "future"), isPlaying: false) == nil)
     #expect(WellPlacement.accessibilityIdentifier(for: .readAloud) == "editor.well.readAloud")
   }
 }

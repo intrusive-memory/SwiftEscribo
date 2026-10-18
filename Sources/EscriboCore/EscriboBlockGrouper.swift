@@ -125,7 +125,8 @@ enum EscriboBlockGrouper {
         // lines: a run of one element becomes one block, which keeps the tiling invariant
         // true no matter what arrives.
         cursor = append(
-          &blocks, degradedKind(for: element), over: run(records, from: cursor, of: element), records)
+          &blocks, degradedKind(for: element), over: run(records, from: cursor, of: element),
+          records)
       }
     }
 
@@ -477,7 +478,8 @@ enum EscriboBlockGrouper {
     _ blocks: inout [EscriboBlock], _ kind: BlockKind, over lines: Range<Int>,
     _ records: [LineRecord], omittingContentOf omitted: Set<ElementKind> = []
   ) -> Int {
-    guard let first = records[safe: lines.lowerBound], let last = records[safe: lines.upperBound - 1]
+    guard let first = records[safe: lines.lowerBound],
+      let last = records[safe: lines.upperBound - 1]
     else { return max(lines.upperBound, lines.lowerBound + 1) }
 
     // One filtered pass, two projections of it. `EscriboBlock.contentRanges` and

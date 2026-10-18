@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo
-updated: 2026-07-28
+updated: 2026-10-17
 ---
 
 # SwiftEscribo

@@ -1,13 +1,13 @@
 import EscriboCore
 import Testing
 
+@testable import SwiftEscribo
+
 #if canImport(AppKit)
   import AppKit
 #elseif canImport(UIKit)
   import UIKit
 #endif
-
-@testable import SwiftEscribo
 
 /// Floating-point comparisons for a layer whose numbers are measured from a face this test
 /// is forbidden to name.
@@ -258,8 +258,9 @@ struct ParagraphGeometryTests {
       theme.paragraphMetrics(for: .heading, depth: 99)
         == theme.paragraphMetrics(for: .heading, depth: 0))
     // An element no entry mentions has no geometry. Never a trap, never a crash.
-    #expect(theme.paragraphMetrics(for: ElementKind(rawValue: "nothing-emits-this"), depth: 0)
-      .isDefault)
+    #expect(
+      theme.paragraphMetrics(for: ElementKind(rawValue: "nothing-emits-this"), depth: 0)
+        .isDefault)
   }
 
   @Test("Alignment reaches the paragraph style, in every direction a theme can ask for")

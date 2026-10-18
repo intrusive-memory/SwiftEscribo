@@ -128,7 +128,8 @@ enum WellHighlight {
     else { return [] }
     textLayoutManager.ensureLayout(for: span)
     var rects: [CGRect] = []
-    textLayoutManager.enumerateTextSegments(in: span, type: .standard, options: []) { _, frame, _, _ in
+    textLayoutManager.enumerateTextSegments(in: span, type: .standard, options: []) {
+      _, frame, _, _ in
       if !frame.isEmpty {
         rects.append(frame.offsetBy(dx: origin.x, dy: origin.y))
       }

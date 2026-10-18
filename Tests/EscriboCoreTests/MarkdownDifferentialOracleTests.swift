@@ -1,12 +1,11 @@
-import Foundation
-import Markdown
-import Testing
-
 // Deliberately **not** `@testable`. The oracle validates the shipped public surface —
 // `EscriboScanner`, `ScanResult`, `LineRecord`, `ElementKind` — because that is what a
 // consumer sees. A differential test that reached into internals could agree with an
 // implementation detail no caller can observe.
 import EscriboCore
+import Foundation
+import Markdown
+import Testing
 
 /// A differential oracle for ``MarkdownGrammar``'s **block** structure, run against
 /// `swift-markdown` (cmark-gfm) as an independent CommonMark implementation.
@@ -310,7 +309,8 @@ struct MarkdownDifferentialOracleTests {
     guard let range = item.range else { return }
     let first = range.lowerBound.line - 1
     guard first >= 0, first < blocks.count else { return }
-    blocks[first] = ordered
+    blocks[first] =
+      ordered
       ? .orderedListItem(depth: listDepth) : .unorderedListItem(depth: listDepth)
   }
 
@@ -362,7 +362,9 @@ struct MarkdownDifferentialOracleTests {
         Divergence(
           line: 5, scanner: .paragraph, oracle: .orderedListItem(depth: 0),
           verdict: .scannerDefect,
-          reason: "DL-122: paragraphOpen leaks across a list item, so a tight ordered list's second item is not a list item"),
+          reason:
+            "DL-122: paragraphOpen leaks across a list item, so a tight ordered list's second item is not a list item"
+        ),
         Divergence(
           line: 6, scanner: .paragraph, oracle: .orderedListItem(depth: 0),
           verdict: .scannerDefect,
@@ -378,7 +380,9 @@ struct MarkdownDifferentialOracleTests {
         Divergence(
           line: 18, scanner: .heading(level: 2), oracle: .unorderedListItem(depth: 0),
           verdict: .scannerDefect,
-          reason: "DL-167 (narrows DL-122): the unordered half needs an EMPTY item — `- a` ⏎ `- ` — not any tight list. Ordinary tight bullet lists classify correctly."),
+          reason:
+            "DL-167 (narrows DL-122): the unordered half needs an EMPTY item — `- a` ⏎ `- ` — not any tight list. Ordinary tight bullet lists classify correctly."
+        ),
       ]),
 
     Fixture(
@@ -391,7 +395,8 @@ struct MarkdownDifferentialOracleTests {
         // line above a `tableDelimiterRow` record.
         Divergence(
           line: 0, scanner: .paragraph, oracle: .table, verdict: .deliberate,
-          reason: "a GFM table header is defined by the row below it; MarkdownGrammar has no lookahead"),
+          reason:
+            "a GFM table header is defined by the row below it; MarkdownGrammar has no lookahead")
       ]),
 
     Fixture(
@@ -399,7 +404,7 @@ struct MarkdownDifferentialOracleTests {
       divergences: [
         Divergence(
           line: 26, scanner: .paragraph, oracle: .table, verdict: .deliberate,
-          reason: "table header row, as in `gfm` — the same documented lookahead gap"),
+          reason: "table header row, as in `gfm` — the same documented lookahead gap")
       ]),
 
     Fixture(
@@ -440,7 +445,9 @@ struct MarkdownDifferentialOracleTests {
         // a bullet. Those three are the traps this fixture exists for.
         Divergence(
           line: 0, scanner: .paragraph, oracle: .heading(level: 1), verdict: .deliberate,
-          reason: "setext heading text line; the underline below carries the heading, the text line cannot be reclassified without backward reach"),
+          reason:
+            "setext heading text line; the underline below carries the heading, the text line cannot be reclassified without backward reach"
+        ),
         Divergence(
           line: 3, scanner: .paragraph, oracle: .heading(level: 2), verdict: .deliberate,
           reason: "as line 0, level two"),
