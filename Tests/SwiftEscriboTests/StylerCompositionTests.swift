@@ -234,4 +234,84 @@ struct StylerCompositionTests {
     styler.environment.metrics = FontMetrics(pointSizeScale: 2)
     #expect(styler.baseStyle(element: .heading, depth: 2).font.pointSize == nominal * 2)
   }
+
+  // MARK: - Element stage
+
+  /// A frontmatter region as the real dossiers write it: `key: value` lines the scanner
+  /// recognises, and between them a nested list item, a `#` comment and an indented
+  /// continuation that it degrades to `.text`.
+  private static let frontmatterDocument = """
+    ---
+    type: character
+    aliases:
+      - Ray Rhodes
+    # a YAML comment
+    draft:
+      generatedBy: pilot
+    ---
+    Body paragraph in the reading face.
+    """
+
+  @Test("Every span on a frontmatter line resolves monospaced, recognised or not")
+  func frontmatterRegionIsOneFace() throws {
+    let result = StylingFixtures.scan(Self.frontmatterDocument)
+    let styler = EscriboStyler(theme: .markdownLight)
+
+    let frontmatterLines = result.lineRecords.filter { $0.element == .frontmatter }
+    #expect(frontmatterLines.count == 6)
+    var degraded = 0
+    for line in frontmatterLines {
+      for span in result.spans where line.range.contains(span.range.lowerBound) {
+        if span.kind == .text { degraded += 1 }
+        #expect(
+          styler.style(for: span, on: line).font.family == .monospaced,
+          "\(span.kind) on a frontmatter line")
+      }
+    }
+    // The point of the stage: lines the scanner could not read as `key:` are in it too.
+    #expect(degraded >= 2)
+
+    // The body keeps the theme's reading face, so the entry is a region and not a kind.
+    let body = try #require(result.spans.last { $0.kind == .text })
+    let bodyLine = try StylingFixtures.record(for: body, in: result)
+    #expect(bodyLine.element == .paragraph)
+    #expect(styler.style(for: body, on: bodyLine).font.family == .body)
+  }
+
+  @Test("The element stage sits between base and kind")
+  func elementStageOrder() throws {
+    let result = StylingFixtures.scan(Self.frontmatterDocument)
+    let key = try #require(result.spans.first { $0.kind == .frontmatterKey })
+    let line = try StylingFixtures.record(for: key, in: result)
+    let red = EscriboColor(red: 1, green: 0, blue: 0)
+    let blue = EscriboColor(red: 0, green: 0, blue: 1)
+
+    var theme = EscriboTheme.markdownLight
+    theme.elementStyles[.frontmatter] = TokenStyle(foreground: red, family: .body, traits: .italic)
+    theme.kindStyles[.frontmatterKey] = TokenStyle(foreground: blue, family: .monospaced)
+    let resolved = EscriboStyler(theme: theme).style(for: key, on: line)
+
+    // Overrides: the kind's colour and family win over the element's.
+    #expect(resolved.foreground == blue)
+    #expect(resolved.font.family == .monospaced)
+    // Unions: the element's trait survives the kind stage.
+    #expect(resolved.font.traits.contains(.italic))
+    // The line's own base style includes the element stage, so geometry measures the
+    // region in its face.
+    #expect(
+      EscriboStyler(theme: theme).baseStyle(element: .frontmatter, depth: 0).foreground == red)
+  }
+
+  @Test("An element with no entry contributes nothing")
+  func absentElementEntryIsIdentity() throws {
+    let result = StylingFixtures.scan(StylingFixtures.mixedMarkdown)
+    var without = EscriboTheme.markdownLight
+    without.elementStyles = [:]
+    let with = EscriboStyler(theme: .markdownLight)
+    let bare = EscriboStyler(theme: without)
+    for span in result.spans {
+      let line = try StylingFixtures.record(for: span, in: result)
+      #expect(with.style(for: span, on: line) == bare.style(for: span, on: line))
+    }
+  }
 }

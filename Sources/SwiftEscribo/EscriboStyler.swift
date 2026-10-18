@@ -276,7 +276,12 @@ final class EscriboStyler {
 
   // MARK: - Composition
 
-  /// The normative composition: base → kind → style → role.
+  /// The normative composition: base → element → kind → style → role.
+  ///
+  /// The element stage reads the **line's** classification, the way size does, so every
+  /// span on a frontmatter line composes over the frontmatter entry whatever kind the
+  /// scanner gave the span. It runs before the kind stage so a kind's own colour still
+  /// lands on top of the region's face.
   ///
   /// Within a stage, **traits union and everything else overrides**. That asymmetry is
   /// the difference between a code span inside a bold heading rendering bold-mono and
@@ -311,13 +316,20 @@ final class EscriboStyler {
       if let value = token.strikethrough { strikethrough = value }
     }
 
-    // Stage 2 — kind. An absent entry contributes nothing: unknown kinds fall back to
-    // base rather than trapping.
+    // Stage 2 — element. The line's classification, so it is part of the line's base
+    // style too (`baseStyle(element:depth:)` does not skip it): a region set in one face
+    // is measured in that face.
+    if let elementStyle = theme.elementStyles[line.element] {
+      apply(elementStyle)
+    }
+
+    // Stage 3 — kind. An absent entry contributes nothing: unknown kinds fall back to
+    // the stages before it rather than trapping.
     if !skippingKindStage, let kindStyle = theme.kindStyles[key.kind] {
       apply(kindStyle)
     }
 
-    // Stage 3 — style flags, additively, in ascending bit order so composition is
+    // Stage 4 — style flags, additively, in ascending bit order so composition is
     // deterministic regardless of how the set was built. A flag with no table entry
     // contributes nothing, which is how a `StyleSet` member added in a later release
     // degrades rather than breaks.
@@ -329,7 +341,7 @@ final class EscriboStyler {
       }
     }
 
-    // Stage 4 — role. Alpha on the foreground, and nothing else.
+    // Stage 5 — role. Alpha on the foreground, and nothing else.
     if key.role == .marker {
       foreground = foreground.withAlphaMultiplied(by: theme.markerOpacity)
     }

@@ -95,6 +95,7 @@ struct SourceThemeTests {
   @Test("Stripping a theme to source empties every table and stops marker dimming")
   func strippingEmptiesTheTables() {
     let stripped = EscriboTheme.markdownDark.strippedToSource()
+    #expect(stripped.elementStyles.isEmpty)
     #expect(stripped.kindStyles.isEmpty)
     #expect(stripped.styleStyles.isEmpty)
     #expect(stripped.elementSizeScales.isEmpty)

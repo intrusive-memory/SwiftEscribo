@@ -191,8 +191,10 @@ A theme is a **value table**, not a protocol with a resolver method. The styler 
 theme change, mode change, appearance change, font-metric change. Adding a fifth
 trigger without invalidating is how you get dark text on a dark background.
 
-Composition order is normative: base → kind → style → role. Traits union; everything
-else overrides. Marker dimming is the last stage and is alpha only.
+Composition order is normative: base → element → kind → style → role. The element
+stage reads the line's `ElementKind` and applies to every span on it, whatever the span's
+kind. Traits union; everything else overrides. Marker dimming is the last stage and is
+alpha only.
 
 `markerOpacity` is a single scalar on the theme — not a per-kind value, not a
 `TokenStyle`. There is deliberately no way to give a marker its own font or size.
