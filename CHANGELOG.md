@@ -12,6 +12,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.5] — 2026-10-18
+
 A **patch** by the consumer's pin: one table is **added** to `EscriboTheme` with an empty
 default, and nothing is removed or renamed. Every existing theme literal still compiles and
 resolves exactly as before, except that the four built-in language themes now set the YAML
@@ -35,6 +37,12 @@ measured in that face.
   scanner degrades to `.text` — a nested list item, a `#` comment, an indented continuation
   — were not, and read in the body face in the middle of the block. Now the whole region is
   one monospaced record, and the span entries keep their colours over it.
+
+### Infrastructure
+
+- CI runs only on pull requests that are ready for review: `tests.yml` and `lint.yml` skip
+  every job on a draft and listen for `ready_for_review`. `development` and `main` now
+  require SwiftLint, Test on macOS and Test on iOS Simulator to merge.
 
 ## [0.4.4] — 2026-10-18
 
