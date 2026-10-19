@@ -76,6 +76,13 @@ one, it is out of scope — say so rather than building a seam for it.
 - **Never `swift build` / `swift test`.** Use `make` targets (XcodeBuildMCP locally,
   `xcodebuild` in CI). Run `make help`. **`make lint` runs SwiftLint and is read-only;
   `make format` is the in-place formatter.** Pre-commit is `make format && make lint`.
+- **CI does not run on draft PRs.** A draft is a workspace; a ready PR is a merge
+  request. `tests.yml` and `lint.yml` gate every job on `!draft` and listen for
+  `ready_for_review`, so `gh pr ready` is what starts the suite. `development` and `main`
+  both require the three checks — `SwiftLint`, `Test on macOS`, `Test on iOS Simulator`
+  — to pass before a merge (`main` additionally requires the branch to be up to date).
+  Renaming a job silently un-requires it: update the branch protection contexts in the
+  same PR. The pattern is the `draft-pr-ci-gate` skill.
 - **Apple Silicon only — always pass the arch.** Every `xcodebuild` invocation pins
   `arch=arm64` in the destination *and* `ARCHS=arm64`; never let it infer. Intel and
   Rosetta are out of scope. The `Makefile` exposes this as `$(ARCH)` — append it to
