@@ -11,7 +11,7 @@ SwiftEscribo.
 
 ## Current version
 
-**`0.4.4`** — the `v0.4.4` release. Between releases this line carries
+**`0.4.5`** — the `v0.4.5` release. Between releases this line carries
 a `-dev` suffix (`X.Y.Z-dev`), which the next release strips. README's install snippet
 always names the last resolvable release, never a `-dev` marker.
 
@@ -44,6 +44,12 @@ archived and worth reading before changing the scanners:
   [Decisions log](docs/complete/fountain-surgeon-01/SUPERVISOR_STATE.md) (190 entries) ·
   [Test cleanup report](docs/complete/fountain-surgeon-01/TEST_CLEANUP_REPORT.md)
 
+Requirements that are written but not built live in `docs/incomplete/`:
+
+- [0.5.0 — the well shows work](docs/incomplete/REQUIREMENTS-0.5.0.md) — busy and failed
+  well states with an indeterminate ring, for a consumer's slow neural voice. Not started;
+  its line citations predate 0.4.1–0.4.4.
+
 **The one thing to know before touching a grammar**: the `incrementalScan == fullScan`
 gate is blind to grammar state *omission* — it passed 288/288 against a Fountain grammar
 that recognized no character cues at all. No grammar claim may rest on a green gate.
@@ -70,6 +76,13 @@ one, it is out of scope — say so rather than building a seam for it.
 - **Never `swift build` / `swift test`.** Use `make` targets (XcodeBuildMCP locally,
   `xcodebuild` in CI). Run `make help`. **`make lint` runs SwiftLint and is read-only;
   `make format` is the in-place formatter.** Pre-commit is `make format && make lint`.
+- **CI does not run on draft PRs.** A draft is a workspace; a ready PR is a merge
+  request. `tests.yml` and `lint.yml` gate every job on `!draft` and listen for
+  `ready_for_review`, so `gh pr ready` is what starts the suite. `development` and `main`
+  both require the three checks — `SwiftLint`, `Test on macOS`, `Test on iOS Simulator`
+  — to pass before a merge (`main` additionally requires the branch to be up to date).
+  Renaming a job silently un-requires it: update the branch protection contexts in the
+  same PR. The pattern is the `draft-pr-ci-gate` skill.
 - **Apple Silicon only — always pass the arch.** Every `xcodebuild` invocation pins
   `arch=arm64` in the destination *and* `ARCHS=arm64`; never let it infer. Intel and
   Rosetta are out of scope. The `Makefile` exposes this as `$(ARCH)` — append it to
@@ -185,8 +198,10 @@ A theme is a **value table**, not a protocol with a resolver method. The styler 
 theme change, mode change, appearance change, font-metric change. Adding a fifth
 trigger without invalidating is how you get dark text on a dark background.
 
-Composition order is normative: base → kind → style → role. Traits union; everything
-else overrides. Marker dimming is the last stage and is alpha only.
+Composition order is normative: base → element → kind → style → role. The element
+stage reads the line's `ElementKind` and applies to every span on it, whatever the span's
+kind. Traits union; everything else overrides. Marker dimming is the last stage and is
+alpha only.
 
 `markerOpacity` is a single scalar on the theme — not a per-kind value, not a
 `TokenStyle`. There is deliberately no way to give a marker its own font or size.

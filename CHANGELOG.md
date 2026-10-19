@@ -12,6 +12,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.5] — 2026-10-18
+
+A **patch** by the consumer's pin: one table is **added** to `EscriboTheme` with an empty
+default, and nothing is removed or renamed. Every existing theme literal still compiles and
+resolves exactly as before, except that the four built-in language themes now set the YAML
+frontmatter region in one face.
+
+### Added
+
+#### `EscriboTheme.elementStyles`
+
+A per-`ElementKind` `TokenStyle` table, composed as a new stage between the base and the
+span kind: base → **element** → kind → style → role. It applies to every span on a line of
+that element whatever the span's own kind, so a region's look can be a property of the
+region. `strippedToSource()` empties it like every other table. The line's base style —
+what paragraph geometry measures with — includes it, so a region set in one face is
+measured in that face.
+
+### Changed
+
+- The four built-in language themes set `.frontmatter` to `.monospaced` in the new table.
+  The `key: value` lines were already monospaced through their span entries; the lines the
+  scanner degrades to `.text` — a nested list item, a `#` comment, an indented continuation
+  — were not, and read in the body face in the middle of the block. Now the whole region is
+  one monospaced record, and the span entries keep their colours over it.
+
+### Infrastructure
+
+- CI runs only on pull requests that are ready for review: `tests.yml` and `lint.yml` skip
+  every job on a draft and listen for `ready_for_review`. `development` and `main` now
+  require SwiftLint, Test on macOS and Test on iOS Simulator to merge.
+
 ## [0.4.4] — 2026-10-18
 
 A **patch**: one construction-time default changes and nothing is added, removed or renamed. Hosts that pin `.upToNextMinor` pick it up without a code change.
