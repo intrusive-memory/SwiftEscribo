@@ -11,9 +11,13 @@ name: Lint
 # because anything declares it test-only. The day a target under `Sources/` says
 # `import Markdown`, the zero-dependency charter breaks and the build stays green. This
 # job is the only thing that notices.
+# Draft PRs do not run this job (`if: !draft` below); `ready_for_review` is listed because
+# it is not a default `pull_request` type, and promoting a draft must start the gate. On a
+# `push` there is no pull_request payload, so the condition is true and the job runs.
 on:
   pull_request:
     branches: [main, development]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main, development]
   workflow_dispatch:
@@ -25,6 +29,7 @@ concurrency:
 jobs:
   swiftlint:
     name: SwiftLint
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: macos-26
 
     # DL-180. Every gating job in this repo declares a deadline. A hung job burns the

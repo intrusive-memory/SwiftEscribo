@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo — Claude Code guidance
-updated: 2026-07-25
+updated: 2026-10-18
 ---
 
 # CLAUDE.md
@@ -25,6 +25,9 @@ canonical Fountain parser
 2. **`EscriboCore` imports Foundation only** — no SwiftUI, AppKit, or UIKit.
 3. **Use `make`, never `swift build` / `swift test`.** Run `make help` for targets;
    `make test-core` is the fast loop.
+4. **CI runs only on ready PRs.** Open work as a draft; `gh pr ready` runs the suite.
+   `development` and `main` require `SwiftLint`, `Test on macOS` and `Test on iOS
+   Simulator` to merge (pattern: the `draft-pr-ci-gate` skill; details in AGENTS.md).
 
 ## Layout
 
