@@ -259,7 +259,9 @@ bug class that example-based tests miss. If it is red, the scanner is wrong no m
 how good the fixtures look.
 
 Performance assertions live in `EscriboPerformanceTests`, excluded from the
-PR-blocking job because wall-clock budgets are machine dependent.
+PR-blocking job because wall-clock budgets are machine dependent. They never run in CI
+automatically: run them with `make test-performance`, or `performance.yml` by manual
+dispatch (`workflow_dispatch` is its only trigger — no push, no schedule).
 
 ## Scope
 

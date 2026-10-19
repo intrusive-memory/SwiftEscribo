@@ -1,21 +1,19 @@
 name: Performance
 
-# **Never on a pull request.** Wall-clock budgets are machine dependent, and a shared
-# runner is exactly the machine that makes them so: a gate that goes red because GitHub
-# handed out a busy host is a gate that gets ignored and then deleted. The PR-blocking
-# job (`tests.yml`) runs with `-skip-testing:EscriboPerformanceTests` for the same reason.
+# **Manual dispatch only — performance tests never run in CI automatically.** Wall-clock
+# budgets are machine dependent, and a shared runner is exactly the machine that makes
+# them so: a gate that goes red because GitHub handed out a busy host is a gate that gets
+# ignored and then deleted. The PR-blocking job (`tests.yml`) runs with
+# `-skip-testing:EscriboPerformanceTests` for the same reason, and this workflow no longer
+# runs on push or on a schedule (a push-triggered run went red on runner noise and
+# attached a failing check to the open Development → Main PR).
 #
-# This workflow exists so the numbers still get *taken* — on every push to a long-lived
-# branch, nightly, and on demand — and land in a log a human can read. The suite prints a
+# This workflow exists so the numbers can still be *taken* on a macOS runner, on demand
+# (`gh workflow run performance.yml --ref <branch>`), and land in a log a human can read.
+# Locally, `make test-performance` runs the same suite. The suite prints a
 # `cold-scan: <N> ms` line on every run; a regression is meant to be visible there long
 # before it reaches the 50 ms ceiling that is actually asserted.
 on:
-  push:
-    branches: [main, development]
-  schedule:
-    # 07:00 UTC daily. Timing drift shows up as a trend across runs, which needs runs on
-    # a fixed cadence rather than only when someone happens to push.
-    - cron: "0 7 * * *"
   workflow_dispatch:
 
 concurrency:
