@@ -238,5 +238,260 @@
       // The content-storage paragraph is never re-vended without a storage edit.
       #expect(abs((extents[.contentStorageParagraph] ?? 0) - rowHeight) > 0.5)
     }
+
+    // MARK: - Rows 3–7: atomic behaviour
+
+    /// True when `location` is strictly inside `range` (an edge is not inside).
+    static func strictlyInside(_ location: Int, _ range: NSRange) -> Bool {
+      location > range.location && location < NSMaxRange(range)
+    }
+
+    @Test("row 3: left/right arrows from the block's edges step over it; never inside")
+    func row3LeftRightStepOver() throws {
+      let h = try SpikeMacHarness()
+      h.embed()
+      _ = h.layout()
+      let tv = h.editor.textView
+      let note = h.note
+
+      // Right from the start edge lands on the end edge.
+      tv.setSelectedRange(NSRange(location: note.location, length: 0))
+      tv.moveRight(nil)
+      #expect(tv.selectedRange() == NSRange(location: NSMaxRange(note), length: 0))
+      // Left from the end edge lands on the start edge.
+      tv.moveLeft(nil)
+      #expect(tv.selectedRange() == NSRange(location: note.location, length: 0))
+
+      // Walk right across the whole document, then left: never strictly inside.
+      tv.setSelectedRange(NSRange(location: 0, length: 0))
+      var visited: [Int] = []
+      for _ in 0..<((tv.string as NSString).length + 2) {
+        tv.moveRight(nil)
+        visited.append(tv.selectedRange().location)
+      }
+      for _ in 0..<((tv.string as NSString).length + 2) {
+        tv.moveLeft(nil)
+        visited.append(tv.selectedRange().location)
+      }
+      #expect(!visited.contains { Self.strictlyInside($0, note) })
+      #expect(visited.contains(note.location) && visited.contains(NSMaxRange(note)))
+    }
+
+    @Test("row 3: up/down from the adjacent lines land after/before the block; never inside")
+    func row3UpDownStepOver() throws {
+      let h = try SpikeMacHarness()
+      h.embed()
+      _ = h.layout()
+      let tv = h.editor.textView
+      let note = h.note
+
+      // Down from the blank line just above the block: AppKit's own step lands on the
+      // block's start edge (the row's leading edge — "before" it, not inside); the next Down
+      // lands after it.
+      tv.setSelectedRange(NSRange(location: note.location - 1, length: 0))
+      tv.moveDown(nil)
+      let firstDown = tv.selectedRange()
+      #expect(firstDown.length == 0)
+      #expect(firstDown.location == note.location || firstDown.location == NSMaxRange(note),
+        "first down → \(firstDown.location); note \(note)")
+      if firstDown.location == note.location {
+        tv.moveDown(nil)
+        #expect(tv.selectedRange() == NSRange(location: NSMaxRange(note), length: 0),
+          "second down → \(tv.selectedRange().location); note \(note)")
+      }
+      // Up from the blank line just below the block lands before it.
+      tv.setSelectedRange(NSRange(location: NSMaxRange(note), length: 0))
+      tv.moveUp(nil)
+      #expect(tv.selectedRange() == NSRange(location: note.location, length: 0),
+        "up → \(tv.selectedRange().location); note \(note)")
+
+      // Walk down from the top and up from the bottom: never inside, and the walk crosses.
+      tv.setSelectedRange(NSRange(location: 0, length: 0))
+      var down: [Int] = []
+      for _ in 0..<10 {
+        tv.moveDown(nil)
+        down.append(tv.selectedRange().location)
+      }
+      #expect(!down.contains { Self.strictlyInside($0, note) }, "down: \(down)")
+      #expect(down.contains { $0 > NSMaxRange(note) }, "down never got past: \(down)")
+
+      tv.setSelectedRange(NSRange(location: (tv.string as NSString).length, length: 0))
+      var up: [Int] = []
+      for _ in 0..<10 {
+        tv.moveUp(nil)
+        up.append(tv.selectedRange().location)
+      }
+      #expect(!up.contains { Self.strictlyInside($0, note) }, "up: \(up)")
+      #expect(up.contains { $0 < note.location }, "up never got past: \(up)")
+    }
+
+    @Test("row 3: a click inside the row lands the caret on one of the block's edges")
+    func row3ClickLandsOnEdge() throws {
+      let h = try SpikeMacHarness()
+      h.embed()
+      let laid = h.layout()
+      let tv = h.editor.textView
+      let note = h.note
+      let row = try #require(h.notParagraphs(laid).first)
+      let origin = tv.textContainerOrigin
+
+      let points = [
+        CGPoint(x: row.frame.midX, y: row.frame.midY),
+        CGPoint(x: row.frame.minX + 4, y: row.frame.minY + 2),
+        CGPoint(x: row.frame.maxX - 4, y: row.frame.maxY - 2),
+      ]
+      var rawInside = 0
+      for point in points {
+        let viewPoint = CGPoint(x: point.x + origin.x, y: point.y + origin.y)
+        let index = tv.characterIndexForInsertion(at: viewPoint)
+        if Self.strictlyInside(index, note) { rawInside += 1 }
+        for start in [0, (tv.string as NSString).length] {
+          tv.setSelectedRange(NSRange(location: start, length: 0))
+          tv.setSelectedRange(NSRange(location: index, length: 0))
+          let loc = tv.selectedRange().location
+          #expect(tv.selectedRange().length == 0)
+          #expect(loc == note.location || loc == NSMaxRange(note) || !NSLocationInRange(index, note),
+            "click index \(index) → \(loc)")
+          #expect(!Self.strictlyInside(loc, note))
+        }
+      }
+      // Non-vacuous: AppKit's own hit-testing does find positions inside the row.
+      #expect(rawInside > 0)
+    }
+
+    @Test("row 4: shift-arrows that touch the block extend the selection over all of it")
+    func row4ShiftArrowSelectsWhole() throws {
+      let h = try SpikeMacHarness()
+      h.embed()
+      _ = h.layout()
+      let tv = h.editor.textView
+      let note = h.note
+
+      tv.setSelectedRange(NSRange(location: note.location, length: 0))
+      tv.moveRightAndModifySelection(nil)
+      #expect(tv.selectedRange() == note)
+
+      tv.setSelectedRange(NSRange(location: NSMaxRange(note), length: 0))
+      tv.moveLeftAndModifySelection(nil)
+      #expect(tv.selectedRange() == note)
+
+      // From the blank line above: the second shift-right touches the block.
+      tv.setSelectedRange(NSRange(location: note.location - 1, length: 0))
+      tv.moveRightAndModifySelection(nil)
+      #expect(tv.selectedRange() == NSRange(location: note.location - 1, length: 1))
+      tv.moveRightAndModifySelection(nil)
+      let sel = tv.selectedRange()
+      #expect(sel.location == note.location - 1 && NSMaxRange(sel) >= NSMaxRange(note))
+    }
+
+    @Test("row 4: a drag (stillSelecting) that touches the block extends over all of it")
+    func row4DragSelectsWhole() throws {
+      let h = try SpikeMacHarness()
+      h.embed()
+      _ = h.layout()
+      let tv = h.editor.textView
+      let note = h.note
+
+      tv.setSelectedRange(NSRange(location: note.location - 5, length: 0))
+      // Dragging forward into the block's first characters.
+      tv.setSelectedRange(
+        NSRange(location: note.location - 5, length: 8), affinity: .downstream, stillSelecting: true)
+      #expect(tv.selectedRange() == NSRange(location: note.location - 5, length: NSMaxRange(note) - (note.location - 5)))
+      // Dragging backward from below into the block's last characters, then releasing.
+      let below = NSMaxRange(note) + 3
+      tv.setSelectedRange(
+        NSRange(location: NSMaxRange(note) - 2, length: below - (NSMaxRange(note) - 2)),
+        affinity: .upstream, stillSelecting: true)
+      #expect(tv.selectedRange() == NSRange(location: note.location, length: below - note.location))
+      tv.setSelectedRange(
+        NSRange(location: NSMaxRange(note) - 2, length: below - (NSMaxRange(note) - 2)),
+        affinity: .upstream, stillSelecting: false)
+      #expect(tv.selectedRange() == NSRange(location: note.location, length: below - note.location))
+    }
+
+    @Test("row 5: Delete with the block selected removes exactly deletionRange as one undo step")
+    func row5DeleteWhole() throws {
+      for forward in [false, true] {
+        let h = try SpikeMacHarness()
+        let provider = TestUndoManagerProvider()
+        h.editor.textView.delegate = provider
+        h.embed()
+        _ = h.layout()
+        settleEventGroup()
+        provider.manager.removeAllActions()
+        provider.manager.resetCount()
+
+        let tv = h.editor.textView
+        let original = tv.string
+        let removal = SpikeEmbedSelection.deletionRange(for: h.note, in: original as NSString)
+        #expect(removal.length == h.note.length + 1)  // block plus the following blank line
+        let expected = (original as NSString).replacingCharacters(in: removal, with: "")
+
+        tv.setSelectedRange(h.note)
+        #expect(tv.selectedRange() == h.note)
+        if forward { tv.deleteForward(nil) } else { tv.deleteBackward(nil) }
+        settleEventGroup()
+
+        #expect(tv.string == expected, "forward: \(forward)")
+        #expect(provider.manager.registrations == 1, "forward: \(forward)")
+        #expect(h.editor.spikeEmbeds.registry.embeds.isEmpty)
+
+        #expect(provider.manager.canUndo)
+        provider.manager.undo()
+        #expect(Array(tv.string.utf8) == Array(original.utf8), "forward: \(forward)")
+        #expect(!provider.manager.canUndo)
+        withExtendedLifetime(provider) {}
+      }
+    }
+
+    @Test("row 6: copy with the block selected writes the original characters")
+    func row6CopySource() throws {
+      let h = try SpikeMacHarness()
+      h.embed()
+      _ = h.layout()
+      let tv = h.editor.textView
+
+      let pasteboard = NSPasteboard(name: NSPasteboard.Name("escribo.spike.row6.\(UUID())"))
+      defer { pasteboard.releaseGlobally() }
+      tv.setSelectedRange(h.note)
+      #expect(tv.selectedRange() == h.note)
+      #expect(tv.writeSelection(to: pasteboard, types: tv.writablePasteboardTypes))
+      #expect(pasteboard.string(forType: .string) == BlockEmbedSpikeFixture.noteLines)
+
+      // A selection that was extended onto the block copies the whole block's source.
+      tv.setSelectedRange(NSRange(location: h.note.location - 1, length: 3))
+      pasteboard.clearContents()
+      #expect(tv.writeSelection(to: pasteboard, types: tv.writablePasteboardTypes))
+      #expect(pasteboard.string(forType: .string) == "\n" + BlockEmbedSpikeFixture.noteLines)
+    }
+
+    @Test("row 7: typing with the block selected changes nothing")
+    func row7TypingIgnored() throws {
+      let h = try SpikeMacHarness()
+      h.embed()
+      _ = h.layout()
+      let tv = h.editor.textView
+      let original = tv.string
+
+      tv.setSelectedRange(h.note)
+      tv.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
+      #expect(tv.string == original)
+      tv.insertText("x", replacementRange: h.note)
+      #expect(tv.string == original)
+      tv.insertNewline(nil)  // Return goes through the package's own handler
+      #expect(tv.string == original)
+      tv.insertTab(nil)
+      #expect(tv.string == original)
+
+      // A wider selection containing the block, too.
+      tv.setSelectedRange(NSRange(location: h.note.location - 1, length: h.note.length + 2))
+      tv.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
+      #expect(tv.string == original)
+
+      // Non-vacuous: typing at the block's start edge (outside it) still edits.
+      tv.setSelectedRange(NSRange(location: h.note.location, length: 0))
+      tv.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
+      #expect(tv.string != original)
+    }
   }
 #endif

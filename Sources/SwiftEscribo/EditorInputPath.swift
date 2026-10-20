@@ -158,6 +158,41 @@ struct CaretLineContext: Equatable {
       super.insertTab(sender)
     }
 
+    // SPIKE — block-embed hooks (Sources/SwiftEscribo/Spike/MacBlockEmbed.swift). Never merged.
+
+    /// SPIKE: rewrites every proposed selection (arrows, shift-arrows, clicks, drags) given the
+    /// current one. `nil` leaves selection behaviour untouched.
+    var spikeSelectionFilter: (@MainActor (_ proposed: [NSValue], _ current: [NSValue]) -> [NSValue])?
+
+    /// SPIKE: vetoes an edit (`false`) before `super` sees it. Typing, paste and deletion all
+    /// reach `shouldChangeText(in:replacementString:)`.
+    var spikeEditFilter: (@MainActor (_ range: NSRange, _ replacement: String?) -> Bool)?
+
+    /// SPIKE: called on Delete / forward-delete; returns `true` when it performed the edit.
+    var spikeDeleteHandler: (@MainActor () -> Bool)?
+
+    override func setSelectedRanges(
+      _ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool
+    ) {
+      let filtered = spikeSelectionFilter?(ranges, selectedRanges) ?? ranges
+      super.setSelectedRanges(filtered, affinity: affinity, stillSelecting: stillSelecting)
+    }
+
+    override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
+      if spikeEditFilter?(affectedCharRange, replacementString) == false { return false }
+      return super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
+    }
+
+    override func deleteBackward(_ sender: Any?) {
+      if spikeDeleteHandler?() == true { return }
+      super.deleteBackward(sender)
+    }
+
+    override func deleteForward(_ sender: Any?) {
+      if spikeDeleteHandler?() == true { return }
+      super.deleteForward(sender)
+    }
+
     // MARK: The paragraph well's inputs (REQUIREMENTS-1.1.0 § 5.2)
 
     /// The well drawn into this view, which these overrides feed. Weak: the editor owns it.

@@ -120,6 +120,82 @@
       layoutManager.invalidateLayout(for: textRange)
       textView.needsDisplay = true
     }
+
+    // MARK: - Atomic behaviour (rows 3–7)
+
+    /// The live embedded ranges, dropped if they no longer fit the storage (the coordinator's
+    /// blocks can lag the storage by one edit while `NSTextView` fixes up the selection).
+    private func liveEmbeds() -> [NSRange] {
+      guard let length = editor?.textView.textStorage?.length else { return [] }
+      return embeddedRanges().filter { NSMaxRange($0) <= length }
+    }
+
+    /// Row 3/4: every proposed selection goes through `SpikeEmbedSelection.constrain`.
+    /// Needed because the zero-height fragments keep their real line fragments, so AppKit's
+    /// own caret movement and hit-testing still find positions inside the block.
+    func filterSelection(_ proposed: [NSValue], current: [NSValue]) -> [NSValue] {
+      let embeds = liveEmbeds()
+      guard !embeds.isEmpty, let length = editor?.textView.textStorage?.length else {
+        return proposed
+      }
+      let previous = current.first?.rangeValue ?? NSRange(location: 0, length: 0)
+      return proposed.map { value in
+        let range = value.rangeValue
+        let constrained = SpikeEmbedSelection.constrain(
+          proposed: range, previous: previous, embeds: embeds)
+        guard NSMaxRange(constrained) <= length else { return value }
+        return NSValue(range: constrained)
+      }
+    }
+
+    /// Row 7 (and a guard for row 5): an edit may not put characters into, or remove part
+    /// of, an embed. Pure deletions that cover every embed they touch are allowed.
+    func allowsEdit(in range: NSRange, replacement: String?) -> Bool {
+      // Attribute-only changes (`nil` replacement) are never the user's keystroke.
+      guard let replacement else { return true }
+      for embed in liveEmbeds() {
+        let start = embed.location
+        let end = NSMaxRange(embed)
+        let touches: Bool
+        if range.length == 0 {
+          touches = range.location > start && range.location < end
+        } else {
+          touches = range.location < end && NSMaxRange(range) > start
+        }
+        guard touches else { continue }
+        if !replacement.isEmpty { return false }
+        let coversWhole = range.location <= start && NSMaxRange(range) >= end
+        if !coversWhole { return false }
+      }
+      return true
+    }
+
+    /// Row 5: with an embed exactly selected, Delete removes the embed's `deletionRange`
+    /// (block + one adjacent blank line) as one `shouldChangeText`/`didChangeText` pair, i.e.
+    /// one undo action.
+    func deleteSelectedEmbed() -> Bool {
+      guard let textView = editor?.textView, let storage = textView.textStorage else {
+        return false
+      }
+      let selection = textView.selectedRange()
+      guard let embed = liveEmbeds().first(where: { $0 == selection }) else { return false }
+      let removal = SpikeEmbedSelection.deletionRange(for: embed, in: storage.string as NSString)
+      guard textView.shouldChangeText(in: removal, replacementString: "") else { return true }
+      // The block is gone: drop its registry entry and shift later keys before storage
+      // processing re-scans, so the filter never sees a stale offset.
+      registry.embeds[embed.location] = nil
+      registry.expanded.remove(embed.location)
+      registry.embeds = Dictionary(
+        uniqueKeysWithValues: registry.embeds.map { key, value in
+          (key > embed.location ? key - removal.length : key, value)
+        })
+      registry.expanded = Set(
+        registry.expanded.map { $0 > embed.location ? $0 - removal.length : $0 })
+      storage.replaceCharacters(in: removal, with: "")
+      textView.didChangeText()
+      textView.setSelectedRange(NSRange(location: removal.location, length: 0))
+      return true
+    }
   }
 
   // MARK: - NSTextLayoutManagerDelegate
@@ -323,6 +399,17 @@
       textView.textLayoutManager?.delegate = controller
       (textView.textLayoutManager?.textContentManager as? NSTextContentStorage)?.delegate =
         controller
+      // Rows 3–7: the `// SPIKE` hooks on the text view subclass (not the delegate, which
+      // belongs to the SwiftUI bridge).
+      textView.spikeSelectionFilter = { [weak controller] proposed, current in
+        controller?.filterSelection(proposed, current: current) ?? proposed
+      }
+      textView.spikeEditFilter = { [weak controller] range, replacement in
+        controller?.allowsEdit(in: range, replacement: replacement) ?? true
+      }
+      textView.spikeDeleteHandler = { [weak controller] in
+        controller?.deleteSelectedEmbed() ?? false
+      }
       return controller
     }
 
