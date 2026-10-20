@@ -43,8 +43,8 @@ type: supervisor-state
 | 2 | macOS | COMPLETED | 1/3 | opus | 514e9ab; rows 1,2,10 pass; frame-override fragment |
 | 3 | macOS | COMPLETED | 1/3 | opus | de9a81e; rows 3–7 pass; make test green |
 | 4 | macOS | COMPLETED | 1/3 | opus | e87dd22; rows 8,9,11 pass; verifier PASS |
-| 5 | iOS | DISPATCHED | 1/3 | opus | |
-| 6 | iOS | PENDING | 0/3 | — | |
+| 5 | iOS | COMPLETED | 1/3 | opus | 39095a3; rows 1,2,10 pass |
+| 6 | iOS | DISPATCHED | 1/3 | opus | |
 | 7 | iOS | PENDING | 0/3 | — | |
 | 8 | Report | PENDING | 0/3 | — | |
 
@@ -63,3 +63,6 @@ type: supervisor-state
 | 2026-10-20T18:15Z | macOS | 4 | VERIFYING | e87dd22. Mechanical checks pass (17 tests, make test green). Row 11 finding: typing above drops the coordinator's spliced block list (blocksSpanDocument false) — spike re-scans read-only per keystroke + shifts registry offsets on willProcessEditing. 1 custom fragment per keystroke, 0 per scroll. Evidence env var must be exported in the shell, not passed as a build setting. |
 | 2026-10-20T18:17Z | macOS | 4 | COMPLETED | verifier VERDICT: PASS on mac-embed-collapsed.png. macOS work unit COMPLETED. |
 | 2026-10-20T18:17Z | iOS | 5 | Model: opus | gate: macOS COMPLETED; iOS draw mirrors S2 on UITextView |
+| 2026-10-20T19:00Z | iOS | 5 | Watchdog intervention | iOS test run hung 38 min: row2 test blocked in -[_UIConcretePasteboard string] (UIPasteboard.general read in simulator test host). Killed xcodebuild; SendMessage to same agent: don't read the general pasteboard in tests. No attempt increment (agent was progressing). |
+| 2026-10-20T19:10Z | iOS | 5 | COMPLETED | 39095a3. Same frame-override fragment works on UITextView. Finding: UIKit occupies NSTextLayoutManager.delegate on iOS 26 (_UITextKit2LayoutController) — recon A-07 "free" held only for package code; spike wraps and forwards. Row 2 copy checked via selected text, not pasteboard (general pasteboard hangs in test host). Shared controller moved into BlockEmbedSpike.swift. |
+| 2026-10-20T19:10Z | iOS | 6 | Model: opus | UITextInput selection differs most from macOS |
