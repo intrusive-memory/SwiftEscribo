@@ -50,8 +50,11 @@ well-slot fallback before any breakdown.
    selected is ignored; click selects it and calls `onEmbedActivate`; `⌥↩` with it
    selected calls the *Edit as Text* action; Find expands the embed holding the current
    match — **macOS only**, since the find bar is macOS-only — by calling
-   `onFindMatchInEmbed`; the host then stops returning an embed for that block. The find
-   bar has no current-match hook today, so this needs one (new work, named here).
+   `onFindMatchInEmbed`; the host then stops returning an embed for that block, and the
+   match's text selection inside it is allowed because the block is no longer an embed
+   (the whole-block selection rule applies only while it is one). The find bar is
+   AppKit's built-in one and has no current-match hook today, so this needs one (new
+   work, named here).
 4. **Accessibility:** one element per embed, button role, the host's label / value /
    identifier, default action = activate, custom actions = `actions`.
 5. **Off by default:** no provider → no change to layout, insets or behaviour; the
@@ -60,15 +63,22 @@ well-slot fallback before any breakdown.
 ## 2. Notice well slot
 
 `EscriboWellItem.notice` (a new static member — additive, per the type's own
-forward-compatibility rule) with a host-supplied glyph and help text per block, and a
-click callback through the existing `onWellAction`.
+forward-compatibility rule) with a click callback through the existing `onWellAction`.
+The well cannot do this today and needs real work, named here:
+- **per-block content**: slots are global and their glyphs hard-coded; add a host
+  callback `wellNotice(for block: EscriboBlock) -> (symbolName: String, help: String)?`
+  — `nil` means the block has no notice;
+- **visibility**: slots show only on hover or for the caret's block today; a notice is
+  shown **always** for the blocks that have one;
+- **eligibility**: today's item filtering would drop `.notice`; it is exempt from the
+  `eligibleKinds` filter.
 
 ## 3. JSON inside notes
 
 Today `GlosaScanner` (`EscriboCore/GlosaScanner.swift`) subdivides tag directives inside
 notes into `glosaTag` / `glosaAttributeName` / `glosaAttributeValue` /
 `glosaPunctuation` spans (`SpanKind.swift:294–331`). It sees **one line at a time** and
-carries no state between lines (`GlosaScanner.swift:58–66`, `FountainGrammar.swift:1024`),
+carries no state between lines (`GlosaScanner.swift:60–68`, `FountainGrammar.swift:1024`),
 so it cannot know that line 2 of a note is inside JSON. Add: a note whose trimmed content
 starts with `{` is scanned as JSON —
 
@@ -78,12 +88,18 @@ starts with `{` is scanned as JSON —
 - malformed JSON stops subdividing at the first error and leaves the rest as `note`
   (no exception, no trap — the scanner's totality rule);
 - **multi-line JSON notes are scanned across lines.** This is real work, named here:
-  the line state the scanner carries (`LineState`) gains a "inside a JSON note" context
-  (string/escape state and nesting depth), and the incremental scanner re-scans
-  following lines when that context changes. The existing performance budgets
-  (`make test-performance`) must still pass. A note's lines remain one `.note` block
-  only when it stands alone between blank lines — a note flush against action or
-  dialogue merges into that block, and consecutive notes merge into one block;
+  the line state the scanner carries (`LineState`) gains an "inside a JSON note"
+  context — string/escape state, a container stack (object/array), and whether the
+  next token in the current object is a key or a value (depth alone cannot tell keys
+  from values) — and the incremental scanner re-scans following lines until line states
+  match again, as it does today. The same context is added to `NestedFountainState` so
+  fenced Fountain inside Markdown scans correctly. The existing performance budgets
+  (`make test-performance`: 50 ms, 1 ms, ≤ 8 lines) must still pass **with a fixture
+  that contains multi-line JSON notes** — the current fixture has none, so it would pass
+  without exercising the new path. A note's lines are one `.note` block when the note
+  is followed by a blank line or the end of the document; a note **between** lines of
+  the same block (action / note / action, or inside a speech) is absorbed into that
+  block (`FountainBlockGroupingTests.swift:131–137`);
 - **colours**: none of the four built-in themes colours any `glosa*` kind or `.note`
   today, so "same as the tag kinds" would mean uncoloured. Add colours for all `glosa*`
   kinds — existing and new — to all four built-in themes.
