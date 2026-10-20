@@ -5,154 +5,14 @@
   import Foundation
   import ObjectiveC
 
-  /// How the N−1 trailing paragraphs of an embedded block are made to take no height.
-  ///
-  /// Kept as a switch so the spike tests can show, side by side, which mechanism collapses
-  /// a multi-paragraph block and which do not. Findings (macOS 26, TextKit 2):
-  ///
-  /// - ``fragmentDrawOnly`` — **fails.** Drawing is cosmetic; `NSTextLayoutManager` stacks
-  ///   fragments by their own line-fragment geometry, so the block keeps N line heights.
-  /// - ``fragmentFrameOverride`` — **works; the spike ships it.** `NSTextLayoutManager`
-  ///   positions each fragment directly below the previous fragment's *overridden*
-  ///   `layoutFragmentFrame`, so the first fragment claiming `rowHeight` and the rest claiming
-  ///   0 collapses N fragments into one row. It is recomputed whenever the layout manager
-  ///   asks the delegate for fragments, so it survives a coordinator restyle and a zoom.
-  /// - ``contentStorageParagraph`` — **collapses only on first vend; cannot be switched on
-  ///   for an already-laid-out document without a storage edit.** `NSTextContentStorage`
-  ///   consults `textContentStorage(_:textParagraphWith:)` when it first vends a paragraph or
-  ///   when the backing `NSTextStorage` reports an edit (the coordinator's restyle does, so it
-  ///   does survive one). `recordEditAction(in:newTextRange:)` re-creates layout fragments but
-  ///   does not re-vend cached paragraphs, so embedding a block on a document already on screen
-  ///   does nothing until the next storage edit — forcing one means writing to (or posting
-  ///   `edited(_:range:changeInLength:)` on) `textStorage`, which the spike forbids. It also
-  ///   re-attributes the real characters (tiny font, pinned line heights), which distorts
-  ///   caret and selection geometry inside the block.
-  enum SpikeCollapseMechanism: CaseIterable {
-    case fragmentDrawOnly
-    case fragmentFrameOverride
-    case contentStorageParagraph
-  }
-
-  /// Owns the two TextKit 2 delegate slots the spike uses. Nothing here writes to
-  /// `textStorage`; everything is display-side.
+  /// The macOS half of the spike controller. The platform-neutral parts (delegate slots,
+  /// registry, block lookup, invalidation, collapse mechanisms, fragments) live in
+  /// `SpikeBlockEmbedController` (`BlockEmbedSpike.swift`); this adds the AppKit selection,
+  /// delete and accessibility hooks.
   @MainActor
-  final class MacBlockEmbedController: NSObject {
-
-    /// The mechanism the spike ships with. Tests may flip it to compare the alternatives.
-    var mechanism: SpikeCollapseMechanism = .fragmentFrameOverride
-
-    /// Row height at a `pointSizeScale` of 1. Scaled with the editor's zoom.
-    nonisolated static let baseRowHeight: CGFloat = 44
-
-    /// Tiny line height used for the collapsed (non-first) paragraphs. TextKit 2 treats a
-    /// `maximumLineHeight` of exactly 0 as "no limit", so this is the smallest positive
-    /// value it honours without treating it as unset.
-    nonisolated static let collapsedLineHeight: CGFloat = 0.001
-
-    var registry = SpikeEmbedRegistry()
-
-    /// Instrumentation for later sorties (row 11): how many row fragments were created.
-    private(set) var rowFragmentCreations = 0
-
-    /// Instrumentation: how many display paragraphs the content-storage delegate vended.
-    private(set) var displayParagraphCount = 0
-
-    weak var editor: EscriboTextView?
-
-    init(editor: EscriboTextView) {
-      self.editor = editor
-      super.init()
-    }
-
-    /// The zoom factor the styler is composing with.
-    var scale: CGFloat {
-      CGFloat(editor?.coordinator.styler.environment.metrics.pointSizeScale ?? 1)
-    }
-
-    var rowHeight: CGFloat { Self.baseRowHeight * scale }
-
-    /// Blocks from the spike's own scan, used when the coordinator's spliced cache is not
-    /// trustworthy. Cleared on every character edit (`storageWillProcessEditing`).
-    private var fallbackBlocks: [EscriboBlock]?
-
-    /// How many times the fallback full scan ran (row 11 instrumentation).
-    private(set) var fallbackScans = 0
-
-    /// The document's blocks: the coordinator's document-wide cache while it is sound
-    /// (`blocksSpanDocument`), otherwise a read-only scan of the storage string. Row 11 found
-    /// that an ordinary keystroke above a block can leave the cache unspliced (stale offsets),
-    /// and the coordinator's own fallback (`block(atUTF16Offset:)`) restyles the storage,
-    /// which must not happen from inside a layout-fragment request.
-    func documentBlocks() -> [EscriboBlock] {
-      guard let coordinator = editor?.coordinator else { return [] }
-      if coordinator.blocksSpanDocument { return coordinator.documentBlocks }
-      if let fallbackBlocks { return fallbackBlocks }
-      guard let storage = editor?.textView.textStorage else { return [] }
-      var scanner = EscriboScanner(language: coordinator.language)
-      let blocks = scanner.fullScan(storage.string).blocks
-      fallbackScans += 1
-      fallbackBlocks = blocks
-      return blocks
-    }
-
-    /// Embedded (collapsed) block ranges, from the document's blocks.
-    func embeddedRanges() -> [NSRange] {
-      guard !registry.embeds.isEmpty else { return [] }
-      return registry.embeddedRanges(in: documentBlocks())
-    }
-
-    /// The embedded range containing a paragraph starting at `offset`, and whether the
-    /// paragraph is the block's first.
-    func embed(containingParagraphAt offset: Int) -> (range: NSRange, isFirst: Bool)? {
-      for range in embeddedRanges() where offset >= range.location && offset < NSMaxRange(range) {
-        return (range, offset == range.location)
-      }
-      return nil
-    }
-
-    func content(for range: NSRange) -> SpikeEmbedContent? {
-      registry.embeds[range.location]
-    }
-
-    /// Leading indent of the block's first paragraph, read from the real storage.
-    func leadingIndent(at offset: Int) -> CGFloat {
-      guard let storage = editor?.textView.textStorage, offset < storage.length,
-        let style = storage.attribute(.paragraphStyle, at: offset, effectiveRange: nil)
-          as? NSParagraphStyle
-      else { return 0 }
-      return style.firstLineHeadIndent
-    }
-
-    // MARK: - Invalidation
-
-    func invalidate(range: NSRange) {
-      guard let textView = editor?.textView,
-        let layoutManager = textView.textLayoutManager,
-        let contentStorage = layoutManager.textContentManager as? NSTextContentStorage,
-        let start = contentStorage.location(contentStorage.documentRange.location, offsetBy: range.location),
-        let end = contentStorage.location(start, offsetBy: range.length),
-        let textRange = NSTextRange(location: start, end: end)
-      else { return }
-      // `invalidateLayout(for:)` alone keeps the existing fragment objects, so the delegate
-      // would never be asked again. A same-range edit recorded on the content manager only
-      // makes the layout manager discard and re-request the block's fragments. The backing
-      // NSTextStorage is not edited, so `processEditing` never runs and the coordinator never
-      // hears of it (asserted by the row 2 test via `restyleCount`).
-      contentStorage.performEditingTransaction {
-        contentStorage.recordEditAction(in: textRange, newTextRange: textRange)
-      }
-      layoutManager.invalidateLayout(for: textRange)
-      textView.needsDisplay = true
-    }
+  final class MacBlockEmbedController: SpikeBlockEmbedController {
 
     // MARK: - Atomic behaviour (rows 3–7)
-
-    /// The live embedded ranges, dropped if they no longer fit the storage (the coordinator's
-    /// blocks can lag the storage by one edit while `NSTextView` fixes up the selection).
-    private func liveEmbeds() -> [NSRange] {
-      guard let length = editor?.textView.textStorage?.length else { return [] }
-      return embeddedRanges().filter { NSMaxRange($0) <= length }
-    }
 
     /// Row 3/4: every proposed selection goes through `SpikeEmbedSelection.constrain`.
     /// Needed because the zero-height fragments keep their real line fragments, so AppKit's
@@ -170,28 +30,6 @@
         guard NSMaxRange(constrained) <= length else { return value }
         return NSValue(range: constrained)
       }
-    }
-
-    /// Row 7 (and a guard for row 5): an edit may not put characters into, or remove part
-    /// of, an embed. Pure deletions that cover every embed they touch are allowed.
-    func allowsEdit(in range: NSRange, replacement: String?) -> Bool {
-      // Attribute-only changes (`nil` replacement) are never the user's keystroke.
-      guard let replacement else { return true }
-      for embed in liveEmbeds() {
-        let start = embed.location
-        let end = NSMaxRange(embed)
-        let touches: Bool
-        if range.length == 0 {
-          touches = range.location > start && range.location < end
-        } else {
-          touches = range.location < end && NSMaxRange(range) > start
-        }
-        guard touches else { continue }
-        if !replacement.isEmpty { return false }
-        let coversWhole = range.location <= start && NSMaxRange(range) >= end
-        if !coversWhole { return false }
-      }
-      return true
     }
 
     /// Row 5: with an embed exactly selected, Delete removes the embed's `deletionRange`
@@ -213,54 +51,6 @@
       return true
     }
 
-    // MARK: - Keeping registry keys in step with edits (row 11)
-
-    /// Registry keys are block start offsets, so an edit above a block moves its key.
-    /// `willProcessEditing` fires before the storage delegate (the coordinator) re-scans, so
-    /// the keys already match the new blocks when the scan and the next layout run.
-    /// Observes a notification — the storage's delegate slot belongs to the coordinator.
-    func observe(storage: NSTextStorage) {
-      NotificationCenter.default.addObserver(
-        self, selector: #selector(storageWillProcessEditing(_:)),
-        name: NSTextStorage.willProcessEditingNotification, object: storage)
-    }
-
-    @objc private func storageWillProcessEditing(_ note: Notification) {
-      guard let storage = note.object as? NSTextStorage,
-        storage.editedMask.contains(.editedCharacters)
-      else { return }
-      fallbackBlocks = nil
-      let delta = storage.changeInLength
-      let edited = storage.editedRange
-      // The range the edit replaced, in pre-edit offsets.
-      let oldStart = edited.location
-      let oldEnd = NSMaxRange(edited) - delta
-      func moved(_ key: Int) -> Int? {
-        if key < oldStart { return key }
-        if key >= oldEnd { return key + delta }
-        return nil  // the block's first character was replaced: the embed goes with it
-      }
-      registry.embeds = Dictionary(
-        uniqueKeysWithValues: registry.embeds.compactMap { key, value in
-          moved(key).map { ($0, value) }
-        })
-      registry.expanded = Set(registry.expanded.compactMap(moved))
-    }
-
-    // MARK: - Expand / collapse (row 8)
-
-    /// Expands (draws as ordinary text, caret may enter) or collapses one embedded block.
-    func setExpanded(_ expanded: Bool, forBlockStartingAt offset: Int) {
-      guard registry.embeds[offset] != nil,
-        let block = documentBlocks().first(where: { $0.range.lowerBound == offset })
-      else { return }
-      if expanded { registry.expanded.insert(offset) } else { registry.expanded.remove(offset) }
-      invalidate(range: NSRange(location: offset, length: block.range.count))
-      // Collapsing under a caret that is inside the block: push it through the filter again.
-      if !expanded, let textView = editor?.textView {
-        textView.setSelectedRange(textView.selectedRange())
-      }
-    }
 
     // MARK: - Accessibility (row 9)
 
@@ -334,132 +124,11 @@
     }
   }
 
-  // MARK: - NSTextLayoutManagerDelegate
+  // MARK: - Row drawing
 
-  extension MacBlockEmbedController: @preconcurrency NSTextLayoutManagerDelegate {
-    func textLayoutManager(
-      _ textLayoutManager: NSTextLayoutManager,
-      textLayoutFragmentFor location: any NSTextLocation,
-      in textElement: NSTextElement
-    ) -> NSTextLayoutFragment {
-      makeFragment(textLayoutManager, location: location, element: textElement)
-    }
-
-    private func makeFragment(
-      _ textLayoutManager: NSTextLayoutManager, location: any NSTextLocation,
-      element: NSTextElement
-    ) -> NSTextLayoutFragment {
-      let plain = { NSTextLayoutFragment(textElement: element, range: element.elementRange) }
-      guard let contentManager = textLayoutManager.textContentManager,
-        let elementRange = element.elementRange
-      else { return plain() }
-      let offset = contentManager.offset(
-        from: contentManager.documentRange.location, to: elementRange.location)
-      guard let hit = embed(containingParagraphAt: offset) else { return plain() }
-
-      let fragment: SpikeEmbedFragment
-      if hit.isFirst, let content = content(for: hit.range) {
-        rowFragmentCreations += 1
-        fragment = SpikeEmbedRowFragment(textElement: element, range: elementRange)
-        (fragment as! SpikeEmbedRowFragment).content = content
-        fragment.indent = leadingIndent(at: hit.range.location)
-      } else {
-        fragment = SpikeEmbedCollapsedFragment(textElement: element, range: elementRange)
-      }
-      fragment.rowHeight = rowHeight
-      fragment.scale = scale
-      fragment.overridesFrame = mechanism == .fragmentFrameOverride
-      return fragment
-    }
-  }
-
-  // MARK: - NSTextContentStorageDelegate
-
-  extension MacBlockEmbedController: @preconcurrency NSTextContentStorageDelegate {
-    func textContentStorage(
-      _ textContentStorage: NSTextContentStorage, textParagraphWith range: NSRange
-    ) -> NSTextParagraph? {
-      displayParagraph(textContentStorage, range: range)
-    }
-
-    private func displayParagraph(_ storage: NSTextContentStorage, range: NSRange)
-      -> NSTextParagraph?
-    {
-      guard mechanism == .contentStorageParagraph,
-        let hit = embed(containingParagraphAt: range.location),
-        let source = storage.textStorage
-      else { return nil }
-
-      // Same characters, display-only attributes. The real storage is only read.
-      let display = NSMutableAttributedString(attributedString: source.attributedSubstring(from: range))
-      let style = NSMutableParagraphStyle()
-      if let original = display.attribute(.paragraphStyle, at: 0, effectiveRange: nil)
-        as? NSParagraphStyle
-      {
-        style.setParagraphStyle(original)
-      }
-      let height = hit.isFirst ? rowHeight : Self.collapsedLineHeight
-      style.minimumLineHeight = height
-      style.maximumLineHeight = height
-      style.lineSpacing = 0
-      style.paragraphSpacing = 0
-      style.paragraphSpacingBefore = 0
-      style.lineHeightMultiple = 0
-      // No wrapping: the whole paragraph is one (clipped) line, so a long note line cannot
-      // add a second line of height.
-      style.lineBreakMode = .byClipping
-      let whole = NSRange(location: 0, length: display.length)
-      display.addAttribute(.paragraphStyle, value: style, range: whole)
-      // A tiny font keeps the glyph run inside one line whatever the paragraph's length.
-      display.addAttribute(.font, value: NSFont.systemFont(ofSize: 0.01), range: whole)
-      displayParagraphCount += 1
-      return NSTextParagraph(attributedString: display)
-    }
-  }
-
-  // MARK: - Fragments
-
-  /// Base for the spike's fragments: carries the row geometry and the frame override.
-  class SpikeEmbedFragment: NSTextLayoutFragment {
-    /// The row spans the text container's usable width, not the paragraph's own text width.
-    var rowWidth: CGFloat {
-      if let container = textLayoutManager?.textContainer, container.size.width > 0 {
-        return max(0, container.size.width - 2 * container.lineFragmentPadding)
-      }
-      return super.layoutFragmentFrame.width
-    }
-
-    var rowHeight: CGFloat = 44
-    var scale: CGFloat = 1
-    var indent: CGFloat = 0
-    var overridesFrame = false
-
-    /// The height this fragment claims when it overrides its frame.
-    var claimedHeight: CGFloat { rowHeight }
-
-    override var layoutFragmentFrame: CGRect {
-      var frame = super.layoutFragmentFrame
-      if overridesFrame { frame.size.height = claimedHeight }
-      return frame
-    }
-
-    override var renderingSurfaceBounds: CGRect {
-      CGRect(x: 0, y: 0, width: rowWidth, height: rowHeight)
-    }
-  }
-
-  /// The first paragraph of an embedded block: draws the whole row.
-  final class SpikeEmbedRowFragment: SpikeEmbedFragment {
-    var content: SpikeEmbedContent?
-
-    override func draw(at point: CGPoint, in context: CGContext) {
-      guard let content else { return }
-      let width = rowWidth
-      let rect = CGRect(
-        x: point.x + indent, y: point.y,
-        width: max(0, width - indent), height: rowHeight
-      ).insetBy(dx: 0, dy: 2 * scale)
-
+  extension SpikeEmbedRowFragment {
+    /// Draws the row (rounded background, SF Symbol, title, subtitle, badge) into `rect`.
+    func drawRow(_ content: SpikeEmbedContent, in rect: CGRect, context: CGContext) {
       NSGraphicsContext.saveGraphicsState()
       defer { NSGraphicsContext.restoreGraphicsState() }
       let ns = NSGraphicsContext(cgContext: context, flipped: true)
@@ -508,14 +177,6 @@
     }
   }
 
-  /// Paragraphs 2…N of an embedded block: draw nothing and (when the mechanism allows)
-  /// take no height.
-  final class SpikeEmbedCollapsedFragment: SpikeEmbedFragment {
-    override var claimedHeight: CGFloat { 0 }
-    override var renderingSurfaceBounds: CGRect { .zero }
-    override func draw(at point: CGPoint, in context: CGContext) {}
-  }
-
   // MARK: - Entry point on the text view
 
   @MainActor private var spikeControllerKey: UInt8 = 0
@@ -532,9 +193,7 @@
       let controller = MacBlockEmbedController(editor: self)
       objc_setAssociatedObject(
         textView, &spikeControllerKey, controller, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-      textView.textLayoutManager?.delegate = controller
-      (textView.textLayoutManager?.textContentManager as? NSTextContentStorage)?.delegate =
-        controller
+      controller.install(on: textView, storage: documentStorage)
       // Rows 3–7: the `// SPIKE` hooks on the text view subclass (not the delegate, which
       // belongs to the SwiftUI bridge).
       textView.spikeSelectionFilter = { [weak controller] proposed, current in
@@ -549,23 +208,7 @@
       textView.spikeAccessibilityChildren = { [weak controller] in
         controller?.accessibilityElements() ?? []
       }
-      if let storage = textView.textStorage { controller.observe(storage: storage) }
       return controller
-    }
-
-    /// Embeds (or, with `nil`, un-embeds) the block starting at `offset`. Updates the
-    /// registry and invalidates layout for that block only. Never touches `textStorage`.
-    func spikeSetEmbed(_ content: SpikeEmbedContent?, forBlockStartingAt offset: Int) {
-      let controller = spikeEmbeds
-      controller.registry.embeds[offset] = content
-      guard let block = controller.documentBlocks().first(where: { $0.range.lowerBound == offset })
-      else { return }
-      controller.invalidate(range: NSRange(location: offset, length: block.range.count))
-    }
-
-    /// Row 8: the host's *Edit as Text* toggle for one embedded block.
-    func spikeSetExpanded(_ expanded: Bool, forBlockStartingAt offset: Int) {
-      spikeEmbeds.setExpanded(expanded, forBlockStartingAt: offset)
     }
   }
 #endif
