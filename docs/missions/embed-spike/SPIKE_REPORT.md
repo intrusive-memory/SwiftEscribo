@@ -9,6 +9,9 @@ branch: spike/block-embeds
 
 # Spike report: atomic block embeds on TextKit 2
 
+> The spike code, tests, `EXECUTION_PLAN.md` and `SUPERVISOR_STATE.md` live on the unmerged
+> branch `spike/block-embeds`. Only this report and its evidence PNGs are proposed for `development`.
+
 **Question** (`REQUIREMENTS.md`): can SwiftEscribo draw one block as a single atomic row
 (symbol, title, subtitle, badge) while its characters stay in the text storage unchanged,
 on macOS (`NSTextView`) and iOS (`UITextView`), on TextKit 2?

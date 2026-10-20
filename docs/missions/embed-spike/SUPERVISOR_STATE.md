@@ -46,7 +46,7 @@ type: supervisor-state
 | 5 | iOS | COMPLETED | 1/3 | opus | 39095a3; rows 1,2,10 pass |
 | 6 | iOS | COMPLETED | 1/3 | opus | 688f2f6; rows 3–7 pass; make test-ios green |
 | 7 | iOS | COMPLETED | 1/3 | opus | 811d79d; rows 8,9,11 pass; verifier PASS |
-| 8 | Report | DISPATCHED | 1/3 | opus | |
+| 8 | Report | COMPLETED | 1/3 | opus | 0543e3a; verifier PASS |
 
 ## Decisions Log
 | Timestamp | Work Unit | Sortie | Decision | Rationale |
@@ -71,3 +71,6 @@ type: supervisor-state
 | 2026-10-20T19:30Z | iOS | 7 | VERIFYING | 811d79d. 17/17 iOS spike tests; make test-ios green. a11y via accessibilityElements override (UIKit count/index API returned 0 in test host — hook answers it). Row 11: iOS block list stayed trustworthy (no rescan). PNGs via layer.render (drawHierarchy blank in test host). |
 | 2026-10-20T19:32Z | iOS | 7 | COMPLETED | verifier VERDICT: PASS on ios-embed-collapsed.png. iOS work unit COMPLETED. |
 | 2026-10-20T19:32Z | Report | 8 | Model: opus | synthesis of evidence + release estimate; [judgment] citation check |
+| 2026-10-20T20:15Z | Report | 8 | Watchdog intervention | make test (macOS) hung 29 min at 0% CPU in pre-existing GeometryRuleSetTests → FontResolver.firstAvailable → NSFont(name:size:) → libFontRegistry sync XPC (font daemon). Environmental. Killed; told agent to retry once with timeout, else record and cite targeted + earlier full runs. |
+| 2026-10-20T20:45Z | Report | 8 | COMPLETED | 0543e3a. make test (re-run) and make test-ios green. Citation verifier PASS. Recommendation: macOS go (conditional on block-cache splice fix), iOS go (conditional on live input/VoiceOver check + accepting private UIKit delegate chaining). macOS 9 PASS/2 PARTIAL; iOS 5 PASS/6 PARTIAL; 0 FAIL. All work units COMPLETED. |
+| 2026-10-20T20:45Z | — | — | Post-mission | test-cleanup: no CI-hostile patterns in spike tests (no hardcoded paths, sleeps, or general-pasteboard reads; evidence test env-gated); nothing pruned. Brief/clean archival skipped: branch is throwaway and unmerged; SPIKE_REPORT.md is the deliverable. |
