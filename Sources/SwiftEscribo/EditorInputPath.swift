@@ -193,6 +193,15 @@ struct CaretLineContext: Equatable {
       super.deleteForward(sender)
     }
 
+    /// SPIKE: extra accessibility children (one element per collapsed embed, row 9).
+    var spikeAccessibilityChildren: (@MainActor () -> [Any])?
+
+    override func accessibilityChildren() -> [Any]? {
+      let base = super.accessibilityChildren()
+      guard let extra = spikeAccessibilityChildren?(), !extra.isEmpty else { return base }
+      return (base ?? []) + extra
+    }
+
     // MARK: The paragraph well's inputs (REQUIREMENTS-1.1.0 § 5.2)
 
     /// The well drawn into this view, which these overrides feed. Weak: the editor owns it.

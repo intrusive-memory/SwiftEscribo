@@ -493,5 +493,194 @@
       tv.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
       #expect(tv.string != original)
     }
+
+    // MARK: - Row 8: expand / collapse
+
+    @Test("row 8: expand draws the block as text and lets the caret in; collapse restores the row and the snap")
+    func row8ExpandCollapse() throws {
+      let h = try SpikeMacHarness()
+      h.embed()
+      let tv = h.editor.textView
+      let note = h.note
+      let inside = note.location + 5
+      #expect(h.notParagraphs(h.layout()).first?.fragment is SpikeEmbedRowFragment)
+
+      // Expanded: ordinary fragments, ordinary heights, caret may enter.
+      h.editor.spikeSetExpanded(true, forBlockStartingAt: note.location)
+      let expanded = h.notParagraphs(h.layout())
+      #expect(expanded.count == 3)
+      for p in expanded {
+        #expect(type(of: p.fragment) == NSTextLayoutFragment.self)
+        #expect(p.frame.height > 0)
+      }
+      tv.setSelectedRange(NSRange(location: inside, length: 0))
+      #expect(tv.selectedRange() == NSRange(location: inside, length: 0))
+      tv.moveRight(nil)
+      #expect(tv.selectedRange() == NSRange(location: inside + 1, length: 0))
+      #expect(h.editor.spikeEmbeds.accessibilityElements().isEmpty)
+
+      // Collapsed again with the caret inside: the row returns and the caret is pushed out.
+      h.editor.spikeSetExpanded(false, forBlockStartingAt: note.location)
+      let collapsed = h.layout()
+      let paras = h.notParagraphs(collapsed)
+      #expect(paras.first?.fragment is SpikeEmbedRowFragment)
+      #expect(abs(h.noteExtent(collapsed) - h.editor.spikeEmbeds.rowHeight) <= 0.5)
+      #expect(!Self.strictlyInside(tv.selectedRange().location, note))
+      tv.setSelectedRange(NSRange(location: inside, length: 0))
+      let loc = tv.selectedRange().location
+      #expect(loc == note.location || loc == NSMaxRange(note))
+    }
+
+    // MARK: - Row 9: accessibility
+
+    @Test("row 9: one accessibility element per embed, label/value from the host, press fires the callback once")
+    func row9Accessibility() throws {
+      let h = try SpikeMacHarness()
+      let tv = h.editor.textView
+      let before = tv.accessibilityChildren() ?? []
+      #expect(!before.contains { $0 is SpikeEmbedAccessibilityElement })
+
+      h.embed()
+      _ = h.layout()
+      var activations: [Int] = []
+      h.editor.spikeEmbeds.onSpikeEmbedActivate = { activations.append($0) }
+
+      let children = tv.accessibilityChildren() ?? []
+      let elements = children.compactMap { $0 as? SpikeEmbedAccessibilityElement }
+      #expect(elements.count == 1)
+      let element = try #require(elements.first)
+      #expect(element.accessibilityRole() == .button)
+      #expect(element.accessibilityLabel() == SpikeMacHarness.content.title)
+      #expect(
+        element.accessibilityValue() as? String
+          == "\(SpikeMacHarness.content.subtitle), \(SpikeMacHarness.content.badge)")
+      #expect((element.accessibilityParent() as AnyObject?) === tv)
+      // Stable identity across queries.
+      #expect((tv.accessibilityChildren() ?? []).contains { ($0 as AnyObject) === element })
+
+      // The element's frame is the row.
+      let row = try #require(h.notParagraphs(h.layout()).first)
+      let frame = element.accessibilityFrameInParentSpace()
+      let origin = tv.textContainerOrigin
+      #expect(abs(frame.minY - (row.frame.minY + origin.y)) <= 0.5)
+      #expect(abs(frame.height - h.editor.spikeEmbeds.rowHeight) <= 0.5)
+      #expect(frame.width > 0)
+
+      // In a window, AppKit reports it in screen coordinates.
+      let window = NSWindow(
+        contentRect: CGRect(x: 100, y: 100, width: 600, height: 800), styleMask: [.titled],
+        backing: .buffered, defer: true)
+      window.contentView = h.editor.scrollView
+      let screenFrame = element.accessibilityFrame()
+      let expected = window.convertToScreen(tv.convert(frame, to: nil))
+      #expect(abs(screenFrame.minX - expected.minX) <= 1 && abs(screenFrame.minY - expected.minY) <= 1,
+        "screen \(screenFrame) vs \(expected)")
+      #expect(abs(screenFrame.height - expected.height) <= 1)
+
+      #expect(element.accessibilityPerformPress())
+      #expect(activations == [h.note.location])
+
+      // Expanded: no element.
+      h.editor.spikeSetExpanded(true, forBlockStartingAt: h.note.location)
+      #expect(!(tv.accessibilityChildren() ?? []).contains { $0 is SpikeEmbedAccessibilityElement })
+      withExtendedLifetime(window) {}
+    }
+
+    // MARK: - Row 11: scroll and edit elsewhere
+
+    @Test("row 11: typing above the block and scrolling keep the row drawn; ≤ 2 row-fragment creations per step")
+    func row11ScrollAndEditStability() throws {
+      let h = try SpikeMacHarness()
+      // A short viewport so the document actually scrolls.
+      h.editor.scrollView.frame = CGRect(x: 0, y: 0, width: 600, height: 120)
+      h.embed()
+      _ = h.layout()
+      let tv = h.editor.textView
+      let controller = h.editor.spikeEmbeds
+      let rowHeight = controller.rowHeight
+      let original = tv.string
+
+      func checkRow(_ step: String, noteStart: Int) throws -> Void {
+        tv.textLayoutManager?.textViewportLayoutController.layoutViewport()
+        let laid = h.layout()
+        let paras = laid.filter { $0.offset >= noteStart && $0.offset < noteStart + h.note.length }
+        let first = try #require(paras.first, "\(step): no note paragraphs")
+        #expect(first.offset == noteStart, "\(step)")
+        #expect(first.fragment is SpikeEmbedRowFragment, "\(step): \(type(of: first.fragment))")
+        #expect(abs(first.frame.height - rowHeight) <= 0.5, "\(step): height \(first.frame.height)")
+        let extent = (paras.last?.frame.maxY ?? 0) - first.frame.minY
+        #expect(abs(extent - rowHeight) <= 0.5, "\(step): extent \(extent)")
+      }
+
+      // Insert 20 characters, one keystroke at a time, at the end of the action line above.
+      let lineEnd = (original as NSString).range(of: "door.").upperBound
+      var perEdit: [Int] = []
+      for i in 0..<20 {
+        let before = controller.rowFragmentCreations
+        tv.setSelectedRange(NSRange(location: lineEnd + i, length: 0))
+        tv.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
+        try checkRow("edit \(i + 1)", noteStart: h.note.location + i + 1)
+        perEdit.append(controller.rowFragmentCreations - before)
+      }
+      #expect(tv.string.count == original.count + 20)
+      #expect(controller.registry.embeds.keys.sorted() == [h.note.location + 20])
+      #expect(perEdit.allSatisfy { $0 <= 2 }, "row fragment creations per edit: \(perEdit)")
+      let noteStart = h.note.location + 20
+
+      // Scroll to the bottom and back, several times.
+      let clip = h.editor.scrollView.contentView
+      let docHeight = h.editor.scrollView.documentView?.frame.height ?? 0
+      #expect(docHeight > h.editor.scrollView.frame.height)
+      var perScroll: [Int] = []
+      for (i, y) in [docHeight, 0, docHeight / 2, docHeight, 0].enumerated() {
+        let before = controller.rowFragmentCreations
+        clip.scroll(to: NSPoint(x: 0, y: max(0, y - clip.bounds.height)))
+        h.editor.scrollView.reflectScrolledClipView(clip)
+        try checkRow("scroll \(i)", noteStart: noteStart)
+        perScroll.append(controller.rowFragmentCreations - before)
+      }
+      #expect(perScroll.allSatisfy { $0 <= 2 }, "row fragment creations per scroll: \(perScroll)")
+      print("SPIKE row 11 creations per edit: \(perEdit); per scroll: \(perScroll); fallback scans: \(controller.fallbackScans); blocksSpanDocument: \(h.editor.coordinator.blocksSpanDocument)")
+    }
+
+    // MARK: - Screenshot evidence
+
+    @Test("evidence: renders collapsed / expanded / zoom2x PNGs when ESCRIBO_SPIKE_EVIDENCE_DIR is set")
+    func screenshotEvidence() throws {
+      guard let dir = ProcessInfo.processInfo.environment["ESCRIBO_SPIKE_EVIDENCE_DIR"],
+        !dir.isEmpty
+      else { return }  // CI: no-op
+      let url = URL(fileURLWithPath: dir, isDirectory: true)
+      try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+
+      func render(_ h: SpikeMacHarness, height: CGFloat, to name: String) throws {
+        let scroll = h.editor.scrollView
+        scroll.appearance = NSAppearance(named: .aqua)
+        h.editor.textView.appearance = NSAppearance(named: .aqua)
+        scroll.frame = CGRect(x: 0, y: 0, width: 600, height: height)
+        _ = h.layout()
+        h.editor.textView.textLayoutManager?.textViewportLayoutController.layoutViewport()
+        scroll.layoutSubtreeIfNeeded()
+        let rep = try #require(scroll.bitmapImageRepForCachingDisplay(in: scroll.bounds))
+        NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance {
+          scroll.cacheDisplay(in: scroll.bounds, to: rep)
+        }
+        let png = try #require(rep.representation(using: .png, properties: [:]))
+        try png.write(to: url.appendingPathComponent(name))
+      }
+
+      let collapsed = try SpikeMacHarness()
+      collapsed.embed()
+      try render(collapsed, height: 260, to: "mac-embed-collapsed.png")
+
+      let expanded = try SpikeMacHarness()
+      expanded.embed()
+      expanded.editor.spikeSetExpanded(true, forBlockStartingAt: expanded.note.location)
+      try render(expanded, height: 260, to: "mac-embed-expanded.png")
+
+      let zoomed = try SpikeMacHarness(scale: 2)
+      zoomed.embed()
+      try render(zoomed, height: 480, to: "mac-embed-zoom2x.png")
+    }
   }
 #endif

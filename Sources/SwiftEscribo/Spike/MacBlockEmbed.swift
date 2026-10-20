@@ -71,10 +71,34 @@
 
     var rowHeight: CGFloat { Self.baseRowHeight * scale }
 
-    /// Embedded (collapsed) block ranges, from the coordinator's document-wide blocks.
+    /// Blocks from the spike's own scan, used when the coordinator's spliced cache is not
+    /// trustworthy. Cleared on every character edit (`storageWillProcessEditing`).
+    private var fallbackBlocks: [EscriboBlock]?
+
+    /// How many times the fallback full scan ran (row 11 instrumentation).
+    private(set) var fallbackScans = 0
+
+    /// The document's blocks: the coordinator's document-wide cache while it is sound
+    /// (`blocksSpanDocument`), otherwise a read-only scan of the storage string. Row 11 found
+    /// that an ordinary keystroke above a block can leave the cache unspliced (stale offsets),
+    /// and the coordinator's own fallback (`block(atUTF16Offset:)`) restyles the storage,
+    /// which must not happen from inside a layout-fragment request.
+    func documentBlocks() -> [EscriboBlock] {
+      guard let coordinator = editor?.coordinator else { return [] }
+      if coordinator.blocksSpanDocument { return coordinator.documentBlocks }
+      if let fallbackBlocks { return fallbackBlocks }
+      guard let storage = editor?.textView.textStorage else { return [] }
+      var scanner = EscriboScanner(language: coordinator.language)
+      let blocks = scanner.fullScan(storage.string).blocks
+      fallbackScans += 1
+      fallbackBlocks = blocks
+      return blocks
+    }
+
+    /// Embedded (collapsed) block ranges, from the document's blocks.
     func embeddedRanges() -> [NSRange] {
-      guard let coordinator = editor?.coordinator, !registry.embeds.isEmpty else { return [] }
-      return registry.embeddedRanges(in: coordinator.documentBlocks)
+      guard !registry.embeds.isEmpty else { return [] }
+      return registry.embeddedRanges(in: documentBlocks())
     }
 
     /// The embedded range containing a paragraph starting at `offset`, and whether the
@@ -181,19 +205,131 @@
       guard let embed = liveEmbeds().first(where: { $0 == selection }) else { return false }
       let removal = SpikeEmbedSelection.deletionRange(for: embed, in: storage.string as NSString)
       guard textView.shouldChangeText(in: removal, replacementString: "") else { return true }
-      // The block is gone: drop its registry entry and shift later keys before storage
-      // processing re-scans, so the filter never sees a stale offset.
-      registry.embeds[embed.location] = nil
-      registry.expanded.remove(embed.location)
-      registry.embeds = Dictionary(
-        uniqueKeysWithValues: registry.embeds.map { key, value in
-          (key > embed.location ? key - removal.length : key, value)
-        })
-      registry.expanded = Set(
-        registry.expanded.map { $0 > embed.location ? $0 - removal.length : $0 })
+      // The registry entry is dropped (and later keys shifted) by `storageWillProcessEditing`,
+      // before the coordinator re-scans.
       storage.replaceCharacters(in: removal, with: "")
       textView.didChangeText()
       textView.setSelectedRange(NSRange(location: removal.location, length: 0))
+      return true
+    }
+
+    // MARK: - Keeping registry keys in step with edits (row 11)
+
+    /// Registry keys are block start offsets, so an edit above a block moves its key.
+    /// `willProcessEditing` fires before the storage delegate (the coordinator) re-scans, so
+    /// the keys already match the new blocks when the scan and the next layout run.
+    /// Observes a notification — the storage's delegate slot belongs to the coordinator.
+    func observe(storage: NSTextStorage) {
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(storageWillProcessEditing(_:)),
+        name: NSTextStorage.willProcessEditingNotification, object: storage)
+    }
+
+    @objc private func storageWillProcessEditing(_ note: Notification) {
+      guard let storage = note.object as? NSTextStorage,
+        storage.editedMask.contains(.editedCharacters)
+      else { return }
+      fallbackBlocks = nil
+      let delta = storage.changeInLength
+      let edited = storage.editedRange
+      // The range the edit replaced, in pre-edit offsets.
+      let oldStart = edited.location
+      let oldEnd = NSMaxRange(edited) - delta
+      func moved(_ key: Int) -> Int? {
+        if key < oldStart { return key }
+        if key >= oldEnd { return key + delta }
+        return nil  // the block's first character was replaced: the embed goes with it
+      }
+      registry.embeds = Dictionary(
+        uniqueKeysWithValues: registry.embeds.compactMap { key, value in
+          moved(key).map { ($0, value) }
+        })
+      registry.expanded = Set(registry.expanded.compactMap(moved))
+    }
+
+    // MARK: - Expand / collapse (row 8)
+
+    /// Expands (draws as ordinary text, caret may enter) or collapses one embedded block.
+    func setExpanded(_ expanded: Bool, forBlockStartingAt offset: Int) {
+      guard registry.embeds[offset] != nil,
+        let block = documentBlocks().first(where: { $0.range.lowerBound == offset })
+      else { return }
+      if expanded { registry.expanded.insert(offset) } else { registry.expanded.remove(offset) }
+      invalidate(range: NSRange(location: offset, length: block.range.count))
+      // Collapsing under a caret that is inside the block: push it through the filter again.
+      if !expanded, let textView = editor?.textView {
+        textView.setSelectedRange(textView.selectedRange())
+      }
+    }
+
+    // MARK: - Accessibility (row 9)
+
+    /// Called with the block's start offset when an embed's accessibility element is pressed.
+    var onSpikeEmbedActivate: ((Int) -> Void)?
+
+    /// Elements kept by block offset so VoiceOver sees stable identities across queries.
+    private var accessibilityCache: [Int: SpikeEmbedAccessibilityElement] = [:]
+
+    /// The row's rectangle in the text view's coordinates, from its layout fragment.
+    func rowRect(forBlockAt range: NSRange) -> CGRect? {
+      guard let textView = editor?.textView,
+        let layoutManager = textView.textLayoutManager,
+        let contentManager = layoutManager.textContentManager,
+        let location = contentManager.location(
+          contentManager.documentRange.location, offsetBy: range.location),
+        let fragment = layoutManager.textLayoutFragment(for: location) as? SpikeEmbedRowFragment
+      else { return nil }
+      let frame = fragment.layoutFragmentFrame
+      let origin = textView.textContainerOrigin
+      return CGRect(
+        x: frame.minX + origin.x + fragment.indent, y: frame.minY + origin.y,
+        width: max(0, fragment.rowWidth - fragment.indent), height: frame.height)
+    }
+
+    /// One element per collapsed embed: role button, label = title, value = subtitle + badge,
+    /// frame = the row (in parent space, which AppKit converts to screen coordinates).
+    func accessibilityElements() -> [SpikeEmbedAccessibilityElement] {
+      guard let textView = editor?.textView else { return [] }
+      var result: [SpikeEmbedAccessibilityElement] = []
+      var live: [Int: SpikeEmbedAccessibilityElement] = [:]
+      for range in liveEmbeds() {
+        guard let content = content(for: range) else { continue }
+        let element = accessibilityCache[range.location] ?? SpikeEmbedAccessibilityElement()
+        element.setAccessibilityRole(.button)
+        element.setAccessibilityLabel(content.title)
+        element.setAccessibilityValue("\(content.subtitle), \(content.badge)")
+        element.setAccessibilityParent(textView)
+        element.view = textView
+        element.rowRect = rowRect(forBlockAt: range) ?? .zero
+        element.setAccessibilityFrameInParentSpace(element.rowRect)
+        let offset = range.location
+        element.onPress = { [weak self] in self?.onSpikeEmbedActivate?(offset) }
+        live[offset] = element
+        result.append(element)
+      }
+      accessibilityCache = live
+      return result
+    }
+  }
+
+  /// Row 9: the accessibility element standing for one collapsed embed.
+  final class SpikeEmbedAccessibilityElement: NSAccessibilityElement {
+    var onPress: (@MainActor () -> Void)?
+    weak var view: NSView?
+    /// The row in `view`'s (flipped) coordinates.
+    var rowRect: CGRect = .zero
+
+    /// Screen coordinates. AppKit's default conversion from `accessibilityFrameInParentSpace`
+    /// did not match the view's own conversion for the flipped text view (row 9), so convert
+    /// explicitly.
+    override func accessibilityFrame() -> NSRect {
+      guard let view, view.window != nil else { return super.accessibilityFrame() }
+      return NSAccessibility.screenRect(fromView: view, rect: rowRect)
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+      guard let onPress else { return false }
+      MainActor.assumeIsolated { onPress() }
       return true
     }
   }
@@ -410,6 +546,10 @@
       textView.spikeDeleteHandler = { [weak controller] in
         controller?.deleteSelectedEmbed() ?? false
       }
+      textView.spikeAccessibilityChildren = { [weak controller] in
+        controller?.accessibilityElements() ?? []
+      }
+      if let storage = textView.textStorage { controller.observe(storage: storage) }
       return controller
     }
 
@@ -418,9 +558,14 @@
     func spikeSetEmbed(_ content: SpikeEmbedContent?, forBlockStartingAt offset: Int) {
       let controller = spikeEmbeds
       controller.registry.embeds[offset] = content
-      guard let block = coordinator.documentBlocks.first(where: { $0.range.lowerBound == offset })
+      guard let block = controller.documentBlocks().first(where: { $0.range.lowerBound == offset })
       else { return }
       controller.invalidate(range: NSRange(location: offset, length: block.range.count))
+    }
+
+    /// Row 8: the host's *Edit as Text* toggle for one embedded block.
+    func spikeSetExpanded(_ expanded: Bool, forBlockStartingAt offset: Int) {
+      spikeEmbeds.setExpanded(expanded, forBlockStartingAt: offset)
     }
   }
 #endif
