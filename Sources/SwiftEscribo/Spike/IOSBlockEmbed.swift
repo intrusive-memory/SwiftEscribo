@@ -9,7 +9,8 @@
   /// the layout-manager delegate vending `SpikeEmbedRowFragment` / `SpikeEmbedCollapsedFragment`
   /// with an overridden `layoutFragmentFrame`, and the same-range content-storage edit that
   /// invalidates — is the shared `SpikeBlockEmbedController`, unchanged from macOS.
-  /// This adds the UIKit selection and delete hooks (rows 3–7); accessibility is later.
+  /// This adds the UIKit selection and delete hooks (rows 3–7) and accessibility (row 9).
+  /// Expand / collapse (row 8) and the registry bookkeeping for edits (row 11) are shared.
   @MainActor
   final class IOSBlockEmbedController: SpikeBlockEmbedController {
 
@@ -41,6 +42,80 @@
       // The registry entry is dropped (and later keys shifted) by `storageWillProcessEditing`.
       editor.performInputPathEdit(InputPathEdit(replacing: removal, with: ""))
       textView.selectedRange = NSRange(location: removal.location, length: 0)
+      return true
+    }
+
+    // MARK: - Accessibility (row 9)
+
+    /// Called with the block's start offset when an embed's accessibility element activates.
+    var onSpikeEmbedActivate: ((Int) -> Void)?
+
+    /// Elements kept by block offset so VoiceOver sees stable identities across queries.
+    private var accessibilityCache: [Int: SpikeEmbedAccessibilityElement] = [:]
+
+    /// The row's rectangle in the text view's bounds (content) coordinates, from its layout
+    /// fragment. Content coordinates are the container space of a scroll view's elements,
+    /// so UIKit moves the element with scrolling.
+    func rowRect(forBlockAt range: NSRange) -> CGRect? {
+      guard let textView = editor?.textView,
+        let layoutManager = textView.textLayoutManager,
+        let contentManager = layoutManager.textContentManager,
+        let location = contentManager.location(
+          contentManager.documentRange.location, offsetBy: range.location),
+        let fragment = layoutManager.textLayoutFragment(for: location) as? SpikeEmbedRowFragment
+      else { return nil }
+      let frame = fragment.layoutFragmentFrame
+      let inset = textView.textContainerInset
+      return CGRect(
+        x: frame.minX + inset.left + fragment.indent, y: frame.minY + inset.top,
+        width: max(0, fragment.rowWidth - fragment.indent), height: frame.height)
+    }
+
+    /// One element per collapsed embed: trait button, label = title, value = subtitle + badge,
+    /// frame = the row in the text view's coordinate space.
+    func accessibilityElements() -> [SpikeEmbedAccessibilityElement] {
+      guard let textView = editor?.textView else { return [] }
+      var result: [SpikeEmbedAccessibilityElement] = []
+      var live: [Int: SpikeEmbedAccessibilityElement] = [:]
+      for range in liveEmbeds() {
+        guard let content = content(for: range) else { continue }
+        let element =
+          accessibilityCache[range.location]
+          ?? SpikeEmbedAccessibilityElement(accessibilityContainer: textView)
+        element.accessibilityTraits = .button
+        element.accessibilityLabel = content.title
+        element.accessibilityValue = "\(content.subtitle), \(content.badge)"
+        element.accessibilityFrameInContainerSpace = rowRect(forBlockAt: range) ?? .zero
+        let offset = range.location
+        element.onActivate = { [weak self] in self?.onSpikeEmbedActivate?(offset) }
+        live[offset] = element
+        result.append(element)
+      }
+      accessibilityCache = live
+      return result
+    }
+  }
+
+  /// Row 9: the accessibility element standing for one collapsed embed.
+  final class SpikeEmbedAccessibilityElement: UIAccessibilityElement {
+    var onActivate: (@MainActor () -> Void)?
+
+    /// Screen coordinates. Observed in the simulator test host: UIKit's default conversion
+    /// from `accessibilityFrameInContainerSpace` returns `.zero` (it lives in the accessibility
+    /// runtime, which is not loaded there), so convert explicitly through the container view.
+    override var accessibilityFrame: CGRect {
+      get {
+        guard let view = accessibilityContainer as? UIView, view.window != nil else {
+          return super.accessibilityFrame
+        }
+        return UIAccessibility.convertToScreenCoordinates(accessibilityFrameInContainerSpace, in: view)
+      }
+      set { super.accessibilityFrame = newValue }
+    }
+
+    override func accessibilityActivate() -> Bool {
+      guard let onActivate else { return false }
+      MainActor.assumeIsolated { onActivate() }
       return true
     }
   }
@@ -122,6 +197,9 @@
       }
       textView.spikeDeleteHandler = { [weak controller] in
         controller?.deleteSelectedEmbed() ?? false
+      }
+      textView.spikeAccessibilityElements = { [weak controller] in
+        controller?.accessibilityElements() ?? []
       }
       return controller
     }

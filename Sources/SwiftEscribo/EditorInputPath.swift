@@ -388,6 +388,40 @@ struct CaretLineContext: Equatable {
       super.replace(range, withText: text)
     }
 
+    /// SPIKE: extra accessibility elements (one per collapsed embed, row 9).
+    var spikeAccessibilityElements: (@MainActor () -> [Any])?
+
+    override var accessibilityElements: [Any]? {
+      get {
+        let base = super.accessibilityElements
+        guard let extra = spikeAccessibilityElements?(), !extra.isEmpty else { return base }
+        return (base ?? []) + extra
+      }
+      set { super.accessibilityElements = newValue }
+    }
+
+    /// SPIKE: the informal `UIAccessibilityContainer` index API, which is what VoiceOver walks.
+    /// Without the accessibility runtime loaded (a test host) UIKit's default reports 0
+    /// elements even when `accessibilityElements` returns some, so answer it explicitly.
+    override func accessibilityElementCount() -> Int {
+      guard spikeAccessibilityElements != nil else { return super.accessibilityElementCount() }
+      return accessibilityElements?.count ?? 0
+    }
+
+    override func accessibilityElement(at index: Int) -> Any? {
+      guard spikeAccessibilityElements != nil else { return super.accessibilityElement(at: index) }
+      guard let elements = accessibilityElements, elements.indices.contains(index) else { return nil }
+      return elements[index]
+    }
+
+    override func index(ofAccessibilityElement element: Any) -> Int {
+      guard spikeAccessibilityElements != nil else {
+        return super.index(ofAccessibilityElement: element)
+      }
+      return accessibilityElements?.firstIndex { ($0 as AnyObject) === (element as AnyObject) }
+        ?? NSNotFound
+    }
+
     override func layoutSubviews() {
       super.layoutSubviews()
       guard bounds.width != wellLayoutWidth else { return }
