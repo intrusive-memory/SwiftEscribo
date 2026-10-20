@@ -40,8 +40,8 @@ type: supervisor-state
 | Sortie | Work unit | State | Attempt | Model | Notes |
 |--------|-----------|-------|---------|-------|-------|
 | 1 | Shared | COMPLETED | 1/3 | sonnet | a92f761; 14 tests pass |
-| 2 | macOS | DISPATCHED | 1/3 | opus | start a92f761+ |
-| 3 | macOS | PENDING | 0/3 | — | |
+| 2 | macOS | COMPLETED | 1/3 | opus | 514e9ab; rows 1,2,10 pass; frame-override fragment |
+| 3 | macOS | DISPATCHED | 1/3 | opus | |
 | 4 | macOS | PENDING | 0/3 | — | |
 | 5 | iOS | PENDING | 0/3 | — | |
 | 6 | iOS | PENDING | 0/3 | — | |
@@ -56,3 +56,5 @@ type: supervisor-state
 | 2026-10-20T17:50Z | — | — | Sequential dispatch, no parallel groups | shared files, one DerivedData, iOS reuses macOS mechanism |
 | 2026-10-20T17:53Z | Shared | 1 | COMPLETED | a92f761; 14/14 BlockEmbedSpikeCoreTests pass; fixture note is one .note block |
 | 2026-10-20T17:53Z | macOS | 2 | Model: opus | complexity ~16: new tech (custom layout fragments), highest risk, 6 dependents |
+| 2026-10-20T18:02Z | macOS | 2 | COMPLETED | 514e9ab. Custom NSTextLayoutFragment overriding layoutFragmentFrame (para 1 = row height, paras 2..N = 0). Draw-only fragment and content-storage-delegate paragraph both failed. Invalidation needs a same-range content-storage edit (textStorage unchanged, asserted). |
+| 2026-10-20T18:02Z | macOS | 3 | Model: opus | selection/editing overrides on new technique; 5 dependents |
