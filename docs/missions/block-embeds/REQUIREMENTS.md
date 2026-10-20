@@ -17,9 +17,29 @@ Also in this release: a **notice** slot in the paragraph well, and **JSON scanni
 inside Fountain notes** so GLOSA notation 2.0 block directives (a JSON object in a
 note, defined by glosa-av 0.9.0) are syntax-coloured.
 
-**Gate in:** the embed spike (`docs/missions/embed-spike/`) reports go on macOS and iOS
-and the user accepts it. If it does not, this document is rewritten around the
-well-slot fallback before any breakdown.
+**Gate in — met 2026-10-20.** The embed spike (`docs/missions/embed-spike/SPIKE_REPORT.md`,
+branch `spike/block-embeds`) recommended go on macOS and iOS; the user accepted **go on
+both**, with the spike's conditions, which are requirements of this release:
+
+- **macOS — the stale block cache.** Typing above an embed leaves the cached block list
+  stale; the spike re-scanned the whole document on every keystroke, which cannot ship.
+  The release keeps block ranges current incrementally (from the scanner's edit
+  results) and proves it with a test that types above an embed.
+- **iOS — live input check first.** The first iOS sortie verifies tap, selection-handle
+  drag, paste, forward-delete and VoiceOver on a running simulator or device (the spike
+  drove them only through UIKit's internal methods), and blocks paste into an embed.
+- **iOS — accepted risk.** On iOS 26 UIKit already occupies the text layout manager's
+  delegate; the embed implementation sits in front of UIKit's private delegate and
+  forwards everything else to it. The user accepted that a future iOS release may break
+  this; the release isolates it in one type with a test that fails loudly if UIKit's
+  delegate is missing.
+- **Mechanism (from the spike):** a custom layout fragment draws the block's first
+  paragraph as the row and gives the block's other paragraphs zero height; text
+  storage is never modified.
+- **Flaky tests to fix first:** `FontResolutionTests.swift:141` (serif font missing on
+  some runners) and a font test that hangs waiting on the system font service. This
+  release's `make test` gate depends on them.
+- Spike estimate: about 16 sorties.
 
 ## 1. Embeds
 
