@@ -39,7 +39,7 @@ type: supervisor-state
 
 | Sortie | Work unit | State | Attempt | Model | Notes |
 |--------|-----------|-------|---------|-------|-------|
-| 1 | Shared | PENDING | 0/3 | — | |
+| 1 | Shared | DISPATCHED | 1/3 | sonnet | agent adf8aa2252fc5eb8a, start 5575691 |
 | 2 | macOS | PENDING | 0/3 | — | |
 | 3 | macOS | PENDING | 0/3 | — | |
 | 4 | macOS | PENDING | 0/3 | — | |
