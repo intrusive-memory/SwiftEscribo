@@ -42,8 +42,8 @@ type: supervisor-state
 | 1 | Shared | COMPLETED | 1/3 | sonnet | a92f761; 14 tests pass |
 | 2 | macOS | COMPLETED | 1/3 | opus | 514e9ab; rows 1,2,10 pass; frame-override fragment |
 | 3 | macOS | COMPLETED | 1/3 | opus | de9a81e; rows 3–7 pass; make test green |
-| 4 | macOS | DISPATCHED | 1/3 | opus | |
-| 5 | iOS | PENDING | 0/3 | — | |
+| 4 | macOS | COMPLETED | 1/3 | opus | e87dd22; rows 8,9,11 pass; verifier PASS |
+| 5 | iOS | DISPATCHED | 1/3 | opus | |
 | 6 | iOS | PENDING | 0/3 | — | |
 | 7 | iOS | PENDING | 0/3 | — | |
 | 8 | Report | PENDING | 0/3 | — | |
@@ -60,3 +60,6 @@ type: supervisor-state
 | 2026-10-20T18:02Z | macOS | 3 | Model: opus | selection/editing overrides on new technique; 5 dependents |
 | 2026-10-20T18:07Z | macOS | 3 | COMPLETED | de9a81e. setSelectedRanges override + delete handlers + shouldChangeText veto. Limits: Down takes two presses (stops on edge first); undo restores text but not the embed; word/line delete vetoed rather than whole-block. Unit tests call responder methods, not real events. |
 | 2026-10-20T18:07Z | macOS | 4 | Model: opus | a11y + screenshot rendering + instrumentation; [judgment] PNG check |
+| 2026-10-20T18:15Z | macOS | 4 | VERIFYING | e87dd22. Mechanical checks pass (17 tests, make test green). Row 11 finding: typing above drops the coordinator's spliced block list (blocksSpanDocument false) — spike re-scans read-only per keystroke + shifts registry offsets on willProcessEditing. 1 custom fragment per keystroke, 0 per scroll. Evidence env var must be exported in the shell, not passed as a build setting. |
+| 2026-10-20T18:17Z | macOS | 4 | COMPLETED | verifier VERDICT: PASS on mac-embed-collapsed.png. macOS work unit COMPLETED. |
+| 2026-10-20T18:17Z | iOS | 5 | Model: opus | gate: macOS COMPLETED; iOS draw mirrors S2 on UITextView |
