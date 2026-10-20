@@ -44,8 +44,8 @@ type: supervisor-state
 | 3 | macOS | COMPLETED | 1/3 | opus | de9a81e; rows 3–7 pass; make test green |
 | 4 | macOS | COMPLETED | 1/3 | opus | e87dd22; rows 8,9,11 pass; verifier PASS |
 | 5 | iOS | COMPLETED | 1/3 | opus | 39095a3; rows 1,2,10 pass |
-| 6 | iOS | DISPATCHED | 1/3 | opus | |
-| 7 | iOS | PENDING | 0/3 | — | |
+| 6 | iOS | COMPLETED | 1/3 | opus | 688f2f6; rows 3–7 pass; make test-ios green |
+| 7 | iOS | DISPATCHED | 1/3 | opus | |
 | 8 | Report | PENDING | 0/3 | — | |
 
 ## Decisions Log
@@ -66,3 +66,5 @@ type: supervisor-state
 | 2026-10-20T19:00Z | iOS | 5 | Watchdog intervention | iOS test run hung 38 min: row2 test blocked in -[_UIConcretePasteboard string] (UIPasteboard.general read in simulator test host). Killed xcodebuild; SendMessage to same agent: don't read the general pasteboard in tests. No attempt increment (agent was progressing). |
 | 2026-10-20T19:10Z | iOS | 5 | COMPLETED | 39095a3. Same frame-override fragment works on UITextView. Finding: UIKit occupies NSTextLayoutManager.delegate on iOS 26 (_UITextKit2LayoutController) — recon A-07 "free" held only for package code; spike wraps and forwards. Row 2 copy checked via selected text, not pasteboard (general pasteboard hangs in test host). Shared controller moved into BlockEmbedSpike.swift. |
 | 2026-10-20T19:10Z | iOS | 6 | Model: opus | UITextInput selection differs most from macOS |
+| 2026-10-20T19:20Z | iOS | 6 | COMPLETED | 688f2f6. selectedTextRange/selectedRange setter filter (hardware arrows route through it via private _move… methods); edit rule checked in insertText/setMarkedText/replace/deleteBackward. Limits: copy proven by selected text only; real key presses not simulated; forward-delete and paste untested, paste not blocked. |
+| 2026-10-20T19:20Z | iOS | 7 | Model: opus | a11y + rendering in UIWindow + [judgment] PNG |
