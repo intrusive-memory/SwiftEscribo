@@ -41,8 +41,8 @@ type: supervisor-state
 |--------|-----------|-------|---------|-------|-------|
 | 1 | Shared | COMPLETED | 1/3 | sonnet | a92f761; 14 tests pass |
 | 2 | macOS | COMPLETED | 1/3 | opus | 514e9ab; rows 1,2,10 pass; frame-override fragment |
-| 3 | macOS | DISPATCHED | 1/3 | opus | |
-| 4 | macOS | PENDING | 0/3 | — | |
+| 3 | macOS | COMPLETED | 1/3 | opus | de9a81e; rows 3–7 pass; make test green |
+| 4 | macOS | DISPATCHED | 1/3 | opus | |
 | 5 | iOS | PENDING | 0/3 | — | |
 | 6 | iOS | PENDING | 0/3 | — | |
 | 7 | iOS | PENDING | 0/3 | — | |
@@ -58,3 +58,5 @@ type: supervisor-state
 | 2026-10-20T17:53Z | macOS | 2 | Model: opus | complexity ~16: new tech (custom layout fragments), highest risk, 6 dependents |
 | 2026-10-20T18:02Z | macOS | 2 | COMPLETED | 514e9ab. Custom NSTextLayoutFragment overriding layoutFragmentFrame (para 1 = row height, paras 2..N = 0). Draw-only fragment and content-storage-delegate paragraph both failed. Invalidation needs a same-range content-storage edit (textStorage unchanged, asserted). |
 | 2026-10-20T18:02Z | macOS | 3 | Model: opus | selection/editing overrides on new technique; 5 dependents |
+| 2026-10-20T18:07Z | macOS | 3 | COMPLETED | de9a81e. setSelectedRanges override + delete handlers + shouldChangeText veto. Limits: Down takes two presses (stops on edge first); undo restores text but not the embed; word/line delete vetoed rather than whole-block. Unit tests call responder methods, not real events. |
+| 2026-10-20T18:07Z | macOS | 4 | Model: opus | a11y + screenshot rendering + instrumentation; [judgment] PNG check |
