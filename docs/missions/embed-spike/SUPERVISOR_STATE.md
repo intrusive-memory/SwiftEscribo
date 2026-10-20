@@ -39,8 +39,8 @@ type: supervisor-state
 
 | Sortie | Work unit | State | Attempt | Model | Notes |
 |--------|-----------|-------|---------|-------|-------|
-| 1 | Shared | DISPATCHED | 1/3 | sonnet | agent adf8aa2252fc5eb8a, start 5575691 |
-| 2 | macOS | PENDING | 0/3 | — | |
+| 1 | Shared | COMPLETED | 1/3 | sonnet | a92f761; 14 tests pass |
+| 2 | macOS | DISPATCHED | 1/3 | opus | start a92f761+ |
 | 3 | macOS | PENDING | 0/3 | — | |
 | 4 | macOS | PENDING | 0/3 | — | |
 | 5 | iOS | PENDING | 0/3 | — | |
@@ -54,3 +54,5 @@ type: supervisor-state
 | 2026-10-20T17:50Z | — | — | Recon reused (CLEAR) | requirements sha256 matches; HEAD diff since 16d03e0 touches docs only |
 | 2026-10-20T17:50Z | — | — | Refine: 0 blockers; 1 criterion fixed (S8 grep); priorities + parallelism annotated | — |
 | 2026-10-20T17:50Z | — | — | Sequential dispatch, no parallel groups | shared files, one DerivedData, iOS reuses macOS mechanism |
+| 2026-10-20T17:53Z | Shared | 1 | COMPLETED | a92f761; 14/14 BlockEmbedSpikeCoreTests pass; fixture note is one .note block |
+| 2026-10-20T17:53Z | macOS | 2 | Model: opus | complexity ~16: new tech (custom layout fragments), highest risk, 6 dependents |
