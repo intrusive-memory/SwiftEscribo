@@ -45,8 +45,8 @@ type: supervisor-state
 | 4 | macOS | COMPLETED | 1/3 | opus | e87dd22; rows 8,9,11 pass; verifier PASS |
 | 5 | iOS | COMPLETED | 1/3 | opus | 39095a3; rows 1,2,10 pass |
 | 6 | iOS | COMPLETED | 1/3 | opus | 688f2f6; rows 3–7 pass; make test-ios green |
-| 7 | iOS | DISPATCHED | 1/3 | opus | |
-| 8 | Report | PENDING | 0/3 | — | |
+| 7 | iOS | COMPLETED | 1/3 | opus | 811d79d; rows 8,9,11 pass; verifier PASS |
+| 8 | Report | DISPATCHED | 1/3 | opus | |
 
 ## Decisions Log
 | Timestamp | Work Unit | Sortie | Decision | Rationale |
@@ -68,3 +68,6 @@ type: supervisor-state
 | 2026-10-20T19:10Z | iOS | 6 | Model: opus | UITextInput selection differs most from macOS |
 | 2026-10-20T19:20Z | iOS | 6 | COMPLETED | 688f2f6. selectedTextRange/selectedRange setter filter (hardware arrows route through it via private _move… methods); edit rule checked in insertText/setMarkedText/replace/deleteBackward. Limits: copy proven by selected text only; real key presses not simulated; forward-delete and paste untested, paste not blocked. |
 | 2026-10-20T19:20Z | iOS | 7 | Model: opus | a11y + rendering in UIWindow + [judgment] PNG |
+| 2026-10-20T19:30Z | iOS | 7 | VERIFYING | 811d79d. 17/17 iOS spike tests; make test-ios green. a11y via accessibilityElements override (UIKit count/index API returned 0 in test host — hook answers it). Row 11: iOS block list stayed trustworthy (no rescan). PNGs via layer.render (drawHierarchy blank in test host). |
+| 2026-10-20T19:32Z | iOS | 7 | COMPLETED | verifier VERDICT: PASS on ios-embed-collapsed.png. iOS work unit COMPLETED. |
+| 2026-10-20T19:32Z | Report | 8 | Model: opus | synthesis of evidence + release estimate; [judgment] citation check |
