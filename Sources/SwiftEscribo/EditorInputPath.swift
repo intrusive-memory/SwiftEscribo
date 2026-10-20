@@ -291,6 +291,8 @@ struct CaretLineContext: Equatable {
 
     override func insertText(_ text: String) {
       wellOverlay?.typed()
+      // SPIKE: typing (and Return/Tab) with an embed in the selection changes nothing.
+      if spikeEditFilter?(selectedRange, text) == false { return }
       if text == "\n", returnKeyHandler?() == true { return }
       if text == "\t", tabKeyHandler?() == true { return }
       super.insertText(text)
@@ -309,7 +311,81 @@ struct CaretLineContext: Equatable {
 
     override func deleteBackward() {
       wellOverlay?.typed()
+      // SPIKE: with an embed exactly selected the handler deletes it whole (row 5).
+      if spikeDeleteHandler?() == true { return }
+      if spikeEditFilter?(spikeDeletionRange(), "") == false { return }
       super.deleteBackward()
+    }
+
+    // SPIKE — block-embed hooks (Sources/SwiftEscribo/Spike/IOSBlockEmbed.swift). Never merged.
+
+    /// SPIKE: rewrites every proposed selection given the current one. UIKit has no
+    /// `setSelectedRanges(_:affinity:stillSelecting:)`; the public funnels are the
+    /// `selectedTextRange` and `selectedRange` setters, both overridden below. `nil` leaves
+    /// selection behaviour untouched.
+    var spikeSelectionFilter: (@MainActor (_ proposed: NSRange, _ current: NSRange) -> NSRange)?
+
+    /// SPIKE: vetoes an edit (`false`). UIKit has no `shouldChangeText(in:replacementString:)`
+    /// on the view (only the delegate's, which belongs to the SwiftUI bridge), so the input
+    /// entry points consult it: `insertText`, `setMarkedText`, `replace(_:withText:)`,
+    /// `deleteBackward`.
+    var spikeEditFilter: (@MainActor (_ range: NSRange, _ replacement: String?) -> Bool)?
+
+    /// SPIKE: called on Backspace; returns `true` when it performed the edit.
+    var spikeDeleteHandler: (@MainActor () -> Bool)?
+
+    /// SPIKE: how many times the `selectedTextRange` setter ran (tests use it to see which
+    /// input routes reach the filter).
+    private(set) var spikeSelectedTextRangeSets = 0
+
+    /// What a plain Backspace would remove: the selection, or the character before the caret.
+    private func spikeDeletionRange() -> NSRange {
+      let sel = selectedRange
+      if sel.length > 0 || sel.location == 0 { return sel }
+      return (textStorage.string as NSString).rangeOfComposedCharacterSequence(at: sel.location - 1)
+    }
+
+    private func spikeNSRange(_ range: UITextRange) -> NSRange {
+      let start = offset(from: beginningOfDocument, to: range.start)
+      return NSRange(location: start, length: offset(from: range.start, to: range.end))
+    }
+
+    override var selectedTextRange: UITextRange? {
+      get { super.selectedTextRange }
+      set {
+        spikeSelectedTextRangeSets += 1
+        guard let filter = spikeSelectionFilter, let newValue else {
+          super.selectedTextRange = newValue
+          return
+        }
+        let proposed = spikeNSRange(newValue)
+        let constrained = filter(proposed, selectedRange)
+        guard constrained != proposed,
+          let start = position(from: beginningOfDocument, offset: constrained.location),
+          let end = position(from: start, offset: constrained.length),
+          let range = textRange(from: start, to: end)
+        else {
+          super.selectedTextRange = newValue
+          return
+        }
+        super.selectedTextRange = range
+      }
+    }
+
+    override var selectedRange: NSRange {
+      get { super.selectedRange }
+      set { super.selectedRange = spikeSelectionFilter?(newValue, super.selectedRange) ?? newValue }
+    }
+
+    override func setMarkedText(_ markedText: String?, selectedRange: NSRange) {
+      let target = markedTextRange.map(spikeNSRange) ?? self.selectedRange
+      if spikeEditFilter?(target, markedText ?? "") == false { return }
+      super.setMarkedText(markedText, selectedRange: selectedRange)
+    }
+
+    override func replace(_ range: UITextRange, withText text: String) {
+      if spikeEditFilter?(spikeNSRange(range), text) == false { return }
+      super.replace(range, withText: text)
     }
 
     override func layoutSubviews() {

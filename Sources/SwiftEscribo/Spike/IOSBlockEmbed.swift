@@ -9,9 +9,41 @@
   /// the layout-manager delegate vending `SpikeEmbedRowFragment` / `SpikeEmbedCollapsedFragment`
   /// with an overridden `layoutFragmentFrame`, and the same-range content-storage edit that
   /// invalidates — is the shared `SpikeBlockEmbedController`, unchanged from macOS.
-  /// Selection, delete and accessibility hooks for `UITextView` arrive in later sorties.
+  /// This adds the UIKit selection and delete hooks (rows 3–7); accessibility is later.
   @MainActor
-  final class IOSBlockEmbedController: SpikeBlockEmbedController {}
+  final class IOSBlockEmbedController: SpikeBlockEmbedController {
+
+    // MARK: - Atomic behaviour (rows 3–7)
+
+    /// Rows 3/4: every proposed selection (from the `selectedTextRange` / `selectedRange`
+    /// setters) goes through `SpikeEmbedSelection.constrain`. As on macOS the collapsed
+    /// fragments keep their real line fragments, so UIKit's own position APIs
+    /// (`position(from:in:offset:)`, `closestPosition(to:)`) still return offsets inside the
+    /// block; the filter is what keeps the caret out.
+    func filterSelection(_ proposed: NSRange, current: NSRange) -> NSRange {
+      let embeds = liveEmbeds()
+      guard !embeds.isEmpty, let length = editor?.documentStorage.length else { return proposed }
+      let constrained = SpikeEmbedSelection.constrain(
+        proposed: proposed, previous: current, embeds: embeds)
+      return NSMaxRange(constrained) <= length ? constrained : proposed
+    }
+
+    /// Row 5: with an embed exactly selected, Backspace removes the embed's `deletionRange`
+    /// (block + one adjacent blank line) through `UITextInput.replace(_:withText:)` — UIKit's
+    /// own input path, which registers the undo — as one edit.
+    func deleteSelectedEmbed() -> Bool {
+      guard let editor else { return false }
+      let textView = editor.textView
+      let selection = textView.selectedRange
+      guard let embed = liveEmbeds().first(where: { $0 == selection }) else { return false }
+      let removal = SpikeEmbedSelection.deletionRange(
+        for: embed, in: editor.documentStorage.string as NSString)
+      // The registry entry is dropped (and later keys shifted) by `storageWillProcessEditing`.
+      editor.performInputPathEdit(InputPathEdit(replacing: removal, with: ""))
+      textView.selectedRange = NSRange(location: removal.location, length: 0)
+      return true
+    }
+  }
 
   // MARK: - Row drawing
 
@@ -80,6 +112,17 @@
       objc_setAssociatedObject(
         textView, &spikeControllerKey, controller, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
       controller.install(on: textView, storage: documentStorage)
+      // Rows 3–7: the `// SPIKE` hooks on the text view subclass (not the delegate, which
+      // belongs to the SwiftUI bridge — `textViewDidChangeSelection` exists only there).
+      textView.spikeSelectionFilter = { [weak controller] proposed, current in
+        controller?.filterSelection(proposed, current: current) ?? proposed
+      }
+      textView.spikeEditFilter = { [weak controller] range, replacement in
+        controller?.allowsEdit(in: range, replacement: replacement) ?? true
+      }
+      textView.spikeDeleteHandler = { [weak controller] in
+        controller?.deleteSelectedEmbed() ?? false
+      }
       return controller
     }
   }
