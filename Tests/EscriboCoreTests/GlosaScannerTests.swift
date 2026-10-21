@@ -244,8 +244,8 @@ struct GlosaScannerTests {
     #expect(Self.texts(.glosaJSONNumber, in: "{\"a\":2E10,\"b\":1e-2}") == ["2E10", "1e-2"])
   }
 
-  @Test("A `]]` and brackets inside a JSON string do not end or confuse the scan")
-  func bracketsInsideAString() {
+  @Test("A literal `]]` inside a JSON string, handed to the scanner directly, is one string span")
+  func literalDoubleBracketInsideAStringScannedDirectly() {
     let content = "{\"a\":\"]]\"}"
     #expect(Self.texts(.glosaJSONString, in: content) == ["\"]]\""])
     #expect(Self.texts(.glosaPunctuation, in: content) == ["{", ":", "}"])
@@ -254,13 +254,33 @@ struct GlosaScannerTests {
     #expect(Self.texts(.glosaJSONString, in: escaped) == ["\"q\\\"]\\\\\""])
   }
 
-  @Test("The first `]]` still closes the note, JSON string or not")
-  func firstCloserWinsEvenInsideAString() {
+  @Test("A literal `]]` in the document closes the note even inside a JSON string")
+  func literalDoubleBracketClosesTheNoteEvenInsideAString() {
     let source = "Bob waits.\n\n[[{\"a\":\"]]\"}]]"
     let result = FountainGrammarTests.fullScan(source)
     // The note content is `{"a":"` — an unterminated string — so nothing is subdivided.
     #expect(FountainRegionTests.texts(.glosaJSONKey, in: result, of: source) == ["\"a\""])
     #expect(FountainRegionTests.texts(.glosaJSONString, in: result, of: source).isEmpty)
+    #expect(result.spans.reduce(0) { $0 + $1.range.count } == source.utf16.count)
+  }
+
+  @Test(
+    "The JSON unicode escape for `]` lets a directive string hold `]]` without closing the note")
+  func unicodeEscapedBracketKeepsTheNoteOpen() {
+    // Document text: [[{"a":"]\u005d"}]]  (one backslash; no literal `]]` inside the string).
+    let source = "Bob waits.\n\n[[{\"a\":\"]\\u005d\"}]]"
+    let result = FountainGrammarTests.fullScan(source)
+    #expect(result.lineRecords[2].element == .note)
+    #expect(FountainRegionTests.texts(.glosaJSONKey, in: result, of: source) == ["\"a\""])
+    #expect(
+      FountainRegionTests.texts(.glosaJSONString, in: result, of: source) == ["\"]\\u005d\""])
+    #expect(
+      FountainRegionTests.texts(.glosaPunctuation, role: .marker, in: result, of: source)
+        == ["{", ":", "}"])
+    // The note closes at the final `]]`: the last two code units are the closing marker.
+    let closer = result.spans.last!
+    #expect(closer.kind == .note && closer.role == .marker)
+    #expect(FountainRegionTests.text(closer.range, of: source) == "]]")
     #expect(result.spans.reduce(0) { $0 + $1.range.count } == source.utf16.count)
   }
 
