@@ -77,6 +77,40 @@ extension EscriboTheme {
         foreground: EscriboColor(red: 0.24, green: 0.30, blue: 0.36),
         family: .monospaced
       ),
+      // GLOSA directives and embedded JSON: tags and keys take the accent colours,
+      // values take the quieter slate, punctuation recedes like a frontmatter fence.
+      .glosaTag: TokenStyle(
+        foreground: EscriboColor(red: 0.05, green: 0.28, blue: 0.63),
+        family: .monospaced
+      ),
+      .glosaAttributeName: TokenStyle(
+        foreground: EscriboColor(red: 0.31, green: 0.16, blue: 0.42),
+        family: .monospaced
+      ),
+      .glosaAttributeValue: TokenStyle(
+        foreground: EscriboColor(red: 0.24, green: 0.30, blue: 0.36),
+        family: .monospaced
+      ),
+      .glosaPunctuation: TokenStyle(
+        foreground: EscriboColor(red: 0.42, green: 0.42, blue: 0.45),
+        family: .monospaced
+      ),
+      .glosaJSONKey: TokenStyle(
+        foreground: EscriboColor(red: 0.31, green: 0.16, blue: 0.42),
+        family: .monospaced
+      ),
+      .glosaJSONString: TokenStyle(
+        foreground: EscriboColor(red: 0.24, green: 0.30, blue: 0.36),
+        family: .monospaced
+      ),
+      .glosaJSONNumber: TokenStyle(
+        foreground: EscriboColor(red: 0.05, green: 0.28, blue: 0.63),
+        family: .monospaced
+      ),
+      .glosaJSONLiteral: TokenStyle(
+        foreground: EscriboColor(red: 0.05, green: 0.28, blue: 0.63),
+        family: .monospaced
+      ),
     ],
     styleStyles: markdownStyleFlags,
     elementSizeScales: [.heading: headingSizeScale],
@@ -117,6 +151,40 @@ extension EscriboTheme {
       ),
       .frontmatterValue: TokenStyle(
         foreground: EscriboColor(red: 0.72, green: 0.79, blue: 0.86),
+        family: .monospaced
+      ),
+      // GLOSA directives and embedded JSON: tags and keys take the accent colours,
+      // values take the quieter slate, punctuation recedes like a frontmatter fence.
+      .glosaTag: TokenStyle(
+        foreground: EscriboColor(red: 0.48, green: 0.71, blue: 1.0),
+        family: .monospaced
+      ),
+      .glosaAttributeName: TokenStyle(
+        foreground: EscriboColor(red: 0.78, green: 0.62, blue: 0.92),
+        family: .monospaced
+      ),
+      .glosaAttributeValue: TokenStyle(
+        foreground: EscriboColor(red: 0.72, green: 0.79, blue: 0.86),
+        family: .monospaced
+      ),
+      .glosaPunctuation: TokenStyle(
+        foreground: EscriboColor(red: 0.62, green: 0.62, blue: 0.66),
+        family: .monospaced
+      ),
+      .glosaJSONKey: TokenStyle(
+        foreground: EscriboColor(red: 0.78, green: 0.62, blue: 0.92),
+        family: .monospaced
+      ),
+      .glosaJSONString: TokenStyle(
+        foreground: EscriboColor(red: 0.72, green: 0.79, blue: 0.86),
+        family: .monospaced
+      ),
+      .glosaJSONNumber: TokenStyle(
+        foreground: EscriboColor(red: 0.48, green: 0.71, blue: 1.0),
+        family: .monospaced
+      ),
+      .glosaJSONLiteral: TokenStyle(
+        foreground: EscriboColor(red: 0.48, green: 0.71, blue: 1.0),
         family: .monospaced
       ),
     ],
@@ -162,6 +230,40 @@ extension EscriboTheme {
         foreground: EscriboColor(red: 0.24, green: 0.30, blue: 0.36),
         family: .monospaced
       ),
+      // GLOSA directives and embedded JSON: tags and keys take the accent colours,
+      // values take the quieter slate, punctuation recedes like a frontmatter fence.
+      .glosaTag: TokenStyle(
+        foreground: EscriboColor(red: 0.16, green: 0.24, blue: 0.44),
+        family: .monospaced
+      ),
+      .glosaAttributeName: TokenStyle(
+        foreground: EscriboColor(red: 0.31, green: 0.16, blue: 0.42),
+        family: .monospaced
+      ),
+      .glosaAttributeValue: TokenStyle(
+        foreground: EscriboColor(red: 0.24, green: 0.30, blue: 0.36),
+        family: .monospaced
+      ),
+      .glosaPunctuation: TokenStyle(
+        foreground: EscriboColor(red: 0.42, green: 0.42, blue: 0.45),
+        family: .monospaced
+      ),
+      .glosaJSONKey: TokenStyle(
+        foreground: EscriboColor(red: 0.31, green: 0.16, blue: 0.42),
+        family: .monospaced
+      ),
+      .glosaJSONString: TokenStyle(
+        foreground: EscriboColor(red: 0.24, green: 0.30, blue: 0.36),
+        family: .monospaced
+      ),
+      .glosaJSONNumber: TokenStyle(
+        foreground: EscriboColor(red: 0.16, green: 0.24, blue: 0.44),
+        family: .monospaced
+      ),
+      .glosaJSONLiteral: TokenStyle(
+        foreground: EscriboColor(red: 0.16, green: 0.24, blue: 0.44),
+        family: .monospaced
+      ),
     ],
     styleStyles: screenplayStyleFlags,
     // Deliberately empty. A screenplay page is uniform 12-point: nothing on it is set
@@ -203,6 +305,40 @@ extension EscriboTheme {
       ),
       .frontmatterValue: TokenStyle(
         foreground: EscriboColor(red: 0.72, green: 0.79, blue: 0.86),
+        family: .monospaced
+      ),
+      // GLOSA directives and embedded JSON: tags and keys take the accent colours,
+      // values take the quieter slate, punctuation recedes like a frontmatter fence.
+      .glosaTag: TokenStyle(
+        foreground: EscriboColor(red: 0.62, green: 0.75, blue: 1.0),
+        family: .monospaced
+      ),
+      .glosaAttributeName: TokenStyle(
+        foreground: EscriboColor(red: 0.78, green: 0.62, blue: 0.92),
+        family: .monospaced
+      ),
+      .glosaAttributeValue: TokenStyle(
+        foreground: EscriboColor(red: 0.72, green: 0.79, blue: 0.86),
+        family: .monospaced
+      ),
+      .glosaPunctuation: TokenStyle(
+        foreground: EscriboColor(red: 0.62, green: 0.62, blue: 0.66),
+        family: .monospaced
+      ),
+      .glosaJSONKey: TokenStyle(
+        foreground: EscriboColor(red: 0.78, green: 0.62, blue: 0.92),
+        family: .monospaced
+      ),
+      .glosaJSONString: TokenStyle(
+        foreground: EscriboColor(red: 0.72, green: 0.79, blue: 0.86),
+        family: .monospaced
+      ),
+      .glosaJSONNumber: TokenStyle(
+        foreground: EscriboColor(red: 0.62, green: 0.75, blue: 1.0),
+        family: .monospaced
+      ),
+      .glosaJSONLiteral: TokenStyle(
+        foreground: EscriboColor(red: 0.62, green: 0.75, blue: 1.0),
         family: .monospaced
       ),
     ],
