@@ -1,6 +1,6 @@
 ---
 type: test-cleanup-report
-state: current
+state: complete
 ---
 
 # Test Cleanup Report: OPERATION PRESSED FLOWER
