@@ -85,6 +85,9 @@ public struct EscriboEditor: View {
   /// iOS.
   private let onFindMatchInEmbed: (EscriboBlock) -> Void
 
+  /// The host's per-block well notice, or `nil` for none.
+  private let wellNotice: ((EscriboBlock) -> (symbolName: String, help: String)?)?
+
   /// The system appearance, which selects between a theme pair when `theme` is `nil`.
   @Environment(\.colorScheme) private var colorScheme
 
@@ -171,6 +174,18 @@ public struct EscriboEditor: View {
   ///     Platform-neutral in this signature and honoured on macOS only, like `findBar`:
   ///     iOS has no find bar, so there it is accepted and never called.
   ///
+  ///   - wellNotice: Per-block well content (REQUIREMENTS.md § 2): return a notice glyph
+  ///     (an SF Symbol name) and its help text for a block that has one, or `nil`. A block
+  ///     with a notice shows it in the well's one slot **at all times**, in place of
+  ///     `.readAloud`, regardless of ``EscriboWell/eligibleKinds`` and whether the block
+  ///     has content; a click calls `onWellAction(.notice, block)`. Needs a non-nil `well`
+  ///     (that is what reserves the lane); `well.items` need not contain `.notice`.
+  ///
+  ///     Asked in **both** ``EditorMode``s, unlike embeds. Asked at the same points as the
+  ///     embed provider — on install, after every full scan, for each edit's rescanned
+  ///     blocks, and for every block on ``EscriboEditorHandle/invalidateEmbeds()`` — and
+  ///     never on a SwiftUI update pass. Defaulted to `nil`: no notices, no change.
+  ///
   /// Every parameter after `onWellAction` is new in this release and comes **after** it on
   /// purpose: a call site that passes `onWellAction` as a trailing closure keeps binding it
   /// there.
@@ -187,7 +202,8 @@ public struct EscriboEditor: View {
     embedProvider: (any EscriboEmbedProvider)? = nil,
     onEmbedActivate: @escaping (EscriboBlock) -> Void = { _ in },
     onEmbedAction: @escaping (EscriboBlock, String) -> Void = { _, _ in },
-    onFindMatchInEmbed: @escaping (EscriboBlock) -> Void = { _ in }
+    onFindMatchInEmbed: @escaping (EscriboBlock) -> Void = { _ in },
+    wellNotice: ((EscriboBlock) -> (symbolName: String, help: String)?)? = nil
   ) {
     self._text = text
     self.language = language
@@ -202,6 +218,7 @@ public struct EscriboEditor: View {
     self.onEmbedActivate = onEmbedActivate
     self.onEmbedAction = onEmbedAction
     self.onFindMatchInEmbed = onFindMatchInEmbed
+    self.wellNotice = wellNotice
   }
 
   public var body: some View {
@@ -221,6 +238,7 @@ public struct EscriboEditor: View {
         provider: embedProvider,
         onActivate: onEmbedActivate,
         onAction: onEmbedAction,
-        onFindMatch: onFindMatchInEmbed))
+        onFindMatch: onFindMatchInEmbed,
+        wellNotice: wellNotice))
   }
 }
