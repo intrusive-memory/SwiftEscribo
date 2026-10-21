@@ -71,6 +71,9 @@
     /// view's stock layout.
     var embedLayout: EmbedLayoutController?
 
+    /// The accessibility elements of the drawn embeds, by block start (§ 1.4).
+    var embedAccessibilityCache: [Int: EmbedAccessibilityElement] = [:]
+
     /// Builds the view over `styler`.
     ///
     /// - Parameters:
@@ -125,6 +128,7 @@
       // Their behaviour (§ 1.3): selection, edits, Delete, click and Option-Return. Each
       // handler declines at once while no embed is drawn.
       installEmbedBehaviour()
+      installEmbedAccessibility()
 
       // Sortie 25. Return goes through `EscriboTextView.handleReturnKey()`, which either
       // performs the whole rewrite as one trip through the input path or declines and lets
