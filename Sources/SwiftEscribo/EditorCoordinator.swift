@@ -204,6 +204,15 @@ public final class EditorCoordinator: NSObject {
   /// `documentLineCount`, and the minuend of the next splice's line delta.
   private var documentBlocksLineCount = 0
 
+  // MARK: - Embeds
+
+  /// The host's embed provider and callbacks, and the provider's cached answer per block
+  /// (REQUIREMENTS.md § 1.1). All of the logic lives in `EditorCoordinator+Embeds.swift`;
+  /// the scanning code below only calls ``refreshAllEmbeds()`` after a full scan and
+  /// ``refreshEmbeds(afterEdit:)`` after an incremental one. With no provider both return
+  /// at once.
+  let embeds = EmbedState()
+
   // MARK: - Geometry, supplied by the view
 
   /// Maps a point in text-view coordinates to a UTF-16 offset in the document.
@@ -318,6 +327,7 @@ public final class EditorCoordinator: NSObject {
   func restyleEverything() {
     needsFullRescan = false
     apply(textStorage.fullScan(using: &scanner), edit: nil)
+    refreshAllEmbeds()
   }
 
   /// Handles one **character** edit reported by the text system.
@@ -351,6 +361,7 @@ public final class EditorCoordinator: NSObject {
     }
 
     apply(textStorage.incrementalScan(edit, using: &scanner), edit: edit)
+    refreshEmbeds(afterEdit: edit)
   }
 
   /// Translates a text-system edit notification into a ``TextEdit``.
