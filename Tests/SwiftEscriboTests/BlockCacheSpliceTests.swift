@@ -314,4 +314,87 @@ struct BlockCacheSpliceTests {
       }
     }
   }
+
+  // MARK: - The cap
+
+  /// A Markdown document whose middle block is one plain paragraph of `lines` lines,
+  /// between two headings.
+  static func paragraphDocument(lines: Int) -> String {
+    "# Before\n\n"
+      + (0..<lines).map { "plain prose line \($0) of a hard-wrapped paragraph" }
+      .joined(separator: "\n")
+      + "\n\n# After\n"
+  }
+
+  /// An offset in the middle of the paragraph's middle line, just before `line N of`, so
+  /// typing there leaves the anchor intact for the next keystroke.
+  static func middle(of text: String, lines: Int) -> Int {
+    let found = (text as NSString).range(of: "line \(lines / 2) of")
+    precondition(found.location != NSNotFound, "fixture anchor missing")
+    return found.location
+  }
+
+  @Test("A 40-line paragraph is inside the alignment cap: typing in it stays spliced")
+  func blockInsideTheCapStaysSpliced() {
+    let text = Self.paragraphDocument(lines: 40)
+    let editor = CoordinatorFixtures.makeEditor(text)
+    let fullScans = editor.coordinator.fullScanCount
+    editor.storage.replaceCharacters(
+      in: NSRange(location: Self.middle(of: text, lines: 40), length: 0), with: "x")
+    Self.expectCacheIsCurrent(
+      editor.coordinator, text: editor.storage.string, fullScans: fullScans,
+      step: "keystroke in a 40-line paragraph")
+  }
+
+  @Test("Over the cap with no provider: the splice declines exactly as before alignment")
+  func blockOverTheCapDeclinesWithoutAProvider() {
+    // 200 lines: more than `blockAlignmentLineLimit` either side of the edit, so the scanner
+    // keeps the minimal window and the splice declines. No provider, so nothing rescans:
+    // the cache is marked stale and the next query pays the scan, as on `development`
+    // before this change.
+    let text = Self.paragraphDocument(lines: 200)
+    let editor = CoordinatorFixtures.makeEditor(text)
+    let coordinator = editor.coordinator
+    let fullScans = coordinator.fullScanCount
+    let at = Self.middle(of: text, lines: 200)
+    editor.storage.replaceCharacters(in: NSRange(location: at, length: 0), with: "x")
+
+    #expect(!coordinator.blocksSpanDocument, "an over-cap block must not be aligned")
+    #expect(coordinator.fullScanCount == fullScans, "and the edit itself does not full-scan")
+    #expect(coordinator.lastLineRecords.count <= 8, "the window stayed minimal")
+
+    // The fallback the queries take still answers correctly.
+    let block = coordinator.block(atUTF16Offset: at)
+    #expect(block?.kind == .paragraph)
+    #expect(block?.lines == 2..<202)
+    Self.expectCacheIsCurrent(
+      coordinator, text: editor.storage.string, fullScans: fullScans + 1,
+      step: "after the query's fallback scan")
+  }
+
+  @Test("Over the cap with an embed elsewhere: the embed path's full scan restores the cache")
+  func blockOverTheCapWithAnEmbedFallsBackToAFullScan() throws {
+    let text = Self.paragraphDocument(lines: 200)
+    let editor = CoordinatorFixtures.makeEditor(text)
+    let coordinator = editor.coordinator
+    let provider = CountingEmbedProvider()
+    provider.embeddedKind = .heading
+    coordinator.setEmbedProvider(provider)
+    #expect(coordinator.embeddedBlocks.count == 2, "both headings are embeds")
+    let fullScans = coordinator.fullScanCount
+
+    for keystroke in 0..<3 {
+      let at = Self.middle(of: editor.storage.string, lines: 200)
+      editor.storage.replaceCharacters(in: NSRange(location: at, length: 0), with: "x")
+      // The splice declined (the cap), so `refreshEmbeds` full-scanned — once per edit,
+      // exactly the pre-alignment cost — and that scan made the cache whole again.
+      Self.expectCacheIsCurrent(
+        coordinator, text: editor.storage.string, fullScans: fullScans + keystroke + 1,
+        step: "over-cap keystroke \(keystroke + 1) with an embed provider")
+    }
+
+    var fresh = EscriboScanner(language: coordinator.language)
+    let headings = fresh.fullScan(editor.storage.string).blocks.filter { $0.kind == .heading }
+    #expect(coordinator.embeddedBlocks.map(\.block) == headings, "the embeds are current")
+  }
 }

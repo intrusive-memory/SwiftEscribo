@@ -101,6 +101,10 @@ public struct EscriboScanner {
   /// the lines it shares; the extra lines are rescanned to the same answers they already
   /// had.
   ///
+  /// At most 64 lines (`blockAlignmentLineLimit`) are added. An end that would need more keeps
+  /// its minimal edge, and the caller's splice declines for that edit as it would without
+  /// this overload.
+  ///
   /// - Parameter blockLines: Maps an **old**-coordinate line (the document before `edit`)
   ///   to the line range of the cached block containing it, or `nil` when the cache cannot
   ///   say. Answers are only ever used to grow the window.

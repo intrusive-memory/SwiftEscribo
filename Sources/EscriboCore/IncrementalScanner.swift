@@ -59,6 +59,24 @@
 /// One named constant so it is tunable in one place and its reasoning survives.
 let joinedContentLineLimit = 200
 
+/// The most lines block alignment may add to a rescan window, beyond the window the
+/// convergence rule (and the joined-content widening) already chose.
+///
+/// Block alignment is a saving for the caller's block cache, not a correctness need: when
+/// it is declined the window is exactly the minimal one, the caller's splice declines, and
+/// its cache is marked stale — the behaviour before alignment existed. So the cap only
+/// decides when a keystroke stops paying to keep the cache spliced.
+///
+/// Sixty-four, for three reasons. Real multi-line blocks — a speech, a note, a JSON note, a
+/// hard-wrapped paragraph — are usually under twenty lines, so the cap does not bind on
+/// ordinary writing; the tests that type in such blocks assert that they stay spliced. At the measured cost of about 1.3 µs
+/// per line in an optimized build (`insideAnAlignableBlock` in the performance suite's
+/// "Block-aligned edits"), sixty-four extra lines are under 0.1 ms, a tenth of the 1 ms
+/// in-line edit budget. And it bounds the worst case at a constant: without a cap, a
+/// keystroke in a 2,000-line fenced code block would rescan all of it on every key, a cost
+/// proportional to the block rather than to the edit.
+let blockAlignmentLineLimit = 64
+
 /// The block kinds whose content is re-scanned as one run.
 ///
 /// Paragraphs, blockquotes, and list items — the three things a writer hard-wraps. A
@@ -151,12 +169,15 @@ struct IncrementalScanner<Grammar: LineGrammar> {
   ///     **old**-coordinate line to the line range of the cached block containing it. When
   ///     given, the window is widened outward to whole cached blocks at both ends — see
   ///     "Widening to the caller's block edges" in the body. `nil` keeps the minimal window.
+  ///   - blockLineLimit: The most lines alignment may add; see ``blockAlignmentLineLimit``.
+  ///     A parameter only so tests can exercise the cap on small documents.
   /// - Returns: A result whose ``ScanResult/dirtyRange`` is line-aligned at both ends and
   ///   contains the edited range, and whose spans exactly tile it.
   @discardableResult
   mutating func incrementalScan(
     _ edit: TextEdit, in source: some UTF16TextSource,
-    blockLines: ((Int) -> Range<Int>?)? = nil
+    blockLines: ((Int) -> Range<Int>?)? = nil,
+    blockLineLimit: Int = blockAlignmentLineLimit
   ) -> ScanResult {
     // Everything in this block is read in OLD coordinates, before the index moves.
     let oldLineCount = index.lineCount
@@ -239,17 +260,32 @@ struct IncrementalScanner<Grammar: LineGrammar> {
     // rule requires is always sound. Answers that would shrink it, or that do not contain
     // the line asked about, are ignored, so a stale or malformed cache degrades to the
     // minimal window rather than to a wrong one.
+    //
+    // **Bounded.** Together the two moves may add at most `blockAlignmentLineLimit` lines.
+    // A floor move over the cap is not made, and then neither is the stop move (the
+    // caller's splice will decline at the floor anyway); a stop move that would take the
+    // total over the cap is not made either. Declining leaves the minimal window for that
+    // end, so the edit costs what it cost before alignment existed.
     var start = min(windowFloor, newLineCount - 1)
+    var alignmentBudget = blockLineLimit
     if let blockLines, start > 0, let block = blockLines(start), block.contains(start) {
-      start = max(0, block.lowerBound)
+      let floorExtra = start - max(0, block.lowerBound)
+      if floorExtra <= alignmentBudget {
+        start -= floorExtra
+        alignmentBudget -= floorExtra
+      } else {
+        alignmentBudget = -1
+      }
     }
+    let budget = alignmentBudget
     let alignStop: ((Int) -> Int)? = blockLines.map { lookup in
       { stop in
-        guard stop < newLineCount else { return stop }
+        guard budget >= 0, stop < newLineCount else { return stop }
         let oldLine = stop - convergence.lineDelta
         guard let block = lookup(oldLine), block.contains(oldLine), block.lowerBound < oldLine
         else { return stop }
-        return min(newLineCount, max(stop, block.upperBound + convergence.lineDelta))
+        let aligned = min(newLineCount, max(stop, block.upperBound + convergence.lineDelta))
+        return aligned - stop <= budget ? aligned : stop
       }
     }
     let incoming = start < previousStates.count ? previousStates[start] : .documentStart

@@ -570,7 +570,7 @@ public final class EditorCoordinator: NSObject {
   ///    block half inside the window is a block whose other half is about to be described
   ///    by different values; keeping either would contradict the other.
   ///
-  /// ## Condition 2 holds by construction on the typing path
+  /// ## Condition 2 holds by construction on the typing path, up to a cap
   ///
   /// The scanner's minimal window is *not* block-aligned: it starts `backwardWidening`
   /// lines above the edit and stops `lookahead` lines past convergence, so an ordinary
@@ -589,9 +589,17 @@ public final class EditorCoordinator: NSObject {
   /// block edges: its floor moves up to the first line of the cached block containing it,
   /// and its stop moves down to the next line where a cached block begins. The window then
   /// replaces whole cached blocks, so nothing straddles. Widening only ever adds lines the
-  /// convergence rule had already proved unchanged, so it costs rescan time — at most the
-  /// two edge blocks' length — and never correctness. The check below stays as the
-  /// fail-safe for a cache that disagrees with the scanner's line count.
+  /// convergence rule had already proved unchanged, so it costs rescan time and never
+  /// correctness.
+  ///
+  /// The time is **capped**: the scanner adds at most 64 lines (`blockAlignmentLineLimit`
+  /// in `EscriboCore`). An edit inside a block too long for that — a 2,000-line code fence,
+  /// a wall-of-text paragraph — gets the minimal window, this check declines, and
+  /// ``blocksSpanDocument`` goes `false` exactly as it did before alignment existed: the
+  /// queries fall back to a scan, and with an embed provider installed
+  /// `refreshEmbeds(afterEdit:)` full-scans, which restores the cache. The check below is
+  /// therefore live on that path, and is also the fail-safe for a cache that disagrees with
+  /// the scanner's line count.
   ///
   /// Condition 2 is doing more work than it looks. It also establishes that the window's
   /// own edge blocks are **not fragments** — which is the thing that actually matters, and
