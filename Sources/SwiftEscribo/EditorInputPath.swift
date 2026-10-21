@@ -247,9 +247,204 @@ struct CaretLineContext: Equatable {
 
     override func insertText(_ text: String) {
       wellOverlay?.typed()
+      // Block embeds (REQUIREMENTS.md § 1.3): typing into or over an embed changes nothing.
+      // Checked before the Return/Tab affordances, so they never rewrite an embed either.
+      if let embedInput {
+        switch embedInput.typingVerdict(range: selectedRange, text: text) {
+        case .veto: return
+        case .plain:
+          super.insertText(text)
+          return
+        case .normal: break
+        }
+      }
       if text == "\n", returnKeyHandler?() == true { return }
       if text == "\t", tabKeyHandler?() == true { return }
       super.insertText(text)
+    }
+
+    // MARK: Block embeds (REQUIREMENTS.md § 1.3)
+
+    /// The embed rules for this view's editor, or `nil` (no editor attached). Every input
+    /// funnel below asks it first; with no embed in the document each answer is the
+    /// pass-through one, so the stock behaviour is unchanged (§ 1.5).
+    var embedInput: IOSEmbedInput?
+
+    /// Set while the package performs its own edit (``EscriboTextView/performInputPathEdit(_:)``):
+    /// the edit rule guards the user's input, not the package's rewrites or the host's
+    /// external text.
+    var isPerformingPackageEdit = false
+
+    override var selectedTextRange: UITextRange? {
+      get { super.selectedTextRange }
+      set {
+        guard let embedInput, let newValue else {
+          super.selectedTextRange = newValue
+          return
+        }
+        let proposed = nsRange(of: newValue)
+        let constrained = embedInput.constrainSelection(proposed, current: super.selectedRange)
+        guard constrained != proposed, let range = textRange(for: constrained) else {
+          super.selectedTextRange = newValue
+          return
+        }
+        super.selectedTextRange = range
+      }
+    }
+
+    override var selectedRange: NSRange {
+      get { super.selectedRange }
+      set {
+        super.selectedRange =
+          embedInput?.constrainSelection(newValue, current: super.selectedRange) ?? newValue
+      }
+    }
+
+    override func setMarkedText(_ markedText: String?, selectedRange: NSRange) {
+      let target = markedTextRange.map(nsRange(of:)) ?? self.selectedRange
+      if embedInput?.allowsInput(range: target, text: markedText ?? "") == false { return }
+      super.setMarkedText(markedText, selectedRange: selectedRange)
+    }
+
+    override func replace(_ range: UITextRange, withText text: String) {
+      if !isPerformingPackageEdit,
+        embedInput?.allowsInput(range: nsRange(of: range), text: text) == false
+      {
+        return
+      }
+      super.replace(range, withText: text)
+    }
+
+    /// Whether a paste into the current selection passes the edit rule.
+    ///
+    /// `paste(_:)` bypasses `insertText`, `replace(_:withText:)` and `setMarkedText`
+    /// (IOS_LIVE_CHECK.md row c), so it is checked on its own. A paste always inserts
+    /// characters, so the rule is asked with a non-empty stand-in rather than the clipboard's
+    /// text: reading `UIPasteboard.general` here would raise the system paste prompt on every
+    /// menu validation, and it hangs the simulator test host.
+    func pasteAllowed() -> Bool {
+      embedInput?.allowsInput(range: selectedRange, text: "\u{FFFC}") != false
+    }
+
+    /// The paste-family actions the veto covers: Cmd-V and the edit menu (`paste:`), Paste
+    /// and Match Style, and `UIPasteControl` / item-provider paste.
+    static let pasteActions: Set<Selector> = [
+      #selector(UIResponderStandardEditActions.paste(_:)),
+      #selector(UIResponderStandardEditActions.pasteAndMatchStyle(_:)),
+      #selector(UIResponder.paste(itemProviders:)),
+    ]
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+      if Self.pasteActions.contains(action) {
+        // Decided before `super`, which may consult the pasteboard.
+        if !pasteAllowed() { return false }
+      } else if action == #selector(editEmbedAsText(_:)) {
+        return embedInput?.selectedEmbed() != nil
+      }
+      return super.canPerformAction(action, withSender: sender)
+    }
+
+    // The actions themselves are vetoed too: a key command or a host can send `paste:`
+    // without asking `canPerformAction` first. The pasteboard is never read when vetoed.
+    override func paste(_ sender: Any?) {
+      guard pasteAllowed() else { return }
+      super.paste(sender)
+    }
+
+    override func pasteAndMatchStyle(_ sender: Any?) {
+      guard pasteAllowed() else { return }
+      super.pasteAndMatchStyle(sender)
+    }
+
+    override func paste(itemProviders: [NSItemProvider]) {
+      guard pasteAllowed() else { return }
+      super.paste(itemProviders: itemProviders)
+    }
+
+    /// `⌥↩` (Edit as Text). It takes priority over UIKit's own handling of the key, and it
+    /// is enabled only while an embed is selected (``canPerformAction(_:withSender:)``);
+    /// otherwise `⌥↩` reaches the text system and inserts its newline as usual.
+    static let embedKeyCommands: [UIKeyCommand] = {
+      let editAsText = UIKeyCommand(
+        input: "\r", modifierFlags: .alternate, action: #selector(editEmbedAsText(_:)))
+      editAsText.wantsPriorityOverSystemBehavior = true
+      return [editAsText]
+    }()
+
+    override var keyCommands: [UIKeyCommand]? {
+      guard embedInput != nil else { return super.keyCommands }
+      return (super.keyCommands ?? []) + Self.embedKeyCommands
+    }
+
+    /// `⌥↩` with an embed selected: the host's *Edit as Text*.
+    @objc func editEmbedAsText(_ sender: Any?) {
+      embedInput?.editSelectedEmbedAsText()
+    }
+
+    // MARK: Hardware forward-delete
+
+    /// The forward-delete press this view consumed, so its key-up is consumed too.
+    private var consumedForwardDelete: UIPress?
+
+    /// Hardware forward-delete next to or on an embed.
+    ///
+    /// Checked on key-down, before UIKit's own handling. Observed live (iOS 26.5): UIKit
+    /// performs forward-delete with a caret by selecting one character forward and then
+    /// deleting, which the selection rule widens to the whole embed, so the embed went in
+    /// one key press; and a `UIKeyCommand` for `UIKeyCommand.inputDelete`, even with
+    /// `wantsPriorityOverSystemBehavior`, never fired. So the key is taken here.
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      if presses.count == 1, let press = presses.first, let key = press.key,
+        key.keyCode == .keyboardDeleteForward,
+        key.modifierFlags.isDisjoint(with: [.command, .alternate, .control, .shift]),
+        forwardDeleteAtEmbed()
+      {
+        consumedForwardDelete = press
+        return
+      }
+      super.pressesBegan(presses, with: event)
+    }
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      if let consumed = consumedForwardDelete, presses.contains(consumed) {
+        consumedForwardDelete = nil
+        let rest = presses.subtracting([consumed])
+        if !rest.isEmpty { super.pressesEnded(rest, with: event) }
+        return
+      }
+      super.pressesEnded(presses, with: event)
+    }
+
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      if let consumed = consumedForwardDelete, presses.contains(consumed) {
+        consumedForwardDelete = nil
+        let rest = presses.subtracting([consumed])
+        if !rest.isEmpty { super.pressesCancelled(rest, with: event) }
+        return
+      }
+      super.pressesCancelled(presses, with: event)
+    }
+
+    /// Forward-delete through the embed rule when it acts on an embed (select it, or
+    /// delete it). Returns `false`, doing nothing, otherwise: the key is UIKit's.
+    func forwardDeleteAtEmbed() -> Bool {
+      guard let embedInput, embedInput.forwardDeleteActs() else { return false }
+      wellOverlay?.typed()
+      return embedInput.handleDeleteKey(forward: true)
+    }
+
+    /// `range` as UTF-16 offsets from the start of the document.
+    private func nsRange(of range: UITextRange) -> NSRange {
+      let start = offset(from: beginningOfDocument, to: range.start)
+      return NSRange(location: start, length: offset(from: range.start, to: range.end))
+    }
+
+    /// The `UITextRange` for UTF-16 `range`, or `nil` when UIKit will not vend one.
+    private func textRange(for range: NSRange) -> UITextRange? {
+      guard let start = position(from: beginningOfDocument, offset: range.location),
+        let end = position(from: start, offset: range.length)
+      else { return nil }
+      return textRange(from: start, to: end)
     }
 
     // MARK: The paragraph well's inputs (REQUIREMENTS-1.1.0 § 5.2)
@@ -265,6 +460,9 @@ struct CaretLineContext: Equatable {
 
     override func deleteBackward() {
       wellOverlay?.typed()
+      // Backspace — and forward-delete with a selection, which UIKit routes here
+      // (IOS_LIVE_CHECK.md row d) — goes through the embed delete rule first.
+      if embedInput?.handleDeleteKey(forward: false) == true { return }
       super.deleteBackward()
     }
 
@@ -349,6 +547,9 @@ extension EscriboTextView {
         let end = textView.position(from: start, offset: edit.range.length),
         let range = textView.textRange(from: start, to: end)
       {
+        let wasPackageEdit = textView.isPerformingPackageEdit
+        textView.isPerformingPackageEdit = true
+        defer { textView.isPerformingPackageEdit = wasPackageEdit }
         textView.replace(range, withText: edit.replacement)
         return true
       }

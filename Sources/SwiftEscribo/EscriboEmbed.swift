@@ -110,6 +110,18 @@ public struct EscriboEmbed: Equatable, Sendable {
   /// the host's own menus. Performing one calls `onEmbedAction:` with the block and ``id``.
   public struct Action: Equatable, Sendable {
 
+    /// The id of the *Edit as Text* action: the writer wants the block's source back as
+    /// ordinary text.
+    ///
+    /// The editor never performs this itself; it only reports it. `⌥↩` with an embed
+    /// selected **always** calls `onEmbedAction:` with the block and this id, on macOS and
+    /// on iOS (a `UIKeyCommand`, with a hardware keyboard), whether or not the host lists
+    /// the action. To offer *Edit as Text* to touch and VoiceOver users as well, the host
+    /// lists an ``Action`` with this id in ``EscriboEmbed/actions``, so it appears among the
+    /// embed's accessibility custom actions. The host answers by returning `nil` for that
+    /// block from its provider and calling ``EscriboEditorHandle/invalidateEmbeds()``.
+    public static let editAsTextID = "escribo.editAsText"
+
     /// The host's identifier for the action, handed back verbatim when it is performed.
     public var id: String
 

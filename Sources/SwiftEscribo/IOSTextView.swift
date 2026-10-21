@@ -137,6 +137,10 @@
       // created the first time the cache holds an embed.
       installEmbedLayout()
 
+      // Block embed input (REQUIREMENTS.md § 1.3): selection, edit, delete, tap and `⌥↩`
+      // rules. Inert until the embed cache holds an embed.
+      installEmbedInput()
+
       // Sortie 25, wired identically to macOS. UIKit spells the Return key as
       // `insertText("\n")` where AppKit spells it `insertNewline(_:)`; both land on the same
       // `EscriboTextView.handleReturnKey()`, which is the point of Architecture §10.
