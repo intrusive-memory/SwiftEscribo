@@ -2,7 +2,7 @@
 type: project
 title: SwiftEscribo — block embeds, notice well slot, and JSON in notes (minor release)
 updated: 2026-10-20
-state: draft
+state: complete
 depends_on: docs/missions/embed-spike (go on both platforms, accepted by the user)
 ---
 

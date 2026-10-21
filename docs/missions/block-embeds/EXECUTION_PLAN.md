@@ -7,7 +7,7 @@ iteration: 1
 title: SwiftEscribo — block embeds, notice well slot, JSON in notes
 requirements: docs/missions/block-embeds/REQUIREMENTS.md
 recon: docs/missions/block-embeds/RECON_REPORT.md (revision 4, CLEAR)
-state: refined
+state: complete
 updated: 2026-10-20
 ---
 
