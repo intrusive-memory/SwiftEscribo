@@ -78,7 +78,9 @@ struct FontResolver {
   mutating func font(for spec: FontSpec) -> PlatformFont {
     if let cached = cache[spec] { return cached }
     let resolved = Self.font(for: spec)
-    cache[spec] = resolved
+    // A face that did not come back at the size asked for is the font service failing
+    // under load, not an answer. It is returned (the function is total) but never kept.
+    if resolved.pointSize == CGFloat(spec.pointSize) { cache[spec] = resolved }
     return resolved
   }
 
@@ -121,8 +123,23 @@ struct FontResolver {
     case .serif:
       return Self.serifSystemFont(ofSize: size)
     default:
-      return PlatformFont.systemFont(ofSize: size)
+      return systemFont(ofSize: size)
     }
+  }
+
+  /// The system font at `size`, asked for again when the answer is not at that size.
+  ///
+  /// Under heavy parallel load the font service has been seen answering with Helvetica at
+  /// 12 points whatever size was requested. That is a failed reply, not a face, so a
+  /// reply whose point size differs is retried, the same remedy as the monospaced fallback.
+  /// `provider` is a parameter so a test can simulate the failure deterministically.
+  static func systemFont(
+    ofSize size: CGFloat,
+    provider: (CGFloat) -> PlatformFont = { PlatformFont.systemFont(ofSize: $0) }
+  ) -> PlatformFont {
+    var font = provider(size)
+    for _ in 0..<5 where font.pointSize != size { font = provider(size) }
+    return font
   }
 
   // MARK: - The serif face
@@ -136,7 +153,7 @@ struct FontResolver {
   /// ``FontFamilyRole/body`` role resolves to — a reader who asked for serif and got the
   /// body face has a cosmetic defect; one who got no font at all does not.
   static func serifSystemFont(ofSize size: CGFloat) -> PlatformFont {
-    let system = PlatformFont.systemFont(ofSize: size)
+    let system = systemFont(ofSize: size)
     guard let descriptor = system.fontDescriptor.withDesign(.serif) else { return system }
     #if canImport(AppKit)
       return NSFont(descriptor: descriptor, size: size) ?? system
@@ -169,7 +186,7 @@ struct FontResolver {
       let font = PlatformFont.monospacedSystemFont(ofSize: size, weight: .regular)
       if font.pointSize == size { return font }
     }
-    return PlatformFont.systemFont(ofSize: size)
+    return systemFont(ofSize: size)
   }
 
   /// The first of `names` that exists on this system, or `nil` if none does.
