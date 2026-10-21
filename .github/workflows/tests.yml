@@ -64,6 +64,8 @@ jobs:
       - name: Test
         run: |
           xcodebuild test \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 300 \
             -scheme SwiftEscribo-Package \
             -destination 'platform=macOS,arch=arm64' \
             -skip-testing:EscriboPerformanceTests \
@@ -91,5 +93,7 @@ jobs:
       # invokes `make lint`: a duplicated destination string drifts. This job failed on its
       # very first run because the workflow pinned OS=26.1 in one place and the Makefile
       # pinned it in another, and only one of them was ever run locally. One definition now.
+      # `make test-ios` runs xcodebuild with `-test-timeouts-enabled YES
+      # -default-test-execution-time-allowance 300`, so a wedged test fails in minutes.
       - name: Test
         run: make test-ios

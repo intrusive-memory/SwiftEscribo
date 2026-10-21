@@ -65,6 +65,8 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild test \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 300 \
             -scheme SwiftEscribo-Package \
             -destination 'platform=macOS,arch=arm64' \
             -only-testing:EscriboPerformanceTests \
