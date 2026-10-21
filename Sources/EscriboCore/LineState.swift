@@ -156,6 +156,20 @@ public struct LineState: Equatable, Sendable {
   /// nothing.
   var nestedFountain: NestedFountainState
 
+  /// Where an open Fountain note stands with respect to the JSON trigger, and — inside a
+  /// JSON note — the tokenizer's container stack and key-or-value expectation.
+  ///
+  /// The trigger can take lines to decide (`[[` alone on its line, or `[[{` then a line
+  /// break before the `"`), and a pretty-printed object's second line means nothing
+  /// without knowing which containers are open and whether a key or a value comes next.
+  /// So both ride here. Fixed-size and allocation-free (the stack is a 64-bit set), and at
+  /// its default everywhere outside a note, where it compares equal to itself forever.
+  /// Every malformed note carries one uniform value, so a scan converges again as soon as
+  /// an edited note's JSON fails the same way the old one did.
+  ///
+  /// `FountainGrammar`'s alone.
+  var jsonNote: JSONNoteContext
+
   /// Creates the state a line begins in.
   ///
   /// `internal` on purpose — see the type's documentation. External code obtains a
@@ -168,7 +182,8 @@ public struct LineState: Equatable, Sendable {
     inDialogueBlock: Bool = false,
     markdownBlocks: MarkdownBlockState = MarkdownBlockState(),
     titlePage: TitlePageRegion = .documentStart,
-    nestedFountain: NestedFountainState = NestedFountainState()
+    nestedFountain: NestedFountainState = NestedFountainState(),
+    jsonNote: JSONNoteContext = JSONNoteContext()
   ) {
     self.openConstruct = openConstruct
     self.fenceCharacter = fenceCharacter
@@ -178,6 +193,7 @@ public struct LineState: Equatable, Sendable {
     self.markdownBlocks = markdownBlocks
     self.titlePage = titlePage
     self.nestedFountain = nestedFountain
+    self.jsonNote = jsonNote
   }
 
   /// The state the first line of a document begins in: nothing open, nothing carried.
@@ -251,15 +267,16 @@ enum TitlePageRegion: UInt8, Equatable, Sendable {
 /// is also the right place on the merits — this is the shape of a `LineState` seen from
 /// inside a fence, and nothing about it belongs to either grammar exclusively.
 ///
-/// Four fields and not one tag. The Fountain grammar's multi-line story is a region tag, a
-/// dialogue block, a block-boundary bit, and a title-page region, and every one of them
+/// Five fields and not one tag. The Fountain grammar's multi-line story is a region tag, a
+/// dialogue block, a block-boundary bit, a title-page region, and a note's JSON context,
+/// and every one of them
 /// decides how the *next* line scans. A nested state that carried only the region tag would
 /// scan the second line of a fenced dialogue block as action, and a nested state that
 /// carried nothing at all — "we are in a fence" and no more — would converge on the fence's
 /// second line and repaint nothing after it.
 ///
-/// All scalars, so this costs nine bytes inside a value stored once per line and allocates
-/// nothing. There is deliberately no nested `NestedFountainState` inside it: nesting is one
+/// All fixed-size scalars, so this costs a few dozen bytes inside a value stored once per
+/// line and allocates nothing. There is deliberately no nested `NestedFountainState` inside it: nesting is one
 /// level (``LineState/nestedFountain``), so the type does not need to be recursive and
 /// therefore does not need to be boxed.
 struct NestedFountainState: Equatable, Sendable {
@@ -281,6 +298,10 @@ struct NestedFountainState: Equatable, Sendable {
   /// the fence** the one line a nested title page may begin on — the same rule a standalone
   /// screenplay gets from line zero, arrived at by the same route.
   var titlePage: TitlePageRegion = .documentStart
+
+  /// ``LineState/jsonNote``, inside the fence — so a JSON note in a fenced screenplay scans
+  /// across lines exactly as it does in a standalone one.
+  var jsonNote = JSONNoteContext()
 }
 
 extension LineState {
@@ -295,7 +316,8 @@ extension LineState {
       openConstruct: inner.openConstruct,
       followsNonBlankLine: inner.followsNonBlankLine,
       inDialogueBlock: inner.inDialogueBlock,
-      titlePage: inner.titlePage)
+      titlePage: inner.titlePage,
+      jsonNote: inner.jsonNote)
   }
 
   /// The Fountain half of this state — what a nested scan's end state contributes back to
@@ -309,6 +331,7 @@ extension LineState {
       openConstruct: openConstruct,
       followsNonBlankLine: followsNonBlankLine,
       inDialogueBlock: inDialogueBlock,
-      titlePage: titlePage)
+      titlePage: titlePage,
+      jsonNote: jsonNote)
   }
 }

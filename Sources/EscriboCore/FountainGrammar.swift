@@ -309,14 +309,14 @@ struct FountainGrammar: LineGrammar {
     // whether it began inside one. The walk is a single left-to-right pass that carries
     // the region open at the start of the line and reports the one open at the end of it
     // — the state a later line will be scanned against.
-    let regions = scanRegions(line, incoming: state.openConstruct)
+    let regions = scanRegions(line, incoming: state.openConstruct, json: state.jsonNote)
 
     // A line with nothing on it but region text is that region. Everything else keeps its
     // ordinary classification, with the region spans laid over the top (deviation 8).
     if regions.coversWholeLine {
       return withState(
         regionLine(line, regions), after: line, state: state, region: regions.endRegion,
-        titlePage: leading)
+        titlePage: leading, jsonNote: regions.endJSON)
     }
 
     // Order matters in exactly four places, and all four are load-bearing:
@@ -360,7 +360,7 @@ struct FountainGrammar: LineGrammar {
 
     return withState(
       overlaid(emphasized, with: regions), after: line, state: state,
-      region: regions.endRegion, titlePage: leading)
+      region: regions.endRegion, titlePage: leading, jsonNote: regions.endJSON)
   }
 
   // MARK: - YAML frontmatter
@@ -450,17 +450,21 @@ struct FountainGrammar: LineGrammar {
   ///     ``noteTag``, ``boneyardTag``, or zero. Passed in and always assigned rather than
   ///     inherited, because inheriting it is how a closed boneyard stays open forever.
   ///   - titlePage: Where the **next** line sits with respect to the title page.
+  ///   - jsonNote: The open note's JSON context at the end of the line. Ignored — reset to
+  ///     the default — unless a note is still open, so no construct can leak it.
   private func withState(
     _ scan: LineScan,
     after line: GrammarLine,
     state: LineState,
     region: UInt16,
-    titlePage: TitlePageRegion
+    titlePage: TitlePageRegion,
+    jsonNote: JSONNoteContext = JSONNoteContext()
   ) -> LineScan {
     var scan = scan
     var next = state
     next.followsNonBlankLine = !isBlank(line.units)
     next.openConstruct = region
+    next.jsonNote = region == Self.noteTag ? jsonNote : JSONNoteContext()
     next.titlePage = titlePage
     switch scan.element {
     case .character:
@@ -959,6 +963,9 @@ struct FountainGrammar: LineGrammar {
     /// ``boneyardTag``, or zero when the line ends outside one.
     var endRegion: UInt16 = 0
 
+    /// The JSON context of the note open at the end of the line; the default when none is.
+    var endJSON = JSONNoteContext()
+
     /// The tag of the **first** region on the line, which is the one that names the line
     /// when the line is nothing but region.
     var firstRegion: UInt16 = 0
@@ -992,12 +999,17 @@ struct FountainGrammar: LineGrammar {
   ///   this grammar does not own — a Markdown fence tag arriving through a nested scan —
   ///   is read as "nothing open", which is the only reading a grammar is entitled to make
   ///   of another grammar's private encoding.
-  private func scanRegions(_ line: GrammarLine, incoming: UInt16) -> RegionScan {
+  /// - Parameter json: The JSON context of the note open at the start of the line, if one
+  ///   is. A note that opens on this line starts from ``JSONNoteContext/noteOpened``.
+  private func scanRegions(
+    _ line: GrammarLine, incoming: UInt16, json: JSONNoteContext
+  ) -> RegionScan {
     let units = line.units
     let base = line.contentRange.lowerBound
     var out = RegionScan()
 
     var region = (incoming == Self.noteTag || incoming == Self.boneyardTag) ? incoming : 0
+    var json = region == Self.noteTag ? json : JSONNoteContext()
     // Where the open region's extent begins on *this* line, and where its text does. Equal
     // when the region opened on an earlier line, which is exactly what "no opening marker
     // on this line" means.
@@ -1023,7 +1035,8 @@ struct FountainGrammar: LineGrammar {
       if textEnd > textStart {
         if kind == .note {
           out.spans.append(
-            contentsOf: GlosaScanner.scan(units, in: textStart..<textEnd, base: base))
+            contentsOf: GlosaScanner.scan(
+              units, in: textStart..<textEnd, base: base, json: &json, continues: !hasCloser))
         } else {
           out.spans.append(EscriboSpan(range: (base + textStart)..<(base + textEnd), kind: kind))
         }
@@ -1050,6 +1063,7 @@ struct FountainGrammar: LineGrammar {
           units[offset] == solidus && offset + 1 < units.count && units[offset + 1] == asterisk
         if opensNote || opensBoneyard {
           region = opensNote ? Self.noteTag : Self.boneyardTag
+          json = opensNote ? .noteOpened : JSONNoteContext()
           if out.firstRegion == 0 { out.firstRegion = region }
           regionStart = offset
           textStart = offset + 2
@@ -1079,6 +1093,7 @@ struct FountainGrammar: LineGrammar {
       // to the end of the document unless a later line closes it (deviation 9).
       closeRegion(at: units.count, withMarker: false)
       out.endRegion = region
+      if region == Self.noteTag { out.endJSON = json }
     }
     return out
   }
