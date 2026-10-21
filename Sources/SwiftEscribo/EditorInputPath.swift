@@ -198,16 +198,56 @@ struct CaretLineContext: Equatable {
     /// **The find-originated selection hook.** While `true`, a proposed selection is a Find
     /// match and passes through ``embedSelectionConstraint`` unsnapped
     /// (`EmbedSelection.constrain(…, isFindMatch: true)`), so the host can be told and can
-    /// expand the embed holding the match (REQUIREMENTS.md § 1.3, Find). Nothing sets it
-    /// yet: the find current-match work sets it around the selection `NSTextFinder` makes.
+    /// expand the embed holding the match (REQUIREMENTS.md § 1.3, Find).
+    ///
+    /// Set only by the ``selectedRanges`` setter below, for the length of that one call.
     var isApplyingFindSelection = false
+
+    /// Called after every selection change, with whether it was a Find match. The embed
+    /// behaviour reports a match inside an embed to the host from here, once the selection
+    /// is in place.
+    var embedSelectionDidChange: (@MainActor (_ isFindMatch: Bool) -> Void)?
+
+    /// The last Find match reported to the host, so a re-asserted match is reported once.
+    /// Cleared by any selection that is not a Find match.
+    var lastReportedFindMatch: [NSRange]?
+
+    /// **The seam that tells a Find match from every other selection.**
+    ///
+    /// `NSTextFinder` (the find bar, and the menu's Find Next / Previous / Select All, which
+    /// reach the same finder through `performTextFinderAction(_:)` and
+    /// `performFindPanelAction(_:)`) reports its current match only by selecting it, and it
+    /// does that through the `NSTextFinderClient` requirement `selectedRanges`'s **setter**,
+    /// which `NSTextView` implements by calling `setSelectedRanges(_:affinity:stillSelecting:)`.
+    /// Probed on macOS 26 with call stacks: Find Next from the menu (synchronous), the find
+    /// bar's incremental search and its next/previous buttons (asynchronous, after the
+    /// action has returned) all arrive here from `_NSTextFinderImpl`; arrows, shift-arrows,
+    /// clicks and drags, Select All, typing, undo and `setSelectedRange(_:)` all call the
+    /// three-argument method directly and never come here. Nothing in this package calls
+    /// this setter, so marking every call here as a Find match is exact.
+    ///
+    /// Wrapping `performTextFinderAction(_:)` instead would miss the find bar's own buttons
+    /// and its asynchronous search, which never pass through the text view's action
+    /// methods, and would mark the text system's own selection adjustments during a Replace
+    /// as matches.
+    override var selectedRanges: [NSValue] {
+      get { super.selectedRanges }
+      set {
+        let wasApplying = isApplyingFindSelection
+        isApplyingFindSelection = true
+        defer { isApplyingFindSelection = wasApplying }
+        super.selectedRanges = newValue
+      }
+    }
 
     override func setSelectedRanges(
       _ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool
     ) {
+      let isFindMatch = isApplyingFindSelection
       let constrained =
-        embedSelectionConstraint?(ranges, selectedRange(), isApplyingFindSelection) ?? ranges
+        embedSelectionConstraint?(ranges, selectedRange(), isFindMatch) ?? ranges
       super.setSelectedRanges(constrained, affinity: affinity, stillSelecting: stillSelecting)
+      embedSelectionDidChange?(isFindMatch)
     }
 
     /// `true` while a paste (`paste(_:)`, the services menu, a drop of text) is inserting, so

@@ -16,6 +16,9 @@
     let undoProvider = TestUndoManagerProvider()
     var activations: [EscriboBlock] = []
     var actions: [(block: EscriboBlock, id: String)] = []
+    var findMatches: [EscriboBlock] = []
+    /// Runs inside `onFindMatchInEmbed`, as a host's handler would.
+    var onFindMatch: ((EscriboBlock) -> Void)?
 
     var editor: EscriboTextView { layout.editor }
     var textView: EscriboNativeTextView { layout.editor.textView }
@@ -34,7 +37,10 @@
       editor.coordinator.setEmbedCallbacks(
         onActivate: { [unowned self] in self.activations.append($0) },
         onAction: { [unowned self] in self.actions.append((block: $0, id: $1)) },
-        onFindMatch: { _ in })
+        onFindMatch: { [unowned self] in
+          self.findMatches.append($0)
+          self.onFindMatch?($0)
+        })
       layout.embed()
       _ = layout.layout()
       settleEventGroup()

@@ -39,8 +39,9 @@ final class EmbedState {
   /// Called with an embed's block and the ``EscriboEmbed/Action/id`` performed on it.
   var onAction: (EscriboBlock, String) -> Void = { _, _ in }
 
-  /// Called when Find lands a match inside an embed. Stored for the find sortie; never
-  /// called on iOS, which has no find bar.
+  /// Called when Find lands a match inside an embed, once per match, from the macOS embed
+  /// behaviour (`MacEmbedBehaviour.swift`). Never called on iOS, which has no find bar: the
+  /// parameter is accepted there and stays a no-op, like `findBar`.
   var onFindMatch: (EscriboBlock) -> Void = { _ in }
 
   /// Set while an external reset is replacing the whole document: the reset's edit is not

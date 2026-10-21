@@ -34,6 +34,9 @@
       textView.embedEditAsTextHandler = { [weak self] in
         self?.handleEmbedEditAsText() ?? false
       }
+      textView.embedSelectionDidChange = { [weak self] isFindMatch in
+        self?.selectionDidChange(isFindMatch: isFindMatch)
+      }
     }
 
     // MARK: - The drawn embeds
@@ -78,6 +81,41 @@
           isFindMatch: isFindMatch)
         guard NSMaxRange(constrained) <= length else { return value }
         return NSValue(range: constrained)
+      }
+    }
+
+    // MARK: - Find
+
+    /// Reports a Find match that lies inside an embed to `onFindMatchInEmbed:`, once per
+    /// match (REQUIREMENTS.md § 1.3, Find).
+    ///
+    /// The match was let through unsnapped (``EscriboNativeTextView/selectedRanges``), so
+    /// it is selected inside the row when this runs. The host typically stops returning an
+    /// embed for the block and calls ``EscriboEditorHandle/invalidateEmbeds()``; the block
+    /// then draws as text with the match still selected, because invalidation re-lays the
+    /// block out and never touches the selection.
+    ///
+    /// "Once per match": `NSTextFinder` re-asserts its current match (the find bar does it
+    /// whenever its field changes), so a selection equal to the last reported one is not
+    /// reported again until some other selection has come between.
+    func selectionDidChange(isFindMatch: Bool) {
+      guard isFindMatch else {
+        textView.lastReportedFindMatch = nil
+        return
+      }
+      let ranges = textView.selectedRanges.map(\.rangeValue)
+      guard ranges != textView.lastReportedFindMatch else { return }
+      textView.lastReportedFindMatch = ranges
+      guard !coordinator.embeddedBlocks.isEmpty else { return }
+
+      let length = documentStorage.length
+      var reported: Set<Int> = []
+      for range in ranges where range.length > 0 {
+        guard let hit = coordinator.embeddedBlock(containingUTF16Offset: range.location),
+          hit.block.range.upperBound <= length,
+          reported.insert(hit.block.range.lowerBound).inserted
+        else { continue }
+        coordinator.embeds.onFindMatch(hit.block)
       }
     }
 
