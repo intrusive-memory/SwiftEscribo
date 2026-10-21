@@ -224,7 +224,7 @@
 
     // MARK: Start edge
 
-    @Test("At the embed's start edge only Return inserts; nothing joins the block's first line")
+    @Test("At the embed's start edge only line-terminated input inserts; nothing joins its first line")
     func startEdgeRule() throws {
       let h = try MacEmbedHarness()
       let tv = h.textView
@@ -243,6 +243,40 @@
       // A selection ending at the start edge, replaced by text, would join too.
       h.select(NSRange(location: h.note.location - 3, length: 3))
       h.type("x")
+      #expect(h.string == h.original)
+
+      // Paste there is ignored, even text ending in a newline (the iOS rule).
+      let pasteboard = NSPasteboard(name: NSPasteboard.Name("escribo.embed.edge.\(UUID())"))
+      defer { pasteboard.releaseGlobally() }
+      pasteboard.clearContents()
+      pasteboard.setString("pasted\n", forType: .string)
+      h.caret(h.note.location)
+      _ = tv.readSelection(from: pasteboard, type: .string)
+      #expect(h.string == h.original)
+
+      // Typed text ending in a line break is inserted above the block, which stays whole.
+      h.caret(h.note.location)
+      h.type("above\n")
+      let typedAbove = (h.original as NSString).replacingCharacters(
+        in: NSRange(location: h.note.location, length: 0), with: "above\n")
+      #expect(h.string == typedAbove)
+      #expect(h.embeddedStarts.count == 1)
+      tv.undoManager?.undo()
+      settleEventGroup()
+      #expect(h.string == h.original)
+
+      // Backspace at the start edge is allowed when it only removes a blank line above...
+      h.caret(h.note.location)
+      tv.deleteBackward(nil)
+      let blankRemoved = (h.original as NSString).replacingCharacters(
+        in: NSRange(location: h.note.location - 1, length: 1), with: "")
+      #expect(h.string == blankRemoved)
+      #expect(h.embeddedStarts == [h.note.location - 1])
+      // ...and ignored when it would pull the block's first line onto a non-empty line.
+      tv.deleteBackward(nil)
+      #expect(h.string == blankRemoved)
+      tv.undoManager?.undo()
+      settleEventGroup()
       #expect(h.string == h.original)
 
       // Return pushes the block down a line and keeps it whole and embedded.

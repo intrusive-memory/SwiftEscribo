@@ -98,6 +98,12 @@
       }
       let embeds = drawnEmbedRanges
       guard !embeds.isEmpty else { return true }
+      // Paste at an embed's start edge is ignored outright, even text ending in a newline:
+      // the iOS rule, where a paste's text is not known before it lands, and the two
+      // platforms keep one behaviour.
+      if textView.isPasting, embeds.contains(where: { $0.location == NSMaxRange(range) }) {
+        return false
+      }
       return EmbedSelection.allowsInput(
         range: range, replacement: replacement, embeds: embeds, in: documentStorage.mutableString)
     }

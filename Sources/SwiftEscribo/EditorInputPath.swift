@@ -200,6 +200,19 @@ struct CaretLineContext: Equatable {
       super.setSelectedRanges(constrained, affinity: affinity, stillSelecting: stillSelecting)
     }
 
+    /// `true` while a paste (`paste(_:)`, the services menu, a drop of text) is inserting, so
+    /// ``embedEditFilter``'s owner can tell a paste from typing.
+    private(set) var isPasting = false
+
+    override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType)
+      -> Bool
+    {
+      let wasPasting = isPasting
+      isPasting = true
+      defer { isPasting = wasPasting }
+      return super.readSelection(from: pboard, type: type)
+    }
+
     override func shouldChangeText(
       in affectedCharRange: NSRange, replacementString: String?
     ) -> Bool {
