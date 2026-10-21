@@ -7,6 +7,42 @@ import SwiftUI
   import UIKit
 #endif
 
+// MARK: - Embed configuration
+
+/// The embed half of ``EscriboEditor``'s parameters, carried to the coordinator as one value
+/// (REQUIREMENTS.md § 1.1).
+///
+/// One struct rather than four more arguments on every bridge and Representable signature:
+/// the four always travel together, and adding a field later touches this type alone.
+/// `onFindMatch` is carried on iOS too and simply never called there — the same
+/// platform-neutral shape as `findBar`.
+struct EmbedConfiguration {
+
+  /// The host's provider, or `nil` for no embeds.
+  var provider: (any EscriboEmbedProvider)?
+
+  /// Called with the block when an embed row is clicked or tapped.
+  var onActivate: (EscriboBlock) -> Void = { _ in }
+
+  /// Called with the block and the action id when an embed action is performed.
+  var onAction: (EscriboBlock, String) -> Void = { _, _ in }
+
+  /// Called with the block when Find lands a match inside an embed. macOS only.
+  var onFindMatch: (EscriboBlock) -> Void = { _ in }
+
+  /// No provider and no-op callbacks: what an editor that never mentions embeds gets.
+  static var none: EmbedConfiguration { EmbedConfiguration(provider: nil) }
+
+  /// Hands this configuration to `coordinator`. Callbacks are re-stored on every call so
+  /// they never target a stale view graph; the provider is asked again only when it
+  /// appears or disappears (``EditorCoordinator/setEmbedProvider(_:)``).
+  func apply(to coordinator: EditorCoordinator) {
+    coordinator.setEmbedCallbacks(
+      onActivate: onActivate, onAction: onAction, onFindMatch: onFindMatch)
+    coordinator.setEmbedProvider(provider)
+  }
+}
+
 // MARK: - The SwiftUI coordinator
 
 /// The object SwiftUI keeps alive across `update…View(_:context:)` passes: it owns the
@@ -101,6 +137,7 @@ final class EscriboEditorBridge: NSObject {
     handle: EscriboEditorHandle? = nil,
     well: EscriboWell? = nil,
     onWellAction: @escaping (EscriboWellItem, EscriboBlock) -> Void = { _, _ in },
+    embeds: EmbedConfiguration = .none,
     horizontalSizeClass: WellLane.HorizontalSizeClass? = nil
   ) -> EscriboTextView {
     let styler = EscriboStyler(
@@ -129,6 +166,11 @@ final class EscriboEditorBridge: NSObject {
     // Rule 1 makes this free when the host starts from an empty string.
     editor.applyExternalText(text.wrappedValue)
 
+    // Embeds last, after the document is in: installing the provider asks every block
+    // once, so installing it before the initial text would ask the empty document first and
+    // then the loaded one.
+    embeds.apply(to: editor.coordinator)
+
     return editor
   }
 
@@ -148,6 +190,7 @@ final class EscriboEditorBridge: NSObject {
     text incoming: String,
     well: EscriboWell? = nil,
     onWellAction: @escaping (EscriboWellItem, EscriboBlock) -> Void = { _, _ in },
+    embeds: EmbedConfiguration = .none,
     horizontalSizeClass: WellLane.HorizontalSizeClass? = nil
   ) {
     guard let editor else { return }
@@ -159,6 +202,10 @@ final class EscriboEditorBridge: NSObject {
     editor.onWellAction = onWellAction
     editor.applyWell(well, horizontalSizeClass: horizontalSizeClass)
     editor.applyExternalText(incoming)
+    // After the text, for the reason `makeEditor` gives. A provider already installed is not
+    // re-asked here: SwiftUI cannot show that its answers changed, so that is the host's
+    // `invalidateEmbeds()` to call.
+    embeds.apply(to: editor.coordinator)
   }
 
   /// Pushes the editor's document back out to the binding.
@@ -260,6 +307,10 @@ final class EscriboEditorBridge: NSObject {
     /// stale view graph.
     let onWellAction: (EscriboWellItem, EscriboBlock) -> Void
 
+    /// The host's embed provider and callbacks. Callbacks are re-stored on every update; the
+    /// provider is asked again only when it appears or disappears.
+    let embeds: EmbedConfiguration
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
@@ -267,7 +318,8 @@ final class EscriboEditorBridge: NSObject {
     func makeNSView(context: Context) -> NSScrollView {
       context.coordinator.makeEditor(
         language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
-        focusOnAppear: focusOnAppear, handle: handle, well: well, onWellAction: onWellAction
+        focusOnAppear: focusOnAppear, handle: handle, well: well, onWellAction: onWellAction,
+        embeds: embeds
       ).scrollView
     }
 
@@ -275,7 +327,7 @@ final class EscriboEditorBridge: NSObject {
       context.coordinator.text = $text
       context.coordinator.update(
         language: language, mode: mode, theme: theme, appearance: appearance, text: text,
-        well: well, onWellAction: onWellAction)
+        well: well, onWellAction: onWellAction, embeds: embeds)
     }
   }
 
@@ -322,6 +374,10 @@ final class EscriboEditorBridge: NSObject {
     /// stale view graph.
     let onWellAction: (EscriboWellItem, EscriboBlock) -> Void
 
+    /// The host's embed provider and callbacks. Callbacks are re-stored on every update; the
+    /// provider is asked again only when it appears or disappears.
+    let embeds: EmbedConfiguration
+
     func makeCoordinator() -> EscriboEditorBridge {
       EscriboEditorBridge(text: $text)
     }
@@ -330,6 +386,7 @@ final class EscriboEditorBridge: NSObject {
       context.coordinator.makeEditor(
         language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
         focusOnAppear: focusOnAppear, handle: handle, well: well, onWellAction: onWellAction,
+        embeds: embeds,
         horizontalSizeClass: WellLane.HorizontalSizeClass(context.environment.horizontalSizeClass)
       ).textView
     }
@@ -338,7 +395,7 @@ final class EscriboEditorBridge: NSObject {
       context.coordinator.text = $text
       context.coordinator.update(
         language: language, mode: mode, theme: theme, appearance: appearance, text: text,
-        well: well, onWellAction: onWellAction,
+        well: well, onWellAction: onWellAction, embeds: embeds,
         horizontalSizeClass: WellLane.HorizontalSizeClass(context.environment.horizontalSizeClass))
     }
   }
