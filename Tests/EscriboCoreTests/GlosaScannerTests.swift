@@ -194,4 +194,153 @@ struct GlosaScannerTests {
       FountainRegionTests.texts(.glosaAttributeName, in: fullResult, of: edited) == ["length"])
     #expect(FountainRegionTests.texts(.glosaAttributeValue, in: fullResult, of: edited) == ["2s"])
   }
+
+  // MARK: - JSON notes (single line)
+
+  /// Scans `content` as a note's content directly through ``GlosaScanner`` and returns
+  /// `(kind, text)` pairs, asserting the spans tile the whole chunk.
+  private static func jsonSpans(_ content: String) -> [(SpanKind, String)] {
+    let units = Array(content.utf16)
+    let spans = GlosaScanner.scan(units, in: 0..<units.count, base: 0)
+    var cursor = 0
+    for span in spans {
+      #expect(span.range.lowerBound == cursor, "gap or overlap scanning \(content)")
+      cursor = span.range.upperBound
+    }
+    #expect(cursor == units.count, "spans do not tile \(content)")
+    return spans.map { span in
+      (span.kind, String(decoding: units[span.range], as: UTF16.self))
+    }
+  }
+
+  private static func texts(_ kind: SpanKind, in content: String) -> [String] {
+    jsonSpans(content).filter { $0.0 == kind }.map(\.1)
+  }
+
+  @Test("A JSON note with every value type is subdivided into key, value and punctuation spans")
+  func validJSONObjectEveryValueType() {
+    let content =
+      "{\"s\": \"x\", \"n\": -1.5e+3, \"t\": true, \"f\": false, \"z\": null, \"o\": {\"k\": 0}, \"a\": [1, \"y\", [null]]}"
+    #expect(
+      Self.texts(.glosaJSONKey, in: content) == [
+        "\"s\"", "\"n\"", "\"t\"", "\"f\"", "\"z\"", "\"o\"", "\"k\"", "\"a\"",
+      ])
+    #expect(Self.texts(.glosaJSONString, in: content) == ["\"x\"", "\"y\""])
+    #expect(Self.texts(.glosaJSONNumber, in: content) == ["-1.5e+3", "0", "1"])
+    #expect(Self.texts(.glosaJSONLiteral, in: content) == ["true", "false", "null", "null"])
+    // Whitespace between tokens stays `note`; nothing degraded to `text`.
+    #expect(Self.jsonSpans(content).allSatisfy { $0.0 != .text })
+    // Counted from the source: 4 braces + 4 brackets, 8 colons (one per key), and 8
+    // commas (6 between the 7 top-level entries, 2 inside the array).
+    let punctuation = Self.texts(.glosaPunctuation, in: content)
+    #expect(punctuation.filter { $0 == ":" }.count == 8)
+    #expect(punctuation.filter { $0 == "," }.count == 8)
+    #expect(punctuation.filter { "{}[]".contains($0) }.count == 8)
+  }
+
+  @Test("Exponent and negative numbers, and a number directly before a closer")
+  func numberForms() {
+    #expect(Self.texts(.glosaJSONNumber, in: "{\"a\":-0.5}") == ["-0.5"])
+    #expect(Self.texts(.glosaJSONNumber, in: "{\"a\":2E10,\"b\":1e-2}") == ["2E10", "1e-2"])
+  }
+
+  @Test("A `]]` and brackets inside a JSON string do not end or confuse the scan")
+  func bracketsInsideAString() {
+    let content = "{\"a\":\"]]\"}"
+    #expect(Self.texts(.glosaJSONString, in: content) == ["\"]]\""])
+    #expect(Self.texts(.glosaPunctuation, in: content) == ["{", ":", "}"])
+    // Escaped quote and backslash stay inside the string.
+    let escaped = "{\"a\":\"q\\\"]\\\\\"}"
+    #expect(Self.texts(.glosaJSONString, in: escaped) == ["\"q\\\"]\\\\\""])
+  }
+
+  @Test("The first `]]` still closes the note, JSON string or not")
+  func firstCloserWinsEvenInsideAString() {
+    let source = "Bob waits.\n\n[[{\"a\":\"]]\"}]]"
+    let result = FountainGrammarTests.fullScan(source)
+    // The note content is `{"a":"` — an unterminated string — so nothing is subdivided.
+    #expect(FountainRegionTests.texts(.glosaJSONKey, in: result, of: source) == ["\"a\""])
+    #expect(FountainRegionTests.texts(.glosaJSONString, in: result, of: source).isEmpty)
+    #expect(result.spans.reduce(0) { $0 + $1.range.count } == source.utf16.count)
+  }
+
+  @Test(
+    "Malformed JSON stops subdividing at the first error and the rest stays `note`",
+    arguments: [
+      // (content, JSON-token texts that survive before the error)
+      ("{\"a\" 1}", ["{", "\"a\""]),
+      ("{\"a\": }", ["{", "\"a\"", ":"]),
+      ("{\"a\": 1,, \"b\": 2}", ["{", "\"a\"", ":", "1", ","]),
+      ("{\"a\": 01}", ["{", "\"a\"", ":"]),
+      ("{\"a\": tru}", ["{", "\"a\"", ":"]),
+      ("{\"a\": \"open}", ["{", "\"a\"", ":"]),
+      ("{\"a\": [1}", ["{", "\"a\"", ":", "[", "1"]),
+      ("{\"a\": 1} trailing", ["{", "\"a\"", ":", "1", "}"]),
+      ("{\"a\": 1.}", ["{", "\"a\"", ":"]),
+    ]
+  )
+  func malformedStopsAtFirstError(content: String, surviving: [String]) {
+    let spans = Self.jsonSpans(content)  // also asserts tiling
+    let tokens = spans.filter { $0.0 != .note }.map(\.1)
+    #expect(tokens == surviving)
+    // The trailing span is `note` and covers the unscanned tail.
+    #expect(spans.last?.0 == .note)
+    #expect(spans.allSatisfy { $0.0 != .text })
+  }
+
+  @Test("Nesting past the depth cap is malformed and the rest stays `note`")
+  func depthCap() {
+    let content =
+      "{\"a\":" + String(repeating: "[", count: 70) + String(repeating: "]", count: 70) + "}"
+    let spans = Self.jsonSpans(content)
+    #expect(spans.last?.0 == .note)
+    #expect(spans.filter { $0.1 == "[" }.count == JSONNoteState.maxDepth - 1)
+  }
+
+  @Test(
+    "`{` then optional whitespace then `\"` triggers JSON; anything else is an ordinary note",
+    arguments: [
+      ("{\"a\":1}", true),
+      ("{ \"a\":1}", true),
+      ("  {\t\"a\":1}", true),
+      ("{sic}", false),
+      ("{}", false),
+      ("{ 1 }", false),
+      ("{", false),
+      ("{ ", false),
+      ("a {\"a\":1}", false),
+    ]
+  )
+  func jsonTrigger(content: String, isJSON: Bool) {
+    let spans = Self.jsonSpans(content)
+    let sawJSON = spans.contains { $0.0 == .glosaJSONKey }
+    #expect(sawJSON == isJSON)
+    if !isJSON {
+      #expect(spans.allSatisfy { $0.0 == .note })
+    }
+  }
+
+  @Test("Through the grammar, `[[{sic}]]` stays a plain note and `[[{ \"a\": 1 }]]` is JSON")
+  func triggerThroughTheGrammar() {
+    let plain = "[[{sic}]]"
+    let plainResult = FountainGrammarTests.fullScan(plain)
+    #expect(FountainRegionTests.texts(.note, in: plainResult, of: plain) == ["{sic}"])
+    #expect(FountainRegionTests.texts(.glosaPunctuation, in: plainResult, of: plain).isEmpty)
+
+    // A leading action line: a first line containing `:` would open a title page.
+    let json = "Bob waits.\n\n[[{ \"a\": 1 }]]"
+    let jsonResult = FountainGrammarTests.fullScan(json)
+    #expect(jsonResult.lineRecords[2].element == .note)
+    #expect(FountainRegionTests.texts(.glosaJSONKey, in: jsonResult, of: json) == ["\"a\""])
+    #expect(FountainRegionTests.texts(.glosaJSONNumber, in: jsonResult, of: json) == ["1"])
+    #expect(jsonResult.spans.reduce(0) { $0 + $1.range.count } == json.utf16.count)
+  }
+
+  @Test("A tag-directive note is unchanged by the JSON trigger")
+  func tagDirectiveNoteUnchanged() {
+    let source = "[[<breath length=\"4s\"/>]]"
+    let result = FountainGrammarTests.fullScan(source)
+    #expect(FountainRegionTests.texts(.glosaTag, in: result, of: source) == ["breath"])
+    #expect(FountainRegionTests.texts(.glosaJSONKey, in: result, of: source).isEmpty)
+  }
 }
