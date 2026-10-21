@@ -410,6 +410,9 @@
     private func embedsDidChange(_ ranges: [Range<Int>]) {
       #if os(macOS)
         defer { embedAccessibilityDidChange() }
+      #else
+        // The accessibility elements follow the embed set (IOSEmbedAccessibility).
+        textView.embedAccessibility?.embedsDidChange()
       #endif
       if embedLayout == nil {
         guard !coordinator.embeddedBlocks.isEmpty else { return }
