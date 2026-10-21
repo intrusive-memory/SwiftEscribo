@@ -165,7 +165,10 @@ public struct EscriboEditor: View {
   ///   - onEmbedActivate: Called once with the block when an embed row is clicked or
   ///     tapped. The block stays selected. Defaulted to a no-op.
   ///   - onEmbedAction: Called with the block and the ``EscriboEmbed/Action/id`` when one of
-  ///     the embed's ``EscriboEmbed/actions`` is performed. Defaulted to a no-op.
+  ///     the embed's ``EscriboEmbed/actions`` is performed. Option-Return with an embed
+  ///     selected always calls it with ``EscriboEmbed/Action/editAsTextID``, whether or not
+  ///     the embed lists that action; list an ``EscriboEmbed/Action`` with that id to offer
+  ///     *Edit as Text* in the accessibility custom actions too. Defaulted to a no-op.
   ///   - onFindMatchInEmbed: Called with the block when the find bar's current match lies
   ///     inside an embed. The host typically stops returning an embed for that block and
   ///     calls ``EscriboEditorHandle/invalidateEmbeds()``, so the match shows as text.

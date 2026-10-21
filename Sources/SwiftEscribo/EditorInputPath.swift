@@ -158,6 +158,84 @@ struct CaretLineContext: Equatable {
       super.insertTab(sender)
     }
 
+    // MARK: Block embeds' inputs (REQUIREMENTS.md § 1.3)
+
+    // Overrides on the view, not delegate methods, for the reason the Return key gives
+    // above. The rules live in `EmbedSelection`; the editor wires these handlers in
+    // `MacEmbedBehaviour.swift`. With no embed drawn every handler declines at once.
+
+    /// Rewrites every proposed selection (arrows, shift-arrows, clicks, drags, the text
+    /// system's own adjustments) given the current one. `nil` leaves selection untouched.
+    var embedSelectionConstraint:
+      (@MainActor (_ proposed: [NSValue], _ current: NSRange, _ isFindMatch: Bool) -> [NSValue])?
+
+    /// Vetoes an edit (`false`) before `super` sees it. Typing, Return, Tab, paste and
+    /// key-bound deletions all reach `shouldChangeText(in:replacementString:)`.
+    var embedEditFilter: (@MainActor (_ range: NSRange, _ replacement: String?) -> Bool)?
+
+    /// Called on Backspace (`forward: false`) and forward-delete (`true`). Returns `true`
+    /// when it has handled the key (selected or deleted an embed).
+    var embedDeleteHandler: (@MainActor (_ forward: Bool) -> Bool)?
+
+    /// Called on a mouse-down at a point in this view's coordinates. Returns `true` when the
+    /// click landed on an embed row and was handled, in which case `super` must not track it.
+    var embedClickHandler: (@MainActor (_ point: CGPoint) -> Bool)?
+
+    /// Called on Option-Return. Returns `true` when an embed was selected and *Edit as Text*
+    /// was sent to the host.
+    var embedEditAsTextHandler: (@MainActor () -> Bool)?
+
+    /// **The find-originated selection hook.** While `true`, a proposed selection is a Find
+    /// match and passes through ``embedSelectionConstraint`` unsnapped
+    /// (`EmbedSelection.constrain(…, isFindMatch: true)`), so the host can be told and can
+    /// expand the embed holding the match (REQUIREMENTS.md § 1.3, Find). Nothing sets it
+    /// yet: the find current-match work sets it around the selection `NSTextFinder` makes.
+    var isApplyingFindSelection = false
+
+    override func setSelectedRanges(
+      _ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool
+    ) {
+      let constrained =
+        embedSelectionConstraint?(ranges, selectedRange(), isApplyingFindSelection) ?? ranges
+      super.setSelectedRanges(constrained, affinity: affinity, stillSelecting: stillSelecting)
+    }
+
+    /// `true` while a paste (`paste(_:)`, the services menu, a drop of text) is inserting, so
+    /// ``embedEditFilter``'s owner can tell a paste from typing.
+    private(set) var isPasting = false
+
+    override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType)
+      -> Bool
+    {
+      let wasPasting = isPasting
+      isPasting = true
+      defer { isPasting = wasPasting }
+      return super.readSelection(from: pboard, type: type)
+    }
+
+    override func shouldChangeText(
+      in affectedCharRange: NSRange, replacementString: String?
+    ) -> Bool {
+      if embedEditFilter?(affectedCharRange, replacementString) == false { return false }
+      return super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
+    }
+
+    override func deleteBackward(_ sender: Any?) {
+      if embedDeleteHandler?(false) == true { return }
+      super.deleteBackward(sender)
+    }
+
+    override func deleteForward(_ sender: Any?) {
+      if embedDeleteHandler?(true) == true { return }
+      super.deleteForward(sender)
+    }
+
+    /// Option-Return's standard key binding.
+    override func insertNewlineIgnoringFieldEditor(_ sender: Any?) {
+      if embedEditAsTextHandler?() == true { return }
+      super.insertNewlineIgnoringFieldEditor(sender)
+    }
+
     // MARK: The paragraph well's inputs (REQUIREMENTS-1.1.0 § 5.2)
 
     /// The well drawn into this view, which these overrides feed. Weak: the editor owns it.
@@ -201,7 +279,13 @@ struct CaretLineContext: Equatable {
 
     /// `NSTextView` tracks a drag-selection inside `mouseDown(with:)` and returns on mouse-up,
     /// so the call to `super` *is* the drag, and bracketing it is exact.
+    ///
+    /// A click on an embed row is not a drag at all: it selects the block and returns
+    /// without `super`, so AppKit never places an edge caret.
     override func mouseDown(with event: NSEvent) {
+      if let embedClickHandler, embedClickHandler(convert(event.locationInWindow, from: nil)) {
+        return
+      }
       wellOverlay?.dragBegan()
       super.mouseDown(with: event)
       wellOverlay?.dragEnded()
