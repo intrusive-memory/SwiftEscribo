@@ -1,5 +1,9 @@
 ---
 type: execution-plan
+feature_name: OPERATION PRESSED FLOWER
+starting_point_commit: 42ff695032ed221c1653874bc4268e047d5e6484
+mission_branch: mission/pressed-flower/01 (state); sorties on mission/pressed-flower/sNN-*
+iteration: 1
 title: SwiftEscribo — block embeds, notice well slot, JSON in notes
 requirements: docs/missions/block-embeds/REQUIREMENTS.md
 recon: docs/missions/block-embeds/RECON_REPORT.md (revision 4, CLEAR)
@@ -28,7 +32,7 @@ section reference below (`§ n`) is to `docs/missions/block-embeds/REQUIREMENTS.
 These apply to every sortie and are part of each one's orders.
 
 1. **Branch and PR.** Each sortie works in its own git worktree on its own branch,
-   `mission/<slug>/sNN-<short-name>`, cut from the current `origin/development`
+   `mission/pressed-flower/sNN-<short-name>`, cut from the current `origin/development`
    (S2 is the one exception; see its tasks). The sortie ends with a PR to `development`,
    marked **ready** (draft PRs do not run CI), and the three required checks green:
    `SwiftLint`, `Test on macOS`, `Test on iOS Simulator`. A check that fails once is
@@ -65,7 +69,7 @@ These apply to every sortie and are part of each one's orders.
 ### Sortie 1: Fix the flaky serif check and the font-service hang
 
 **Entry criteria**:
-- [ ] First sortie — no prerequisites. Branch `mission/<slug>/s01-font-tests` from `origin/development`.
+- [ ] First sortie — no prerequisites. Branch `mission/pressed-flower/s01-font-tests` from `origin/development`.
 - [ ] Read: `Sources/SwiftEscribo/FontResolver.swift` (`firstAvailable` at `:168`), `Tests/SwiftEscriboTests/FontResolutionTests.swift:141`, `Tests/SwiftEscriboTests/GeometryRuleSetTests.swift:75`, `Makefile`, `.github/workflows/tests.yml` (comment at `:22-37`), REQUIREMENTS.md *Gate in* "Flaky tests to fix first".
 
 **Tasks**:
@@ -87,12 +91,12 @@ These apply to every sortie and are part of each one's orders.
 - [ ] Read: the spike report (`git show origin/spike/block-embeds:docs/missions/embed-spike/SPIKE_REPORT.md`), `Sources/SwiftEscribo/Spike/IOSBlockEmbed.swift` and the iOS `// SPIKE` hooks in `Sources/SwiftEscribo/EditorInputPath.swift` on that branch, REQUIREMENTS.md *Gate in* "iOS — live input check first".
 
 **Tasks**:
-1. Create branch `mission/<slug>/s02-ios-live-check` from `origin/spike/block-embeds` (this sortie alone builds on the spike, because no production embed code exists yet).
+1. Create branch `mission/pressed-flower/s02-ios-live-check` from `origin/spike/block-embeds` (this sortie alone builds on the spike, because no production embed code exists yet).
 2. Build a throwaway iOS host app **outside the repo** (in the agent's scratch directory, e.g. with XcodeBuildMCP `scaffold_ios_project`) that depends on the worktree's package by local path and shows `EscriboEditor` with one multi-line Fountain note embedded through the spike controller.
 3. On an **iPhone 17 (iOS 26.5)** and on an **iPad** simulator (prefer iPad Pro 11-inch (M5); resolve by UDID from `xcrun simctl list devices available` if the name is missing), drive the real input paths with XcodeBuildMCP UI automation and record what happens for each: (a) tap on the row; (b) selection-handle drag across the row; (c) paste into the row with the block selected; (d) hardware-keyboard forward-delete with the block selected (`toggle_connect_hardware_keyboard`, `key_press`); (e) iPad pointer click and trackpad-style drag on the row; (f) the accessibility tree from `snapshot_ui` (one button element with the host label/value; activate fires the callback). Live VoiceOver speech cannot run in the Simulator; say so and use the AX tree as the proxy.
 4. Implement the paste veto on this branch (iOS `paste(_:)` / `canPerformAction(_:withSender:)` with an embed selected, routed through the same edit rule as typing), add a unit test for it, and re-verify (c) live.
 5. Write `docs/missions/block-embeds/IOS_LIVE_CHECK.md` (`type: report`): device, OS, each check (a)–(f) per device with PASS / FAIL / PARTIAL and the evidence (screenshot file names, AX snapshot excerpt), the paste-veto commit SHA on the spike-based branch, and a final line `VERDICT: GO` or `VERDICT: NO-GO` with the reason. **NO-GO** if UIKit's tap or selection-handle gesture puts the caret or a partial selection inside the embed and no public funnel catches it.
-6. Push the spike-based branch (do not PR it). Open a PR to `development` from a second branch, `mission/<slug>/s02-ios-live-check-report`, cut from `origin/development`, that adds **only** `IOS_LIVE_CHECK.md` (and evidence PNGs under `docs/missions/block-embeds/evidence/` if any).
+6. Push the spike-based branch (do not PR it). Open a PR to `development` from a second branch, `mission/pressed-flower/s02-ios-live-check-report`, cut from `origin/development`, that adds **only** `IOS_LIVE_CHECK.md` (and evidence PNGs under `docs/missions/block-embeds/evidence/` if any).
 
 **Exit criteria**:
 - [ ] `IOS_LIVE_CHECK.md` exists and contains rows (a)–(f) for both an iPhone and an iPad simulator, and a `VERDICT:` line.
@@ -301,7 +305,7 @@ These apply to every sortie and are part of each one's orders.
 
 **Entry criteria**:
 - [ ] Sorties 9 and 10 merged; `IOS_LIVE_CHECK.md` says `VERDICT: GO`.
-- [ ] Read: REQUIREMENTS.md § 1.3; `IOS_LIVE_CHECK.md` (any hook it says the gestures need); spike `IOSBlockEmbed.swift`, iOS `// SPIKE` hooks in `EditorInputPath.swift` (`:292,353,375`), `BlockEmbedSpikeIOSTests.swift`; the S2 paste-veto commit on `mission/<slug>/s02-ios-live-check`.
+- [ ] Read: REQUIREMENTS.md § 1.3; `IOS_LIVE_CHECK.md` (any hook it says the gestures need); spike `IOSBlockEmbed.swift`, iOS `// SPIKE` hooks in `EditorInputPath.swift` (`:292,353,375`), `BlockEmbedSpikeIOSTests.swift`; the S2 paste-veto commit on `mission/pressed-flower/s02-ios-live-check`.
 
 **Tasks**:
 1. `selectedTextRange` / `selectedRange` setter constraint (plus any extra funnel S2 found).
