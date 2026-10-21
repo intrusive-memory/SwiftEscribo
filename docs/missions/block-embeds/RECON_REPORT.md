@@ -2,15 +2,37 @@
 type: recon-report
 state: current
 requirements_file: REQUIREMENTS.md
-requirements_sha256: bf8c20106ee729dd2b95aa5d67d2d0d719acb9aedc0f253446b20f347b524b61
-project_head: d1abe982f2f5a1c1da4971989f9df3ee4e8883c3
+requirements_sha256: 56ca5e087d82b32a321b1bdddca1b735acb7f25f97d6cb17a0d34f8ea1c5c3ed
+project_head: fcf6e380e2ea68e7a016d8310a30c615c0f464f6
 spike_head: 506afcf (origin/spike/block-embeds)
 search_root: ~/Projects
 generated: 2026-10-20
 verdict: CLEAR
+revision: 4
 ---
 
-# Recon Report: block embeds, notice well slot, JSON in notes (revision 3)
+# Recon Report: block embeds, notice well slot, JSON in notes (revision 4)
+
+## Revision 4 delta (2026-10-20)
+
+The user accepted Q-1 to Q-6 as recommended, and `REQUIREMENTS.md` now records each
+decision in the section it governs, plus the breakdown notes N-2 to N-12. No code changed
+(`Sources/` and `Tests/` are identical to revision 3). Every new factual claim the edit
+added was checked:
+
+| ID | Claim | Verdict | Evidence |
+|----|-------|---------|----------|
+| A-37 | `EscriboEditorHandle` exists and a handle with no editor answers nothing (so `invalidateEmbeds()` can be a no-op when detached) | CONFIRMED | `EscriboEditorHandle.swift:46`, weak `coordinator` at `:53`; queries use `coordinator?.` |
+| A-38 | `onWellAction` is the last `EscriboEditor` init parameter; `findBar` is "a no-op on iOS" | CONFIRMED | `EscriboEditor.swift:151`, `:59` |
+| A-39 | `EditorMode.swift:3-8` says a mode switch is "not a code path" | CONFIRMED | `EditorMode.swift:3-4` |
+| A-40 | The "block has content" rule and the span bar are where the spec says | CONFIRMED | `EscriboWell.swift:129`; span bar `WellOverlay.swift:331` |
+| A-41 | glosa-av 0.9.0 detection: trimmed note starting `{` + optional whitespace + `"` | CONFIRMED | glosa-av `v0.9.0:AGENTS.md:35` |
+| A-42 | The splice declines on a straddling block at `EditorCoordinator.swift:540-560` | CONFIRMED | Soundness condition 2 documented at `:541-543`; carried from A-34 |
+| A-43 | The `Makefile` runs `xcodebuild test` with no `-test-timeouts-enabled` today | CONFIRMED | `Makefile:30,38,44,62` |
+
+Verdict unchanged: **CLEAR**. Open questions Q-1 to Q-6 are answered; none remain.
+
+# Revision 3 (preserved)
 
 ## Terminology
 
