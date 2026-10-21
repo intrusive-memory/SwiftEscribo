@@ -213,6 +213,10 @@ public final class EditorCoordinator: NSObject {
   /// at once.
   let embeds = EmbedState()
 
+  /// The host's `wellNotice` callback and its cached answer per block (REQUIREMENTS.md § 2).
+  /// Logic in `EditorCoordinator+Notices.swift`; refreshed beside the embed cache.
+  let notices = NoticeState()
+
   // MARK: - Geometry, supplied by the view
 
   /// Maps a point in text-view coordinates to a UTF-16 offset in the document.
@@ -328,6 +332,7 @@ public final class EditorCoordinator: NSObject {
     needsFullRescan = false
     apply(textStorage.fullScan(using: &scanner), edit: nil)
     refreshAllEmbeds()
+    refreshAllNotices()
   }
 
   /// Handles one **character** edit reported by the text system.
@@ -362,6 +367,7 @@ public final class EditorCoordinator: NSObject {
 
     apply(textStorage.incrementalScan(edit, using: &scanner), edit: edit)
     refreshEmbeds(afterEdit: edit)
+    refreshNotices(afterEdit: edit)
   }
 
   /// Translates a text-system edit notification into a ``TextEdit``.

@@ -30,6 +30,10 @@ struct EmbedConfiguration {
   /// Called with the block when Find lands a match inside an embed. macOS only.
   var onFindMatch: (EscriboBlock) -> Void = { _ in }
 
+  /// The host's `wellNotice` callback, or `nil` for no notices (REQUIREMENTS.md § 2).
+  /// Carried here because it travels the same path and is re-asked at the same points.
+  var wellNotice: ((EscriboBlock) -> (symbolName: String, help: String)?)?
+
   /// No provider and no-op callbacks: what an editor that never mentions embeds gets.
   static var none: EmbedConfiguration { EmbedConfiguration(provider: nil) }
 
@@ -40,6 +44,7 @@ struct EmbedConfiguration {
     coordinator.setEmbedCallbacks(
       onActivate: onActivate, onAction: onAction, onFindMatch: onFindMatch)
     coordinator.setEmbedProvider(provider)
+    coordinator.setWellNotice(wellNotice)
   }
 }
 

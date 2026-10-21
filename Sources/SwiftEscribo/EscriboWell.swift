@@ -45,6 +45,14 @@ extension EscriboWellItem {
   /// Read the block aloud. The package draws and tracks the button; the host speaks.
   public static let readAloud = EscriboWellItem(rawValue: "readAloud")
 
+  /// A host-defined notice on a block. It **shares the read-aloud slot**: on a block the
+  /// ``EscriboEditor``'s `wellNotice` callback answers for, the slot shows the callback's
+  /// glyph at all times and draws no span bar; a click or tap calls
+  /// `onWellAction(.notice, block)`. The glyph and help text come from the callback, not
+  /// from this package. Exempt from ``EscriboWell/eligibleKinds`` and from the "has
+  /// content" rule.
+  public static let notice = EscriboWellItem(rawValue: "notice")
+
 }
 
 /// The host's description of the paragraph well: which slots it holds, which block is
@@ -129,6 +137,13 @@ public struct EscriboWell: Equatable, Sendable {
     guard !block.contentRanges.isEmpty else { return false }
     guard let eligibleKinds else { return true }
     return eligibleKinds.contains(block.kind)
+  }
+
+  /// Whether `block` gets a well slot at all, given whether the host's `wellNotice` has a
+  /// notice for it. A notice is exempt from both ``isEligible(_:)`` rules: whether a block
+  /// has one is the callback's answer alone.
+  func presents(_ block: EscriboBlock, hasNotice: Bool) -> Bool {
+    hasNotice || isEligible(block)
   }
 }
 

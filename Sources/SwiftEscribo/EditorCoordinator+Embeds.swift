@@ -155,11 +155,12 @@ extension EditorCoordinator {
   /// (a splice could not be proved sound), this full-scans, which refreshes every answer
   /// as a side effect.
   func invalidateEmbeds() {
-    if embedsAreActive, !blocksSpanDocument {
-      restyleEverything()
+    if embedsAreActive || notices.provider != nil, !blocksSpanDocument {
+      restyleEverything()  // re-asks embeds and notices alike
       return
     }
     refreshAllEmbeds()
+    refreshAllNotices()
   }
 
   /// Re-asks every block of ``documentBlocks``. Called after every full scan.
