@@ -37,8 +37,10 @@ both**, with the spike's conditions, which are requirements of this release:
   paragraph as the row and gives the block's other paragraphs zero height; text
   storage is never modified.
 - **Flaky tests to fix first:** `FontResolutionTests.swift:141` (serif font missing on
-  some runners) and a font test that hangs waiting on the system font service. This
-  release's `make test` gate depends on them.
+  some runners) and `GeometryRuleSetTests.swift:75`, which hung in
+  `FontResolver.firstAvailable` → `NSFont(name:size:)` waiting on the system font
+  service (any test that resolves a named font can hit the same wait). This release's
+  `make test` gate depends on them.
 - Spike estimate: about 16 sorties.
 
 ## 1. Embeds
@@ -78,7 +80,7 @@ both**, with the spike's conditions, which are requirements of this release:
 4. **Accessibility:** one element per embed, button role, the host's label / value /
    identifier, default action = activate, custom actions = `actions`.
 5. **Off by default:** no provider → no change to layout, insets or behaviour; the
-   existing UI tests pass untouched.
+   existing tests pass untouched (the package has no UI test target).
 
 ## 2. Notice well slot
 
@@ -90,15 +92,19 @@ The well cannot do this today and needs real work, named here:
   — `nil` means the block has no notice;
 - **visibility**: slots show only on hover or for the caret's block today; a notice is
   shown **always** for the blocks that have one;
-- **eligibility**: today's item filtering would drop `.notice`; it is exempt from the
-  `eligibleKinds` filter.
+- **eligibility**: today the well drops any item the package has no glyph for
+  (`WellOverlay.swift:320–322`, `WellPlacement.symbolName`, `WellTracker.swift:373–378`),
+  so `.notice` would never draw; it takes its glyph from the callback instead. It is
+  also exempt from the block-level `eligibleKinds` filter (`EscriboWell.isEligible`,
+  `EscriboWell.swift:128–132`), so a block whose kind the host left out of
+  `eligibleKinds` still shows its notice.
 
 ## 3. JSON inside notes
 
 Today `GlosaScanner` (`EscriboCore/GlosaScanner.swift`) subdivides tag directives inside
 notes into `glosaTag` / `glosaAttributeName` / `glosaAttributeValue` /
 `glosaPunctuation` spans (`SpanKind.swift:294–331`). It sees **one line at a time** and
-carries no state between lines (`GlosaScanner.swift:60–68`, `FountainGrammar.swift:1024`),
+carries no state between lines (`GlosaScanner.swift:60–68`, `FountainGrammar.swift:1024–1026`),
 so it cannot know that line 2 of a note is inside JSON. Add: a note whose trimmed content
 starts with `{` is scanned as JSON —
 
@@ -119,7 +125,7 @@ starts with `{` is scanned as JSON —
   without exercising the new path. A note's lines are one `.note` block when the note
   is followed by a blank line or the end of the document; a note **between** lines of
   the same block (action / note / action, or inside a speech) is absorbed into that
-  block (`FountainBlockGroupingTests.swift:131–137`);
+  block (`FountainBlockGroupingTests.swift:127–137`);
 - **colours**: none of the four built-in themes colours any `glosa*` kind or `.note`
   today, so "same as the tag kinds" would mean uncoloured. Add colours for all `glosa*`
   kinds — existing and new — to all four built-in themes.
