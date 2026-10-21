@@ -404,6 +404,10 @@ struct CaretLineContext: Equatable {
     /// pass-through one, so the stock behaviour is unchanged (§ 1.5).
     var embedInput: IOSEmbedInput?
 
+    /// The embeds' accessibility elements (REQUIREMENTS.md § 1.4), kept over their rows by
+    /// ``layoutSubviews()``. `nil` only before the editor attaches.
+    var embedAccessibility: IOSEmbedAccessibility?
+
     /// Set while the package performs its own edit (``EscriboTextView/performInputPathEdit(_:)``):
     /// the edit rule guards the user's input, not the package's rewrites or the host's
     /// external text.
@@ -602,9 +606,13 @@ struct CaretLineContext: Equatable {
 
     override func layoutSubviews() {
       super.layoutSubviews()
-      guard bounds.width != wellLayoutWidth else { return }
-      wellLayoutWidth = bounds.width
-      wellOverlay?.layoutDidChange()
+      if bounds.width != wellLayoutWidth {
+        wellLayoutWidth = bounds.width
+        wellOverlay?.layoutDidChange()
+        embedAccessibility?.layoutDidChange()
+      }
+      // A no-op unless the embeds, the text or the width changed since the last pass.
+      embedAccessibility?.syncIfNeeded()
     }
   }
 

@@ -141,6 +141,10 @@
       // rules. Inert until the embed cache holds an embed.
       installEmbedInput()
 
+      // Block embed accessibility (REQUIREMENTS.md § 1.4): one button element per embed,
+      // laid over its row. Inert until the embed cache holds an embed.
+      installEmbedAccessibility()
+
       // Sortie 25, wired identically to macOS. UIKit spells the Return key as
       // `insertText("\n")` where AppKit spells it `insertNewline(_:)`; both land on the same
       // `EscriboTextView.handleReturnKey()`, which is the point of Architecture §10.
