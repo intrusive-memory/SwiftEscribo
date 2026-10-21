@@ -66,7 +66,13 @@ struct PerfDocument: Sendable {
           hasLowercase = true
           break
         }
-        if hasLowercase { return candidate }
+        // A line of a multi-line JSON note is not prose, and an "ordinary keystroke" in one
+        // is the pathological case, not the typical one: the note's carried state differs
+        // line to line, so the 8-line budget does not apply inside it (REQUIREMENTS § 3,
+        // Q-3). Note interiors are indented, and the opener and closer start with `[`/`}`.
+        let first = units[start]
+        let isNoteLine = first == 0x20 || first == 0x5B || first == 0x7B || first == 0x7D
+        if hasLowercase && !isNoteLine { return candidate }
       }
       candidate += 1
     }
@@ -86,6 +92,35 @@ struct PerfDocument: Sendable {
       offset -= 1
     }
     return offset
+  }
+
+  /// The text of `line`, without its terminator.
+  func lineText(_ line: Int) -> String {
+    let units = Array(text.utf16)
+    return String(decoding: units[lineStarts[line]..<lineEnds[line]], as: UTF16.self)
+  }
+
+  /// The line ranges of the multi-line JSON notes: from the `[[{` opener line to the
+  /// first line at or after it containing the closing `]]`, both inclusive. A note that
+  /// opens and closes on one line is not multi-line and is not counted.
+  var multiLineJSONNotes: [ClosedRange<Int>] {
+    let units = Array(text.utf16)
+    func lineText(_ line: Int) -> String {
+      String(decoding: units[lineStarts[line]..<lineEnds[line]], as: UTF16.self)
+    }
+    var notes: [ClosedRange<Int>] = []
+    var line = 0
+    while line < lineCount {
+      let text = lineText(line)
+      if text.hasPrefix("[[{"), !text.contains("]]") {
+        var end = line + 1
+        while end < lineCount, !lineText(end).contains("]]") { end += 1 }
+        if end < lineCount { notes.append(line...end) }
+        line = end
+      }
+      line += 1
+    }
+    return notes
   }
 
   /// This document with `replacement` spliced in over `range`, plus the matching edit.
@@ -114,7 +149,9 @@ struct PerfDocument: Sendable {
 /// `Fixtures/long_screenplay.fountain` is **committed**, not generated at test time. It is
 /// `episode_10.fountain` + `spanish.fountain` + `episode_01.fountain` — the three
 /// screenplays vendored in Sortie 17 — concatenated in that order, three times, joined by
-/// a blank line. 130 739 bytes, 6 032 lines, ~128 KB. Repetition is sound here because
+/// a blank line (130 739 bytes, 6 032 lines), plus twelve multi-line pretty-printed JSON
+/// notes of 10–25 lines each (six of them ≥ 20 lines), each after its own action line,
+/// so the multi-line JSON scan path is exercised. 134 073 bytes, 6 284 lines, ~131 KB. Repetition is sound here because
 /// this target measures scan *throughput*: the scanner has no memory that scene 40
 /// duplicates scene 12, and every line it re-reads it re-classifies from scratch.
 ///
@@ -161,6 +198,13 @@ enum PerfFixture {
 
   /// The screenplay under an unterminated boneyard opened on line 0.
   static let boneyarded = PerfDocument("/*\n" + screenplay.text)
+
+  /// The screenplay under an unterminated JSON note opened on line 2: `[[{"` leaves a
+  /// string open, and a JSON string cannot cross a line, so the scan errors at the next
+  /// line and the note continues as plain `note` text up to the first literal `]]`.
+  /// The leading action line is there because a first line containing `:` opens a title
+  /// page.
+  static let jsonPrologued = PerfDocument("Bob waits.\n\n[[{\"\n" + screenplay.text)
 
   /// A 10 KB paste payload: ASCII, multi-line, and shaped like screenplay body so the
   /// grammar has real classification work to do on every pasted line rather than
