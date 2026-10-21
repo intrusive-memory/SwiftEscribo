@@ -742,10 +742,15 @@ struct ScanGateTests {
     steps: [GateStep],
     from document: String,
     seed: UInt64,
-    documentName: String
+    documentName: String,
+    alignToBlocks: Bool = false
   ) {
     var incremental = IncrementalScanner(grammar: grammar)
     let first = incremental.fullScan(document)
+    // With `alignToBlocks`, every scan is handed the previous text's blocks as the block
+    // cache an editor would hold — a perfect cache, so any failure is the engine's.
+    var previousBlocks = first.blocks
+    var previousLineCount = first.documentLineCount
     ScanInvariants.check(
       first, text: document, editedRange: nil,
       "seed 0x\(String(seed, radix: 16)) \(documentName) — initial full scan of \(Grammar.self)")
@@ -764,8 +769,24 @@ struct ScanGateTests {
       // corrupted, and a corrupted document is indistinguishable from a scanner bug.
       #expect(step.boundsWereCharacterAligned, "the generator spliced a surrogate — \(note)")
 
-      let result = incremental.incrementalScan(step.edit, in: step.text)
+      let blocks = previousBlocks
+      let result =
+        alignToBlocks
+        ? incremental.incrementalScan(
+          step.edit, in: step.text,
+          blockLines: { line in blocks.first { $0.lines.contains(line) }?.lines })
+        : incremental.incrementalScan(step.edit, in: step.text)
       ScanInvariants.check(result, text: step.text, editedRange: step.editedRange, note)
+      if alignToBlocks, !blocks.isEmpty {
+        // The window replaces whole cached blocks: it starts where one starts and stops,
+        // in old line numbers, where one starts or the document ends.
+        let starts = Set(blocks.map(\.lines.lowerBound)).union([previousLineCount])
+        let oldStop = result.lines.upperBound - (result.documentLineCount - previousLineCount)
+        #expect(starts.contains(result.lines.lowerBound), "window floor off a block edge — \(note)")
+        #expect(
+          result.lines.upperBound == result.documentLineCount || starts.contains(oldStop),
+          "window stop off a block edge — \(note)")
+      }
 
       var fresh = IncrementalScanner(grammar: grammar)
       let full = fresh.fullScan(step.text)
@@ -794,6 +815,8 @@ struct ScanGateTests {
       painted.apply(result, newLineCount: ScanInvariants.lineCount(of: step.text))
       ScanInvariants.expectSameElements(
         painted.lines, ScanInvariants.paintedLines(of: full), "painted document", note)
+      previousBlocks = full.blocks
+      previousLineCount = full.documentLineCount
     }
   }
 
@@ -876,6 +899,26 @@ struct ScanGateTests {
     Self.replay(
       FountainGrammar(), steps: steps, from: document.text, seed: seed,
       documentName: document.name)
+  }
+
+  /// The same property with the window widened to the caller's block edges, as the editor
+  /// runs it (`EditorCoordinator` hands its document-wide block cache to every scan).
+  ///
+  /// Widening only adds lines the convergence rule already proved unchanged, so the output
+  /// must be exactly as correct as the minimal window's — and the window must now begin and
+  /// end on cached block edges, which is the whole point. The two shipping grammars, since
+  /// they are the only ones that group blocks.
+  @Test(
+    "Block-aligned incremental scanning equals full scanning and lands on block edges",
+    arguments: gateSeeds, gateCorpus)
+  func blockAlignedIncrementalScanEqualsFullScan(seed: UInt64, document: GateDocument) {
+    let steps = GateEditGenerator.sequence(seed: seed, from: document.text)
+    Self.replay(
+      MarkdownGrammar(), steps: steps, from: document.text, seed: seed,
+      documentName: document.name, alignToBlocks: true)
+    Self.replay(
+      FountainGrammar(), steps: steps, from: document.text, seed: seed,
+      documentName: document.name, alignToBlocks: true)
   }
 
   // MARK: Coverage of the adversarial shapes

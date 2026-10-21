@@ -147,10 +147,17 @@ struct IncrementalScanner<Grammar: LineGrammar> {
   ///     indexes the document as this scanner currently describes it, and its length
   ///     delta is read from ``TextEdit/changeInLength`` rather than recomputed.
   ///   - source: The document **after** the edit.
+  ///   - blockLines: Optional. The caller's document-wide block cache, as a lookup from an
+  ///     **old**-coordinate line to the line range of the cached block containing it. When
+  ///     given, the window is widened outward to whole cached blocks at both ends — see
+  ///     "Widening to the caller's block edges" in the body. `nil` keeps the minimal window.
   /// - Returns: A result whose ``ScanResult/dirtyRange`` is line-aligned at both ends and
   ///   contains the edited range, and whose spans exactly tile it.
   @discardableResult
-  mutating func incrementalScan(_ edit: TextEdit, in source: some UTF16TextSource) -> ScanResult {
+  mutating func incrementalScan(
+    _ edit: TextEdit, in source: some UTF16TextSource,
+    blockLines: ((Int) -> Range<Int>?)? = nil
+  ) -> ScanResult {
     // Everything in this block is read in OLD coordinates, before the index moves.
     let oldLineCount = index.lineCount
     let previousStates = startStates
@@ -209,11 +216,46 @@ struct IncrementalScanner<Grammar: LineGrammar> {
     // it is entirely before the edit, so its text and, inductively, the state it began in
     // are untouched. The clamp is belt and braces: it cannot bind, because the lines below
     // the edit are exactly the lines an edit cannot move.
-    let start = min(windowFloor, newLineCount - 1)
+    //
+    // ## Widening to the caller's block edges
+    //
+    // A caller that keeps document-wide blocks splices each window into them, and can only
+    // do so when no cached block straddles either window edge (see `EditorCoordinator`'s
+    // splice). The minimal window straddles one whenever an edit lands in, or within
+    // `lookahead` lines of, a multi-line block, so when the caller hands over its cache the
+    // window is moved outward to the cached block edges:
+    //
+    // - **Floor** to the first line of the cached block containing it. Every line before
+    //   the minimal floor is before the edit, so old and new line numbers agree there and
+    //   the lookup needs no translation; the state entering the lowered floor is the
+    //   carried one, which is exactly as valid as at the minimal floor.
+    // - **Stop** to the first cached block edge at or after the converged stop. Past
+    //   convergence every line is old line `j - lineDelta` with unchanged text and an
+    //   entering state just proved identical, so scanning on reproduces what the old scan
+    //   said about those lines — it costs time, never correctness — and it ends at a line
+    //   where the cache already has a boundary.
+    //
+    // Both moves only ever **grow** the window, and a larger window than the convergence
+    // rule requires is always sound. Answers that would shrink it, or that do not contain
+    // the line asked about, are ignored, so a stale or malformed cache degrades to the
+    // minimal window rather than to a wrong one.
+    var start = min(windowFloor, newLineCount - 1)
+    if let blockLines, start > 0, let block = blockLines(start), block.contains(start) {
+      start = max(0, block.lowerBound)
+    }
+    let alignStop: ((Int) -> Int)? = blockLines.map { lookup in
+      { stop in
+        guard stop < newLineCount else { return stop }
+        let oldLine = stop - convergence.lineDelta
+        guard let block = lookup(oldLine), block.contains(oldLine), block.lowerBound < oldLine
+        else { return stop }
+        return min(newLineCount, max(stop, block.upperBound + convergence.lineDelta))
+      }
+    }
     let incoming = start < previousStates.count ? previousStates[start] : .documentStart
     let scan = scanLines(
       from: start, incoming: incoming, in: source, convergence: convergence,
-      minimumStop: windowCeiling)
+      minimumStop: windowCeiling, alignStop: alignStop)
     startStates = rebuiltStates(
       scanned: scan.states,
       from: start,
@@ -303,7 +345,8 @@ struct IncrementalScanner<Grammar: LineGrammar> {
     incoming: LineState,
     in source: some UTF16TextSource,
     convergence: Convergence?,
-    minimumStop: Int = 0
+    minimumStop: Int = 0,
+    alignStop: ((Int) -> Int)? = nil
   ) -> (result: ScanResult, states: [LineState]) {
     let lineCount = index.lineCount
     let lookahead = max(0, grammar.lookahead)
@@ -377,7 +420,9 @@ struct IncrementalScanner<Grammar: LineGrammar> {
         // their window on the previous scan — or, for a grammar whose lookahead is not
         // fully reflected in its state, may have — and repainting them costs `lookahead`
         // lines while omitting them costs a wrong screen.
-        let stop = min(lineCount, line + lookahead)
+        let converged = min(lineCount, line + lookahead)
+        // Never below `converged`: alignment can only extend the window to a block edge.
+        let stop = max(converged, min(lineCount, alignStop?(converged) ?? converged))
         if line >= stop { break }
         stopLine = stop
       }

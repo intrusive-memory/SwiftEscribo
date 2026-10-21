@@ -79,4 +79,16 @@ extension EditorTextStorage {
   func incrementalScan(_ edit: TextEdit, using scanner: inout EscriboScanner) -> ScanResult {
     scanner.incrementalScan(edit, in: self)
   }
+
+  /// Applies `edit` and rescans, widening the window to whole blocks of a block cache.
+  ///
+  /// - Parameter blockLines: The cache's block lookup by **old**-coordinate line, or `nil`
+  ///   for the minimal window. See ``EditorCoordinator/cachedBlockLookup()``.
+  func incrementalScan(
+    _ edit: TextEdit, using scanner: inout EscriboScanner,
+    alignedToBlocks blockLines: ((Int) -> Range<Int>?)?
+  ) -> ScanResult {
+    guard let blockLines else { return scanner.incrementalScan(edit, in: self) }
+    return scanner.incrementalScan(edit, in: self, alignedToBlocks: blockLines)
+  }
 }

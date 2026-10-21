@@ -90,6 +90,27 @@ public struct EscriboScanner {
   ) -> ScanResult {
     scanner.incrementalScan(edit, in: source)
   }
+
+  /// ``incrementalScan(_:in:)``, with the window widened to whole blocks of the caller's
+  /// document-wide block cache.
+  ///
+  /// For a caller that splices each result into blocks it keeps for the whole document:
+  /// the window then begins at a cached block's first line and ends where a cached block
+  /// begins, so no cached block straddles either edge and the splice never has to decline.
+  /// The spans, records and states are exactly what the minimal window would produce for
+  /// the lines it shares; the extra lines are rescanned to the same answers they already
+  /// had.
+  ///
+  /// - Parameter blockLines: Maps an **old**-coordinate line (the document before `edit`)
+  ///   to the line range of the cached block containing it, or `nil` when the cache cannot
+  ///   say. Answers are only ever used to grow the window.
+  @discardableResult
+  package mutating func incrementalScan(
+    _ edit: TextEdit, in source: some UTF16TextSource,
+    alignedToBlocks blockLines: @escaping (Int) -> Range<Int>?
+  ) -> ScanResult {
+    scanner.incrementalScan(edit, in: source, blockLines: blockLines)
+  }
 }
 
 /// The grammar a ``Language`` resolves to, as one concrete type.
