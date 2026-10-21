@@ -614,6 +614,53 @@
       #expect(tv.text != original)
     }
 
+    @Test("row 7: paste with the block selected (or partly covered) changes nothing and is hidden from the menu")
+    func row7PasteVetoed() throws {
+      let h = try SpikeIOSHarness()
+      let tv = h.editor.textView
+      let paste = #selector(UIResponderStandardEditActions.paste(_:))
+      let pasteAndMatch = #selector(UIResponderStandardEditActions.pasteAndMatchStyle(_:))
+
+      // Before any embed, the rule allows a paste over the note's characters.
+      tv.selectedRange = h.note
+      #expect(tv.spikePasteAllowed())
+
+      h.embed()
+      _ = h.layout()
+      let original = tv.text
+
+      // Exactly the block selected. Every paste-family entry point is vetoed before UIKit
+      // reads the pasteboard (the general pasteboard is never touched by this test: reading
+      // it hangs the simulator test host).
+      tv.selectedRange = h.note
+      #expect(tv.selectedRange == h.note)
+      #expect(!tv.spikePasteAllowed())
+      #expect(!tv.canPerformAction(paste, withSender: nil))
+      #expect(!tv.canPerformAction(pasteAndMatch, withSender: nil))
+      #expect(!tv.canPerformAction(#selector(UIResponder.paste(itemProviders:)), withSender: nil))
+      tv.paste(nil)
+      #expect(tv.text == original)
+      tv.pasteAndMatchStyle(nil)
+      #expect(tv.text == original)
+      tv.paste(itemProviders: [NSItemProvider(object: "x" as NSString)])
+      #expect(tv.text == original)
+
+      // A wider selection containing the block: still vetoed.
+      tv.selectedRange = NSRange(location: h.note.location - 1, length: h.note.length + 2)
+      #expect(!tv.spikePasteAllowed())
+      #expect(!tv.canPerformAction(paste, withSender: nil))
+      tv.paste(nil)
+      #expect(tv.text == original)
+
+      // The same rule as typing: a caret at the block's edge (outside it) may paste.
+      tv.selectedRange = NSRange(location: h.note.location, length: 0)
+      #expect(tv.spikePasteAllowed())
+      tv.selectedRange = NSRange(location: NSMaxRange(h.note), length: 0)
+      #expect(tv.spikePasteAllowed())
+      // And it is the typing rule itself, not a separate one.
+      #expect(h.editor.spikeEmbeds.allowsEdit(in: h.note, replacement: "\u{FFFC}") == false)
+    }
+
     // MARK: - Row 8: expand / collapse
 
     @Test("row 8: expand draws the block as text and lets the caret in; collapse restores the row and the snap")

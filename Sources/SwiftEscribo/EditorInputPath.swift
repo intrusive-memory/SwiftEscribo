@@ -388,6 +388,51 @@ struct CaretLineContext: Equatable {
       super.replace(range, withText: text)
     }
 
+    // MARK: SPIKE — paste veto
+
+    /// SPIKE: whether a paste into the current selection passes the same edit rule as typing.
+    ///
+    /// Observed live (iOS 26.5 simulator): `paste(_:)` with an embed selected replaced the
+    /// embed's characters without passing through `insertText`, `replace(_:withText:)` or
+    /// `setMarkedText`, so none of the typing hooks saw it. A paste always inserts
+    /// characters, so the rule is asked with a non-empty stand-in rather than the clipboard
+    /// text: reading `UIPasteboard.general` here would raise the system paste prompt for
+    /// every menu validation (and hangs the simulator test host).
+    func spikePasteAllowed() -> Bool {
+      spikeEditFilter?(selectedRange, "\u{FFFC}") != false
+    }
+
+    /// SPIKE: the paste-family actions the veto covers: Cmd-V and the edit menu (`paste:`),
+    /// Paste and Match Style, and `UIPasteControl` / item-provider paste.
+    static let spikePasteActions: Set<Selector> = [
+      #selector(UIResponderStandardEditActions.paste(_:)),
+      #selector(UIResponderStandardEditActions.pasteAndMatchStyle(_:)),
+      #selector(UIResponder.paste(itemProviders:)),
+    ]
+
+    /// SPIKE: hides Paste from the edit menu (and disables Cmd-V) while the rule says no.
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+      if Self.spikePasteActions.contains(action), !spikePasteAllowed() { return false }
+      return super.canPerformAction(action, withSender: sender)
+    }
+
+    /// SPIKE: the action itself is vetoed too — a key command or a host can send `paste:`
+    /// without asking `canPerformAction` first.
+    override func paste(_ sender: Any?) {
+      guard spikePasteAllowed() else { return }
+      super.paste(sender)
+    }
+
+    override func pasteAndMatchStyle(_ sender: Any?) {
+      guard spikePasteAllowed() else { return }
+      super.pasteAndMatchStyle(sender)
+    }
+
+    override func paste(itemProviders: [NSItemProvider]) {
+      guard spikePasteAllowed() else { return }
+      super.paste(itemProviders: itemProviders)
+    }
+
     /// SPIKE: extra accessibility elements (one per collapsed embed, row 9).
     var spikeAccessibilityElements: (@MainActor () -> [Any])?
 
