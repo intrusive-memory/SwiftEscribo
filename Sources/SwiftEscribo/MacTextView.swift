@@ -64,6 +64,13 @@
     /// The host's well-action callback, invoked by a well button with its item and block.
     var onWellAction: (EscriboWellItem, EscriboBlock) -> Void = { _, _ in }
 
+    // MARK: - Block embeds (REQUIREMENTS.md § 1.2)
+
+    /// Draws embedded blocks as rows. `nil` until the coordinator's embed cache first holds
+    /// an embed (``installEmbedLayout()``), so an editor without embeds keeps the text
+    /// view's stock layout.
+    var embedLayout: EmbedLayoutController?
+
     /// Builds the view over `styler`.
     ///
     /// - Parameters:
@@ -110,6 +117,10 @@
       // The paragraph well. Inert until a well is applied: with none, the overlay draws
       // nothing and every input it is fed returns at once.
       installWellOverlay()
+
+      // Block embeds. Only hooks the coordinator's embed cache; the layout controller is
+      // created the first time the cache holds an embed.
+      installEmbedLayout()
 
       // Sortie 25. Return goes through `EscriboTextView.handleReturnKey()`, which either
       // performs the whole rewrite as one trip through the input path or declines and lets
