@@ -181,6 +181,16 @@ struct CaretLineContext: Equatable {
     /// click landed on an embed row and was handled, in which case `super` must not track it.
     var embedClickHandler: (@MainActor (_ point: CGPoint) -> Bool)?
 
+    /// One accessibility element per drawn embed, appended to this view's own children.
+    /// The text view stays the accessible text area.
+    var embedAccessibilityChildren: (@MainActor () -> [Any])?
+
+    override func accessibilityChildren() -> [Any]? {
+      let base = super.accessibilityChildren()
+      guard let extra = embedAccessibilityChildren?(), !extra.isEmpty else { return base }
+      return (base ?? []) + extra
+    }
+
     /// Called on Option-Return. Returns `true` when an embed was selected and *Edit as Text*
     /// was sent to the host.
     var embedEditAsTextHandler: (@MainActor () -> Bool)?

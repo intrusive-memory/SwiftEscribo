@@ -408,6 +408,9 @@
 
     /// The change hook's body: install on the first embed, then re-vend what changed.
     private func embedsDidChange(_ ranges: [Range<Int>]) {
+      #if os(macOS)
+        defer { embedAccessibilityDidChange() }
+      #endif
       if embedLayout == nil {
         guard !coordinator.embeddedBlocks.isEmpty else { return }
         let controller = EmbedLayoutController(textView: textView, coordinator: coordinator)
