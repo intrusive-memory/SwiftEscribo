@@ -12,6 +12,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-20
+
 A **minor** by the consumer's pin: every addition is source-compatible, and nothing is removed
 or renamed. A host that does not pass the new `EscriboEditor` parameters, or does not return an
 embed, gets the same geometry, attributes and behaviour as before. The new parameters all come
