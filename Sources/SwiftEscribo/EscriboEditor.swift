@@ -72,6 +72,22 @@ public struct EscriboEditor: View {
   /// the well's button. Handed to the text view, whose well invokes it.
   private let onWellAction: (EscriboWellItem, EscriboBlock) -> Void
 
+  /// The host's embed provider, or `nil` to draw every block as text.
+  private let embedProvider: (any EscriboEmbedProvider)?
+
+  /// Called with the block when an embed row is clicked or tapped.
+  private let onEmbedActivate: (EscriboBlock) -> Void
+
+  /// Called with the block and the action's id when an embed's action is performed.
+  private let onEmbedAction: (EscriboBlock, String) -> Void
+
+  /// Called with the block when Find lands a match inside an embed. macOS only; a no-op on
+  /// iOS.
+  private let onFindMatchInEmbed: (EscriboBlock) -> Void
+
+  /// The host's per-block well notice, or `nil` for none.
+  private let wellNotice: ((EscriboBlock) -> (symbolName: String, help: String)?)?
+
   /// The system appearance, which selects between a theme pair when `theme` is `nil`.
   @Environment(\.colorScheme) private var colorScheme
 
@@ -139,6 +155,43 @@ public struct EscriboEditor: View {
   ///   - onWellAction: Called with the slot and the block when a well slot is activated.
   ///     The package draws and tracks; the host acts — for `.readAloud`, it speaks. Defaulted
   ///     to a no-op so every pre-0.4.0 call site keeps compiling unchanged.
+  ///   - embedProvider: Draws blocks as **embeds** — one atomic row in place of the block's
+  ///     text, while its characters stay in the document (REQUIREMENTS.md § 1). Asked per
+  ///     block in ``EditorMode/live`` only; see ``EscriboEmbedProvider`` for exactly when.
+  ///     Because a provider is not `Equatable`, a new value on an update pass is not a
+  ///     re-ask: call ``EscriboEditorHandle/invalidateEmbeds()`` when its answers change
+  ///     without an edit. Defaulted to `nil`, which changes nothing — no layout, inset or
+  ///     behaviour differs from an editor that never heard of embeds.
+  ///   - onEmbedActivate: Called once with the block when an embed row is clicked or
+  ///     tapped. The block stays selected. Defaulted to a no-op.
+  ///   - onEmbedAction: Called with the block and the ``EscriboEmbed/Action/id`` when one of
+  ///     the embed's ``EscriboEmbed/actions`` is performed. Option-Return with an embed
+  ///     selected always calls it with ``EscriboEmbed/Action/editAsTextID``, whether or not
+  ///     the embed lists that action; list an ``EscriboEmbed/Action`` with that id to offer
+  ///     *Edit as Text* in the accessibility custom actions too. Defaulted to a no-op.
+  ///   - onFindMatchInEmbed: Called with the block when the find bar's current match lies
+  ///     inside an embed. The host typically stops returning an embed for that block and
+  ///     calls ``EscriboEditorHandle/invalidateEmbeds()``, so the match shows as text.
+  ///     Defaulted to a no-op.
+  ///
+  ///     Platform-neutral in this signature and honoured on macOS only, like `findBar`:
+  ///     iOS has no find bar, so there it is accepted and never called.
+  ///
+  ///   - wellNotice: Per-block well content (REQUIREMENTS.md § 2): return a notice glyph
+  ///     (an SF Symbol name) and its help text for a block that has one, or `nil`. A block
+  ///     with a notice shows it in the well's one slot **at all times**, in place of
+  ///     `.readAloud`, regardless of ``EscriboWell/eligibleKinds`` and whether the block
+  ///     has content; a click calls `onWellAction(.notice, block)`. Needs a non-nil `well`
+  ///     (that is what reserves the lane); `well.items` need not contain `.notice`.
+  ///
+  ///     Asked in **both** ``EditorMode``s, unlike embeds. Asked at the same points as the
+  ///     embed provider — on install, after every full scan, for each edit's rescanned
+  ///     blocks, and for every block on ``EscriboEditorHandle/invalidateEmbeds()`` — and
+  ///     never on a SwiftUI update pass. Defaulted to `nil`: no notices, no change.
+  ///
+  /// Every parameter after `onWellAction` is new in this release and comes **after** it on
+  /// purpose: a call site that passes `onWellAction` as a trailing closure keeps binding it
+  /// there.
   public init(
     text: Binding<String>,
     language: Language,
@@ -148,7 +201,12 @@ public struct EscriboEditor: View {
     focusOnAppear: Bool = false,
     handle: EscriboEditorHandle? = nil,
     well: EscriboWell? = nil,
-    onWellAction: @escaping (EscriboWellItem, EscriboBlock) -> Void = { _, _ in }
+    onWellAction: @escaping (EscriboWellItem, EscriboBlock) -> Void = { _, _ in },
+    embedProvider: (any EscriboEmbedProvider)? = nil,
+    onEmbedActivate: @escaping (EscriboBlock) -> Void = { _ in },
+    onEmbedAction: @escaping (EscriboBlock, String) -> Void = { _, _ in },
+    onFindMatchInEmbed: @escaping (EscriboBlock) -> Void = { _ in },
+    wellNotice: ((EscriboBlock) -> (symbolName: String, help: String)?)? = nil
   ) {
     self._text = text
     self.language = language
@@ -159,6 +217,11 @@ public struct EscriboEditor: View {
     self.handle = handle
     self.well = well
     self.onWellAction = onWellAction
+    self.embedProvider = embedProvider
+    self.onEmbedActivate = onEmbedActivate
+    self.onEmbedAction = onEmbedAction
+    self.onFindMatchInEmbed = onFindMatchInEmbed
+    self.wellNotice = wellNotice
   }
 
   public var body: some View {
@@ -173,6 +236,12 @@ public struct EscriboEditor: View {
       focusOnAppear: focusOnAppear,
       handle: handle,
       well: well,
-      onWellAction: onWellAction)
+      onWellAction: onWellAction,
+      embeds: EmbedConfiguration(
+        provider: embedProvider,
+        onActivate: onEmbedActivate,
+        onAction: onEmbedAction,
+        onFindMatch: onFindMatchInEmbed,
+        wellNotice: wellNotice))
   }
 }

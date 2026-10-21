@@ -78,7 +78,9 @@ struct FontResolver {
   mutating func font(for spec: FontSpec) -> PlatformFont {
     if let cached = cache[spec] { return cached }
     let resolved = Self.font(for: spec)
-    cache[spec] = resolved
+    // A face that did not come back at the size asked for is the font service failing
+    // under load, not an answer. It is returned (the function is total) but never kept.
+    if resolved.pointSize == CGFloat(spec.pointSize) { cache[spec] = resolved }
     return resolved
   }
 
@@ -121,8 +123,23 @@ struct FontResolver {
     case .serif:
       return Self.serifSystemFont(ofSize: size)
     default:
-      return PlatformFont.systemFont(ofSize: size)
+      return systemFont(ofSize: size)
     }
+  }
+
+  /// The system font at `size`, asked for again when the answer is not at that size.
+  ///
+  /// Under heavy parallel load the font service has been seen answering with Helvetica at
+  /// 12 points whatever size was requested. That is a failed reply, not a face, so a
+  /// reply whose point size differs is retried, the same remedy as the monospaced fallback.
+  /// `provider` is a parameter so a test can simulate the failure deterministically.
+  static func systemFont(
+    ofSize size: CGFloat,
+    provider: (CGFloat) -> PlatformFont = { PlatformFont.systemFont(ofSize: $0) }
+  ) -> PlatformFont {
+    var font = provider(size)
+    for _ in 0..<5 where font.pointSize != size { font = provider(size) }
+    return font
   }
 
   // MARK: - The serif face
@@ -136,7 +153,7 @@ struct FontResolver {
   /// ``FontFamilyRole/body`` role resolves to — a reader who asked for serif and got the
   /// body face has a cosmetic defect; one who got no font at all does not.
   static func serifSystemFont(ofSize size: CGFloat) -> PlatformFont {
-    let system = PlatformFont.systemFont(ofSize: size)
+    let system = systemFont(ofSize: size)
     guard let descriptor = system.fontDescriptor.withDesign(.serif) else { return system }
     #if canImport(AppKit)
       return NSFont(descriptor: descriptor, size: size) ?? system
@@ -155,8 +172,21 @@ struct FontResolver {
   /// editor uses with a list of deliberately unavailable families — which is the only way
   /// to exercise the final fallback on a machine where the first name resolves.
   static func monospacedFont(named names: [String], size: CGFloat) -> PlatformFont {
-    firstAvailable(of: names, size: size)
-      ?? PlatformFont.monospacedSystemFont(ofSize: size, weight: .regular)
+    firstAvailable(of: names, size: size) ?? systemMonospacedFont(ofSize: size)
+  }
+
+  /// The system monospaced face at `size`.
+  ///
+  /// The font service has been seen answering this call with a face whose point size is
+  /// zero when it is busy, which collapses every measurement made from it. A face that did
+  /// not come back at the size asked for is asked for again, and the plain system font
+  /// stands in if the service still will not answer properly.
+  private static func systemMonospacedFont(ofSize size: CGFloat) -> PlatformFont {
+    for _ in 0..<3 {
+      let font = PlatformFont.monospacedSystemFont(ofSize: size, weight: .regular)
+      if font.pointSize == size { return font }
+    }
+    return systemFont(ofSize: size)
   }
 
   /// The first of `names` that exists on this system, or `nil` if none does.
@@ -165,12 +195,64 @@ struct FontResolver {
   /// CoreText constructor never fails — it substitutes a face for an unknown name — so a
   /// chain built on it would always stop at its first entry and the fallback would be
   /// unreachable. CoreText does the measuring here, not the choosing.
-  static func firstAvailable(of names: [String], size: CGFloat) -> PlatformFont? {
-    for name in names {
-      if let font = PlatformFont(name: name, size: size) { return font }
+  ///
+  /// A name is only handed to `PlatformFont(name:size:)` after a listing of the installed
+  /// families says it exists. That constructor makes a synchronous round trip to the font
+  /// registry for a name it does not already know, and that reply has been observed not to
+  /// arrive (a test sat for 29 minutes in `NSFont(name:size:)`). The listing is read once
+  /// and cached; a name it does not contain resolves to `nil` without the lookup.
+  /// `lookup` and `isInstalled` are parameters so a test can observe that.
+  static func firstAvailable(
+    of names: [String],
+    size: CGFloat,
+    isInstalled: (String) -> Bool = FontResolver.isInstalled,
+    lookup: (String, CGFloat) -> PlatformFont? = FontResolver.namedFont
+  ) -> PlatformFont? {
+    for name in names where isInstalled(name) {
+      if let font = lookup(name, size) { return font }
     }
     return nil
   }
+
+  /// `PlatformFont(name:size:)`, one caller at a time and once per name and size.
+  ///
+  /// Every resolver instance used to repeat this registry round trip, and when many ran at
+  /// once (a parallel test run, several editors opening together) the replies stopped
+  /// arriving. Serialising the calls and remembering the answers keeps at most one request
+  /// in flight and none repeated; the result for a given name and size is the same font.
+  static func namedFont(_ name: String, size: CGFloat) -> PlatformFont? {
+    let key = "\(name)\u{0}\(size)"
+    namedFontLock.lock()
+    defer { namedFontLock.unlock() }
+    if let cached = namedFontCache[key] { return cached }
+    let font = PlatformFont(name: name, size: size)
+    namedFontCache[key] = .some(font)
+    return font
+  }
+
+  private static let namedFontLock = NSLock()
+  nonisolated(unsafe) private static var namedFontCache: [String: PlatformFont?] = [:]
+
+  /// Whether `name` is an installed family or face name, case-insensitively, answered from
+  /// a listing read once per process.
+  static func isInstalled(_ name: String) -> Bool {
+    installedNames.contains(name.lowercased())
+  }
+
+  private static let installedNames: Set<String> = {
+    var names = Set<String>()
+    #if canImport(AppKit)
+      let manager = NSFontManager.shared
+      names.formUnion(manager.availableFontFamilies.map { $0.lowercased() })
+      names.formUnion(manager.availableFonts.map { $0.lowercased() })
+    #elseif canImport(UIKit)
+      for family in UIFont.familyNames {
+        names.insert(family.lowercased())
+        names.formUnion(UIFont.fontNames(forFamilyName: family).map { $0.lowercased() })
+      }
+    #endif
+    return names
+  }()
 
   // MARK: - Measurement
 

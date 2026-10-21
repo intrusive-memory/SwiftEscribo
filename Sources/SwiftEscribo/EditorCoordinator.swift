@@ -122,6 +122,14 @@ public final class EditorCoordinator: NSObject {
   /// How many edits have been skipped because a composition was in flight.
   private(set) var markedTextSkipCount = 0
 
+  /// How many times the whole document has been scanned — every ``restyleEverything()``,
+  /// whether called by the host, by a language switch, or by a query's fallback.
+  ///
+  /// The typing path's promise is that this does **not** move: an ordinary keystroke is an
+  /// incremental scan, spliced into ``documentBlocks``. A test that types and then sees
+  /// this climb has found a keystroke that fell back to a full scan.
+  private(set) var fullScanCount = 0
+
   /// The line records the most recent scan produced, in order.
   ///
   /// ## Why records are retained when spans are not
@@ -203,6 +211,19 @@ public final class EditorCoordinator: NSObject {
   /// The document line count ``documentBlocks`` was built against — the previous scan's
   /// `documentLineCount`, and the minuend of the next splice's line delta.
   private var documentBlocksLineCount = 0
+
+  // MARK: - Embeds
+
+  /// The host's embed provider and callbacks, and the provider's cached answer per block
+  /// (REQUIREMENTS.md § 1.1). All of the logic lives in `EditorCoordinator+Embeds.swift`;
+  /// the scanning code below only calls ``refreshAllEmbeds()`` after a full scan and
+  /// ``refreshEmbeds(afterEdit:)`` after an incremental one. With no provider both return
+  /// at once.
+  let embeds = EmbedState()
+
+  /// The host's `wellNotice` callback and its cached answer per block (REQUIREMENTS.md § 2).
+  /// Logic in `EditorCoordinator+Notices.swift`; refreshed beside the embed cache.
+  let notices = NoticeState()
 
   // MARK: - Geometry, supplied by the view
 
@@ -317,7 +338,10 @@ public final class EditorCoordinator: NSObject {
   /// recovery path after a composition, which is why it clears ``needsFullRescan``.
   func restyleEverything() {
     needsFullRescan = false
+    fullScanCount += 1
     apply(textStorage.fullScan(using: &scanner), edit: nil)
+    refreshAllEmbeds()
+    refreshAllNotices()
   }
 
   /// Handles one **character** edit reported by the text system.
@@ -350,7 +374,11 @@ public final class EditorCoordinator: NSObject {
       return
     }
 
-    apply(textStorage.incrementalScan(edit, using: &scanner), edit: edit)
+    apply(
+      textStorage.incrementalScan(edit, using: &scanner, alignedToBlocks: cachedBlockLookup()),
+      edit: edit)
+    refreshEmbeds(afterEdit: edit)
+    refreshNotices(afterEdit: edit)
   }
 
   /// Translates a text-system edit notification into a ``TextEdit``.
@@ -542,6 +570,37 @@ public final class EditorCoordinator: NSObject {
   ///    block half inside the window is a block whose other half is about to be described
   ///    by different values; keeping either would contradict the other.
   ///
+  /// ## Condition 2 holds by construction on the typing path, up to a cap
+  ///
+  /// The scanner's minimal window is *not* block-aligned: it starts `backwardWidening`
+  /// lines above the edit and stops `lookahead` lines past convergence, so an ordinary
+  /// keystroke inside a multi-line block — or within a line of one — lands an edge inside
+  /// it. On macOS that happens even one block **above** a note: `NSTextView` reports a
+  /// keystroke's `editedRange` one code unit longer than the insertion, over the line's
+  /// terminator (the range is `{n, 1}` at `willProcessEditing` and `{n, 2}` at
+  /// `didProcessEditing`, so AppKit's attribute fixing between the two extends it), which
+  /// moves convergence one line further down. `UITextView` reports the insertion alone,
+  /// which is why iOS stayed spliced for the same keystroke. Declining there left
+  /// ``blocksSpanDocument`` `false` after nearly every keystroke near a multi-line block,
+  /// and every query then paid a full scan.
+  ///
+  /// So ``didProcessCharacterEdit(editedRange:changeInLength:)`` hands the scanner this
+  /// cache (``cachedBlockLookup()``) and the scanner widens its window outward to cached
+  /// block edges: its floor moves up to the first line of the cached block containing it,
+  /// and its stop moves down to the next line where a cached block begins. The window then
+  /// replaces whole cached blocks, so nothing straddles. Widening only ever adds lines the
+  /// convergence rule had already proved unchanged, so it costs rescan time and never
+  /// correctness.
+  ///
+  /// The time is **capped**: the scanner adds at most 64 lines (`blockAlignmentLineLimit`
+  /// in `EscriboCore`). An edit inside a block too long for that — a 2,000-line code fence,
+  /// a wall-of-text paragraph — gets the minimal window, this check declines, and
+  /// ``blocksSpanDocument`` goes `false` exactly as it did before alignment existed: the
+  /// queries fall back to a scan, and with an embed provider installed
+  /// `refreshEmbeds(afterEdit:)` full-scans, which restores the cache. The check below is
+  /// therefore live on that path, and is also the fail-safe for a cache that disagrees with
+  /// the scanner's line count.
+  ///
   /// Condition 2 is doing more work than it looks. It also establishes that the window's
   /// own edge blocks are **not fragments** — which is the thing that actually matters, and
   /// it is worth writing down why, because the obvious extra test is both redundant and
@@ -563,6 +622,12 @@ public final class EditorCoordinator: NSObject {
   /// fire. The empirical check on all of this is
   /// `splicedAnswersAgreeWithAFreshScan`, which compares a spliced cache against a scanner
   /// that never saw the earlier document.
+  ///
+  /// The widening does not change this argument, it only chooses *X*: the window now
+  /// stops at a line the cache already had a boundary at, and starts at one, rather than
+  /// wherever convergence happened to land. The boundary there survives for exactly the
+  /// reasons above; what the widening buys is that condition 2 no longer rejects the
+  /// window for straddling a block whose lines the edit never touched.
   ///
   /// Both conditions fail *safely*: the caller clears ``blocksSpanDocument`` and the queries
   /// take the conservative path. The splice is therefore a pure saving — it never produces
@@ -598,6 +663,40 @@ public final class EditorCoordinator: NSObject {
 
     return before + result.blocks
       + after.map { $0.shifted(byLines: lineDelta, byOffset: offsetDelta) }
+  }
+
+  /// The block cache as the scanner's block-edge lookup, or `nil` when it cannot be trusted.
+  ///
+  /// Maps a line in the **current** cache's coordinates — which are the scanner's old-text
+  /// coordinates for the edit about to be scanned, since the cache was last brought up to
+  /// date by the previous scan — to the lines of the cached block containing it. `nil`
+  /// while ``blocksSpanDocument`` is `false`: a cache that does not describe the document
+  /// would steer the window by stale edges, and the splice would decline anyway.
+  func cachedBlockLookup() -> ((Int) -> Range<Int>?)? {
+    guard blocksSpanDocument, !documentBlocks.isEmpty else { return nil }
+    let blocks = documentBlocks
+    return { line in Self.lines(ofBlockContaining: line, in: blocks) }
+  }
+
+  /// The lines of the block in `blocks` (sorted, non-overlapping) containing `line`.
+  ///
+  /// A binary search: the typing path calls this twice per keystroke, and a long document
+  /// has thousands of blocks.
+  static func lines(ofBlockContaining line: Int, in blocks: [EscriboBlock]) -> Range<Int>? {
+    var low = 0
+    var high = blocks.count
+    while low < high {
+      let mid = (low + high) / 2
+      let lines = blocks[mid].lines
+      if lines.upperBound <= line {
+        low = mid + 1
+      } else if lines.lowerBound > line {
+        high = mid
+      } else {
+        return lines
+      }
+    }
+    return nil
   }
 
   // MARK: - Asking the scanner about a block

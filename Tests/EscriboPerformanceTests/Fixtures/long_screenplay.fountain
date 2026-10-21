@@ -252,6 +252,19 @@ If you receive a letter, you remember your friend.
 MAESTRA
 Tú usas el coche.
 
+A single bulb sways above the desk.
+
+[[{
+  "take": 1,
+  "shot": "wide establishing",
+  "lens": 24,
+  "handheld": true,
+  "move": {
+    "type": "dolly",
+    "speed": 0.5
+  }
+}]]
+
 MAESTRA
 Tú usas el coche.
 
@@ -756,6 +769,23 @@ I work in the city.
 
 [[<pause length="4s"/>]]
 
+The street outside has gone quiet.
+
+[[{
+  "take": 2,
+  "shot": "slow push-in",
+  "lens": 35,
+  "handheld": false,
+  "move": {
+    "type": "pan",
+    "speed": 0.75
+  },
+  "tags": [
+    "quiet"
+  ],
+  "pad13": 13
+}]]
+
 MAESTRA
 Tú trabajas en la tienda.
 
@@ -1254,6 +1284,27 @@ A road sign reads "EV CHARGING: THIS EXIT".
 
 JUNE
 Dad, would you know?
+
+Rain taps the window in a slow pattern.
+
+[[{
+  "take": 3,
+  "shot": "over the shoulder",
+  "lens": 50,
+  "handheld": true,
+  "move": {
+    "type": "tilt",
+    "speed": 1.0
+  },
+  "tags": [
+    "quiet",
+    "dusk",
+    "warm",
+    "grain"
+  ],
+  "pad16": 16,
+  "pad17": 17
+}]]
 
 LONN
 Know what?
@@ -1757,6 +1808,29 @@ JUNE
 Nine times.
 (the researcher waking up in him)
 And they keep calling it memory, which is wrong. It isn't memory. It's attention. The context window isn't where things are kept. It's where things are looked at. The second a token falls off the back, it was never there at all.
+
+She sets the cup down without a sound.
+
+[[{
+  "take": 4,
+  "shot": "close on hands",
+  "lens": 85,
+  "handheld": false,
+  "move": {
+    "type": "crane",
+    "speed": 0.5
+  },
+  "tags": [
+    "quiet",
+    "dusk",
+    "warm",
+    "grain",
+    "soft",
+    "still"
+  ],
+  "pad18": 18,
+  "pad19": 19
+}]]
 
 MIRA
 (turning from the storm to look at him)
@@ -2263,6 +2337,31 @@ If you receive a letter, you remember your friend.
 MAESTRA
 Tú usas el coche.
 
+Somewhere below, a door closes.
+
+[[{
+  "take": 5,
+  "shot": "low angle",
+  "lens": 24,
+  "handheld": true,
+  "move": {
+    "type": "dolly",
+    "speed": 0.75
+  },
+  "tags": [
+    "quiet",
+    "dusk",
+    "warm",
+    "grain",
+    "soft",
+    "still"
+  ],
+  "pad18": 18,
+  "pad19": 19,
+  "pad20": 20,
+  "pad21": 21
+}]]
+
 MAESTRA
 Tú usas el coche.
 
@@ -2767,6 +2866,34 @@ I work in the city.
 
 [[<pause length="4s"/>]]
 
+The clock on the wall reads nearly midnight.
+
+[[{
+  "take": 6,
+  "shot": "tracking left",
+  "lens": 35,
+  "handheld": false,
+  "move": {
+    "type": "pan",
+    "speed": 1.0
+  },
+  "tags": [
+    "quiet",
+    "dusk",
+    "warm",
+    "grain",
+    "soft",
+    "still"
+  ],
+  "pad18": 18,
+  "pad19": 19,
+  "pad20": 20,
+  "pad21": 21,
+  "pad22": 22,
+  "pad23": 23,
+  "pad24": 24
+}]]
+
 MAESTRA
 Tú trabajas en la tienda.
 
@@ -3265,6 +3392,21 @@ A road sign reads "EV CHARGING: THIS EXIT".
 
 JUNE
 Dad, would you know?
+
+Dust drifts through the shaft of light.
+
+[[{
+  "take": 7,
+  "shot": "insert: ledger",
+  "lens": 50,
+  "handheld": true,
+  "move": {
+    "type": "tilt",
+    "speed": 0.5
+  },
+  "pad10": 10,
+  "pad11": 11
+}]]
 
 LONN
 Know what?
@@ -3768,6 +3910,30 @@ JUNE
 Nine times.
 (the researcher waking up in him)
 And they keep calling it memory, which is wrong. It isn't memory. It's attention. The context window isn't where things are kept. It's where things are looked at. The second a token falls off the back, it was never there at all.
+
+He folds the letter and slips it away.
+
+[[{
+  "take": 8,
+  "shot": "two-shot at the table",
+  "lens": 85,
+  "handheld": false,
+  "move": {
+    "type": "crane",
+    "speed": 0.75
+  },
+  "tags": [
+    "quiet",
+    "dusk",
+    "warm",
+    "grain",
+    "soft",
+    "still"
+  ],
+  "pad18": 18,
+  "pad19": 19,
+  "pad20": 20
+}]]
 
 MIRA
 (turning from the storm to look at him)
@@ -4274,6 +4440,25 @@ If you receive a letter, you remember your friend.
 MAESTRA
 Tú usas el coche.
 
+A train passes, and the glass hums.
+
+[[{
+  "take": 9,
+  "shot": "high angle",
+  "lens": 24,
+  "handheld": true,
+  "move": {
+    "type": "dolly",
+    "speed": 1.0
+  },
+  "tags": [
+    "quiet",
+    "dusk"
+  ],
+  "pad14": 14,
+  "pad15": 15
+}]]
+
 MAESTRA
 Tú usas el coche.
 
@@ -4778,6 +4963,33 @@ I work in the city.
 
 [[<pause length="4s"/>]]
 
+The lamp flickers once and holds.
+
+[[{
+  "take": 10,
+  "shot": "rack focus",
+  "lens": 35,
+  "handheld": false,
+  "move": {
+    "type": "pan",
+    "speed": 0.5
+  },
+  "tags": [
+    "quiet",
+    "dusk",
+    "warm",
+    "grain",
+    "soft",
+    "still"
+  ],
+  "pad18": 18,
+  "pad19": 19,
+  "pad20": 20,
+  "pad21": 21,
+  "pad22": 22,
+  "pad23": 23
+}]]
+
 MAESTRA
 Tú trabajas en la tienda.
 
@@ -5276,6 +5488,20 @@ A road sign reads "EV CHARGING: THIS EXIT".
 
 JUNE
 Dad, would you know?
+
+Footsteps cross the floor overhead.
+
+[[{
+  "take": 11,
+  "shot": "handheld follow",
+  "lens": 50,
+  "handheld": true,
+  "move": {
+    "type": "tilt",
+    "speed": 0.75
+  },
+  "pad10": 10
+}]]
 
 LONN
 Know what?
@@ -5779,6 +6005,32 @@ JUNE
 Nine times.
 (the researcher waking up in him)
 And they keep calling it memory, which is wrong. It isn't memory. It's attention. The context window isn't where things are kept. It's where things are looked at. The second a token falls off the back, it was never there at all.
+
+The curtain moves, though the window is shut.
+
+[[{
+  "take": 12,
+  "shot": "static medium",
+  "lens": 85,
+  "handheld": false,
+  "move": {
+    "type": "crane",
+    "speed": 1.0
+  },
+  "tags": [
+    "quiet",
+    "dusk",
+    "warm",
+    "grain",
+    "soft",
+    "still"
+  ],
+  "pad18": 18,
+  "pad19": 19,
+  "pad20": 20,
+  "pad21": 21,
+  "pad22": 22
+}]]
 
 MIRA
 (turning from the storm to look at him)

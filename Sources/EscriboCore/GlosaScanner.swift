@@ -57,10 +57,11 @@ private func isASCIILetter(_ unit: UInt16) -> Bool {
 /// scanned as one, recognized or not — the same "unknown kinds fall back, never fail"
 /// contract every ``SpanKind`` in this package already keeps.
 ///
-/// ## Scope: one content chunk, no cross-line state
+/// ## Scope: one content chunk; only JSON notes carry state across lines
 ///
-/// A directive must open and close within the chunk it is handed — this scanner carries
-/// no state across lines and adds none to ``LineState``, because Sortie 15 already
+/// A tag directive must open and close within the chunk it is handed — the tag scan carries
+/// no state across lines. (A JSON note is the exception: its ``JSONNoteContext`` rides in
+/// ``LineState`` so a pretty-printed object scans across lines.) Sortie 15 already
 /// decided a note's content arrives as one span per line and this sortie only
 /// subdivides it. A `<tag` whose `>` never arrives before the chunk ends is exactly the
 /// malformed case task 4 describes, and it degrades to ``SpanKind/text`` like every
@@ -97,6 +98,27 @@ enum GlosaScanner {
   ///     document coordinates like every other span this package emits.
   /// - Returns: Spans that tile `range` exactly, in ascending order.
   static func scan(_ units: [UInt16], in range: Range<Int>, base: Int) -> [EscriboSpan] {
+    var json = JSONNoteContext.noteOpened
+    return scan(units, in: range, base: base, json: &json, continues: false)
+  }
+
+  /// Scans one chunk of a note that may span lines, carrying the JSON context across them.
+  ///
+  /// A note whose content opens like a block directive (`{`, whitespace — line breaks
+  /// included — then `"`) is JSON, not a tag directive, and `json` carries the tokenizer
+  /// from this chunk to the next line's. Everything else keeps the tag scan.
+  ///
+  /// - Parameters:
+  ///   - json: The note's JSON context at the start of the chunk; advanced past it.
+  ///     ``JSONNoteContext/noteOpened`` for a note whose `[[` is on this line.
+  ///   - continues: Whether the note stays open past this chunk.
+  static func scan(
+    _ units: [UInt16], in range: Range<Int>, base: Int, json: inout JSONNoteContext,
+    continues: Bool
+  ) -> [EscriboSpan] {
+    if let spans = json.scan(units, in: range, base: base, continues: continues) {
+      return spans
+    }
     guard !range.isEmpty else { return [] }
 
     var spans: [EscriboSpan] = []

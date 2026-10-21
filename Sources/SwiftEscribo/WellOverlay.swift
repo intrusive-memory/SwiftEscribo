@@ -136,6 +136,13 @@ final class WellOverlay: NSObject {
   /// or `nil`. Only iOS installs one: Caret is a touch state.
   var caretOffset: () -> Int? = { nil }
 
+  /// The host's notice for a block, from the coordinator's cache, or `nil`. Supplied by
+  /// ``EscriboTextView/installWellOverlay()``.
+  var noticeForBlock: (EscriboBlock) -> WellNotice? = { _ in nil }
+
+  /// Every noticed block's ID, for the tracker.
+  var noticedBlockIDs: () -> Set<EscriboBlock.ID> = { [] }
+
   /// Draws and removes the spoken-word highlight. ``WellHighlightRenderer/none`` until a
   /// text view installs its own.
   var highlightRenderer: WellHighlightRenderer = .none
@@ -169,11 +176,25 @@ final class WellOverlay: NSObject {
     updateHighlight(well?.spokenRange)
     guard let well else {
       tracker = WellTracker()
+      tracker.noticesChanged(to: noticedBlockIDs())
       removeAllSlots()
       return
     }
     tracker.activeBlockChanged(to: well.activeBlock, at: now())
     reconcile()
+  }
+
+  /// The set of noticed blocks changed (the coordinator's `onNoticesChange`, or the first
+  /// install): hands the tracker the new set and redraws. A notice appears at once, with no
+  /// fade.
+  func noticesDidChange() {
+    syncNotices()
+    reconcile()
+  }
+
+  /// Hands the tracker the current noticed set, without redrawing.
+  func syncNotices() {
+    tracker.noticesChanged(to: noticedBlockIDs())
   }
 
   /// The pointer moved to `point` in text-view coordinates, or left the view (`nil`).
@@ -311,14 +332,21 @@ final class WellOverlay: NSObject {
     for presentation in tracker.presentations(at: time) {
       // Ineligible blocks show nothing (rule 5) — checked here as well as at the pointer,
       // because the host's active block is not filtered on its way in.
-      guard let block = blockWithID(presentation.block), well.isEligible(block) else { continue }
+      guard let block = blockWithID(presentation.block) else { continue }
+      let notice = presentation.role == .notice ? noticeForBlock(block) : nil
+      guard well.presents(block, hasNotice: notice != nil) else { continue }
       let fragments = geometry.lineFragmentRects(block.range)
       guard let firstLine = fragments.first,
         let blockRect = WellPlacement.blockRect(enclosing: fragments)
       else { continue }
       let isPlaying = presentation.role == .playing
-      let items = well.items.filter {
-        WellPlacement.symbolName(for: $0, isPlaying: isPlaying) != nil
+      let items: [EscriboWellItem]
+      if presentation.role == .notice {
+        items = notice == nil ? [] : [.notice]
+      } else {
+        items = well.items.filter {
+          WellPlacement.symbolName(for: $0, isPlaying: isPlaying, notice: nil) != nil
+        }
       }
       guard !items.isEmpty else { continue }
 
@@ -326,12 +354,14 @@ final class WellOverlay: NSObject {
       let slot = existing ?? WellSlot()
       if existing == nil {
         slots[block.id] = slot
-        host.addSubview(slot.bar)
       }
-      slot.bar.frame = WellPlacement.spanBarFrame(blockRect: blockRect, textEdge: textEdge)
-      slot.bar.render(
-        WellPlacement.barFill(
-          role: presentation.role, progress: well.progress, reduceMotion: reduceMotion()))
+      slot.setShowsBar(presentation.showsSpanBar, in: host)
+      if presentation.showsSpanBar {
+        slot.bar.frame = WellPlacement.spanBarFrame(blockRect: blockRect, textEdge: textEdge)
+        slot.bar.render(
+          WellPlacement.barFill(
+            role: presentation.role, progress: well.progress, reduceMotion: reduceMotion()))
+      }
 
       slot.setItems(items, in: host, target: self)
       for (index, button) in slot.buttons.enumerated() {
@@ -339,7 +369,11 @@ final class WellOverlay: NSObject {
         button.frame = WellPlacement.buttonFrame(
           slot: index, firstLineFragment: firstLine, textEdge: textEdge, laneWidth: lane,
           platform: .current)
-        button.style(isPlaying: isPlaying)
+        if let notice {
+          button.styleNotice(notice)
+        } else {
+          button.style(isPlaying: isPlaying)
+        }
       }
 
       if existing == nil {
@@ -415,8 +449,18 @@ final class WellSlot {
     }
   }
 
+  /// Adds the span bar to `host`, or removes it: a notice draws none.
+  func setShowsBar(_ shows: Bool, in host: WellHostView) {
+    if shows, bar.superview == nil {
+      host.addSubview(bar)
+    } else if !shows, bar.superview != nil {
+      bar.removeFromSuperview()
+    }
+  }
+
   func appear(fadeDuration: TimeInterval) {
-    let views: [WellHostView] = [bar as WellHostView] + buttons.map { $0 as WellHostView }
+    let views: [WellHostView] =
+      (bar.superview == nil ? [] : [bar as WellHostView]) + buttons.map { $0 as WellHostView }
     guard fadeDuration > 0 else {
       for view in views { view.setWellAlpha(1) }
       return
@@ -513,6 +557,7 @@ extension WellHostView {
     /// Whether the button shows `stop.fill` — `nil` until first styled.
     private(set) var showsStop: Bool?
     private var hoverArea: NSTrackingArea?
+    private(set) var noticeShown: WellNotice?
 
     func configure(item: EscriboWellItem, target: WellOverlay) {
       self.item = item
@@ -536,6 +581,18 @@ extension WellHostView {
         .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold))
       contentTintColor = isPlaying ? .controlAccentColor : .tertiaryLabelColor
       setAccessibilityLabel(label)
+    }
+
+    /// Draws the host's notice glyph, with its help as tooltip and accessibility label.
+    func styleNotice(_ notice: WellNotice) {
+      guard noticeShown != notice else { return }
+      noticeShown = notice
+      showsStop = nil
+      image = NSImage(systemSymbolName: notice.symbolName, accessibilityDescription: notice.help)?
+        .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold))
+      contentTintColor = .secondaryLabelColor
+      toolTip = notice.help
+      setAccessibilityLabel(notice.help)
     }
 
     override func updateTrackingAreas() {
@@ -618,6 +675,22 @@ extension WellHostView {
 
     /// Whether the button shows `stop.fill` — `nil` until first styled.
     private(set) var showsStop: Bool?
+    private(set) var noticeShown: WellNotice?
+
+    /// Draws the host's notice glyph, with its help as tooltip and accessibility label.
+    func styleNotice(_ notice: WellNotice) {
+      guard noticeShown != notice else { return }
+      noticeShown = notice
+      showsStop = nil
+      setImage(
+        UIImage(
+          systemName: notice.symbolName,
+          withConfiguration: UIImage.SymbolConfiguration(pointSize: 17)),
+        for: .normal)
+      tintColor = .secondaryLabel
+      toolTip = notice.help
+      accessibilityLabel = notice.help
+    }
 
     func configure(item: EscriboWellItem, target: WellOverlay) {
       self.item = item
@@ -663,7 +736,11 @@ extension EscriboTextView {
       coordinator?.block(atUTF16Offset: offset)
     }
     overlay.laneWidth = { [weak self] in self?.wellLaneWidth ?? 0 }
+    overlay.noticeForBlock = { [weak coordinator] block in coordinator?.notice(for: block) }
+    overlay.noticedBlockIDs = { [weak coordinator] in coordinator?.noticedBlockIDs ?? [] }
+    coordinator.onNoticesChange = { [weak overlay] _ in overlay?.noticesDidChange() }
     overlay.onAction = { [weak self] item, block in self?.onWellAction(item, block) }
+    overlay.syncNotices()
 
     #if os(macOS)
       overlay.geometry = WellGeometry(

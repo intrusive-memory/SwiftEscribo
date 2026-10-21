@@ -87,12 +87,27 @@ struct WellTracker: Equatable {
     case playing
     /// The block just stopped being active and is holding before returning to Hover or Rest.
     case finished
+    /// The host's `wellNotice` has a notice for the block: shown at all times, in the
+    /// block's one slot, glyph only. It wins over every other role for that block.
+    case notice
   }
 
   /// One well that should be on screen.
   struct Presentation: Equatable, Sendable {
     let block: EscriboBlock.ID
     let role: Role
+
+    /// Whether the span bar is drawn. A notice draws its glyph only (REQUIREMENTS.md § 2);
+    /// the overlay must honour this.
+    var showsSpanBar: Bool { role != .notice }
+  }
+
+  /// The blocks the host's `wellNotice` has a notice for. Set by ``noticesChanged(to:)``.
+  private(set) var noticeBlocks: Set<EscriboBlock.ID> = []
+
+  /// The set of noticed blocks changed. Not time-dependent, so it carries no timestamp.
+  mutating func noticesChanged(to blocks: Set<EscriboBlock.ID>) {
+    noticeBlocks = blocks
   }
 
   /// The eligible block the pointer was last over, whether or not it is currently shown.
@@ -225,6 +240,10 @@ struct WellTracker: Equatable {
       result.append(Presentation(block: block, role: role))
     }
 
+    // A noticed block always presents its notice, in its one slot, whatever else would
+    // show there. Added first so `add` drops the block's other roles. In document order.
+    for block in noticeBlocks.sorted(by: { $0.offset < $1.offset }) { add(block, .notice) }
+
     if let activeBlock { add(activeBlock, .playing) }
     if let finishedBlock, let deadline = finishedEndsAt, now < deadline {
       add(finishedBlock, .finished)
@@ -342,7 +361,7 @@ enum WellPlacement {
     -> WellBarFill
   {
     switch role {
-    case .hover, .caret:
+    case .hover, .caret, .notice:
       return WellBarFill(isAccent: false, fraction: 0, duration: 0)
     case .finished:
       return WellBarFill(isAccent: true, fraction: 1, duration: 0)
@@ -371,8 +390,18 @@ enum WellPlacement {
   /// An unknown item draws nothing rather than a placeholder: the well never shows a control
   /// it cannot give a meaning to.
   static func symbolName(for item: EscriboWellItem, isPlaying: Bool) -> String? {
+    symbolName(for: item, isPlaying: isPlaying, notice: nil)
+  }
+
+  /// As ``symbolName(for:isPlaying:)``, with the block's notice glyph, if it has one.
+  ///
+  /// `.notice` takes its glyph from the host's callback, so it is drawable exactly when
+  /// `notice` is non-nil, and is never looked up in this package's table. On a noticed
+  /// block `.readAloud` is not drawn: the notice owns the slot.
+  static func symbolName(for item: EscriboWellItem, isPlaying: Bool, notice: String?) -> String? {
     switch item {
-    case .readAloud: return isPlaying ? "stop.fill" : "play.fill"
+    case .notice: return notice
+    case .readAloud: return notice == nil ? (isPlaying ? "stop.fill" : "play.fill") : nil
     default: return nil
     }
   }

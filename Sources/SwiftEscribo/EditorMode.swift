@@ -1,10 +1,18 @@
 /// Whether the editor renders its document styled or raw.
 ///
-/// Switching between the two is a **theme swap, not a content transformation and not a
-/// code path** (REQUIREMENTS.md § Source mode is a theme). The document's characters are
-/// identical in both modes; only the attributes applied over them change. That is why
-/// this type never reaches the styler: ``EditorStyleEnvironment`` resolves a mode plus a
-/// theme into one theme, and the styler is handed the result.
+/// Switching between the two is a **theme swap, not a content transformation** (REQUIREMENTS.md
+/// § Source mode is a theme). The document's characters are identical in both modes; only
+/// the attributes applied over them change. That is why this type never reaches the
+/// styler: ``EditorStyleEnvironment`` resolves a mode plus a theme into one theme, and the
+/// styler is handed the result.
+///
+/// ## The one code path a mode does select
+///
+/// With no ``EscriboEmbedProvider`` installed, switching modes is not a code path either.
+/// With one, it is: the provider is asked **only** in ``live``, so ``source`` draws every
+/// block as text and never calls the provider, and returning to ``live`` asks every block
+/// again. The styler still never sees the mode; the branch is the editor's single check
+/// before it consults the provider.
 ///
 /// A struct with static members rather than an enum, matching the rest of the package's
 /// vocabulary types.

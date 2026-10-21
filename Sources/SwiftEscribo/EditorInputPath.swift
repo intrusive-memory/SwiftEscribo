@@ -158,6 +158,134 @@ struct CaretLineContext: Equatable {
       super.insertTab(sender)
     }
 
+    // MARK: Block embeds' inputs (REQUIREMENTS.md § 1.3)
+
+    // Overrides on the view, not delegate methods, for the reason the Return key gives
+    // above. The rules live in `EmbedSelection`; the editor wires these handlers in
+    // `MacEmbedBehaviour.swift`. With no embed drawn every handler declines at once.
+
+    /// Rewrites every proposed selection (arrows, shift-arrows, clicks, drags, the text
+    /// system's own adjustments) given the current one. `nil` leaves selection untouched.
+    var embedSelectionConstraint:
+      (@MainActor (_ proposed: [NSValue], _ current: NSRange, _ isFindMatch: Bool) -> [NSValue])?
+
+    /// Vetoes an edit (`false`) before `super` sees it. Typing, Return, Tab, paste and
+    /// key-bound deletions all reach `shouldChangeText(in:replacementString:)`.
+    var embedEditFilter: (@MainActor (_ range: NSRange, _ replacement: String?) -> Bool)?
+
+    /// Called on Backspace (`forward: false`) and forward-delete (`true`). Returns `true`
+    /// when it has handled the key (selected or deleted an embed).
+    var embedDeleteHandler: (@MainActor (_ forward: Bool) -> Bool)?
+
+    /// Called on a mouse-down at a point in this view's coordinates. Returns `true` when the
+    /// click landed on an embed row and was handled, in which case `super` must not track it.
+    var embedClickHandler: (@MainActor (_ point: CGPoint) -> Bool)?
+
+    /// One accessibility element per drawn embed, appended to this view's own children.
+    /// The text view stays the accessible text area.
+    var embedAccessibilityChildren: (@MainActor () -> [Any])?
+
+    override func accessibilityChildren() -> [Any]? {
+      let base = super.accessibilityChildren()
+      guard let extra = embedAccessibilityChildren?(), !extra.isEmpty else { return base }
+      return (base ?? []) + extra
+    }
+
+    /// Called on Option-Return. Returns `true` when an embed was selected and *Edit as Text*
+    /// was sent to the host.
+    var embedEditAsTextHandler: (@MainActor () -> Bool)?
+
+    /// **The find-originated selection hook.** While `true`, a proposed selection is a Find
+    /// match and passes through ``embedSelectionConstraint`` unsnapped
+    /// (`EmbedSelection.constrain(…, isFindMatch: true)`), so the host can be told and can
+    /// expand the embed holding the match (REQUIREMENTS.md § 1.3, Find).
+    ///
+    /// Set only by the ``selectedRanges`` setter below, for the length of that one call.
+    var isApplyingFindSelection = false
+
+    /// Called after every selection change, with whether it was a Find match. The embed
+    /// behaviour reports a match inside an embed to the host from here, once the selection
+    /// is in place.
+    var embedSelectionDidChange: (@MainActor (_ isFindMatch: Bool) -> Void)?
+
+    /// The last Find match reported to the host, so a re-asserted match is reported once.
+    /// Cleared by any selection that is not a Find match.
+    var lastReportedFindMatch: [NSRange]?
+
+    /// **The seam that tells a Find match from every other selection.**
+    ///
+    /// `NSTextFinder` (the find bar, and the menu's Find Next / Previous / Select All, which
+    /// reach the same finder through `performTextFinderAction(_:)` and
+    /// `performFindPanelAction(_:)`) reports its current match only by selecting it, and it
+    /// does that through the `NSTextFinderClient` requirement `selectedRanges`'s **setter**,
+    /// which `NSTextView` implements by calling `setSelectedRanges(_:affinity:stillSelecting:)`.
+    /// Probed on macOS 26 with call stacks: Find Next from the menu (synchronous), the find
+    /// bar's incremental search and its next/previous buttons (asynchronous, after the
+    /// action has returned) all arrive here from `_NSTextFinderImpl`; arrows, shift-arrows,
+    /// clicks and drags, Select All, typing, undo and `setSelectedRange(_:)` all call the
+    /// three-argument method directly and never come here. Nothing in this package calls
+    /// this setter, so marking every call here as a Find match is exact.
+    ///
+    /// Wrapping `performTextFinderAction(_:)` instead would miss the find bar's own buttons
+    /// and its asynchronous search, which never pass through the text view's action
+    /// methods, and would mark the text system's own selection adjustments during a Replace
+    /// as matches.
+    override var selectedRanges: [NSValue] {
+      get { super.selectedRanges }
+      set {
+        let wasApplying = isApplyingFindSelection
+        isApplyingFindSelection = true
+        defer { isApplyingFindSelection = wasApplying }
+        super.selectedRanges = newValue
+      }
+    }
+
+    override func setSelectedRanges(
+      _ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool
+    ) {
+      let isFindMatch = isApplyingFindSelection
+      let constrained =
+        embedSelectionConstraint?(ranges, selectedRange(), isFindMatch) ?? ranges
+      super.setSelectedRanges(constrained, affinity: affinity, stillSelecting: stillSelecting)
+      embedSelectionDidChange?(isFindMatch)
+    }
+
+    /// `true` while a paste (`paste(_:)`, the services menu, a drop of text) is inserting, so
+    /// ``embedEditFilter``'s owner can tell a paste from typing.
+    private(set) var isPasting = false
+
+    override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType)
+      -> Bool
+    {
+      let wasPasting = isPasting
+      isPasting = true
+      defer { isPasting = wasPasting }
+      return super.readSelection(from: pboard, type: type)
+    }
+
+    override func shouldChangeText(
+      in affectedCharRange: NSRange, replacementString: String?
+    ) -> Bool {
+      if embedEditFilter?(affectedCharRange, replacementString) == false { return false }
+      return super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
+    }
+
+    override func deleteBackward(_ sender: Any?) {
+      if embedDeleteHandler?(false) == true { return }
+      super.deleteBackward(sender)
+    }
+
+    override func deleteForward(_ sender: Any?) {
+      if embedDeleteHandler?(true) == true { return }
+      super.deleteForward(sender)
+    }
+
+    /// Option-Return's standard key binding.
+    override func insertNewlineIgnoringFieldEditor(_ sender: Any?) {
+      if embedEditAsTextHandler?() == true { return }
+      super.insertNewlineIgnoringFieldEditor(sender)
+    }
+
     // MARK: The paragraph well's inputs (REQUIREMENTS-1.1.0 § 5.2)
 
     /// The well drawn into this view, which these overrides feed. Weak: the editor owns it.
@@ -201,7 +329,13 @@ struct CaretLineContext: Equatable {
 
     /// `NSTextView` tracks a drag-selection inside `mouseDown(with:)` and returns on mouse-up,
     /// so the call to `super` *is* the drag, and bracketing it is exact.
+    ///
+    /// A click on an embed row is not a drag at all: it selects the block and returns
+    /// without `super`, so AppKit never places an edge caret.
     override func mouseDown(with event: NSEvent) {
+      if let embedClickHandler, embedClickHandler(convert(event.locationInWindow, from: nil)) {
+        return
+      }
       wellOverlay?.dragBegan()
       super.mouseDown(with: event)
       wellOverlay?.dragEnded()
@@ -247,9 +381,208 @@ struct CaretLineContext: Equatable {
 
     override func insertText(_ text: String) {
       wellOverlay?.typed()
+      // Block embeds (REQUIREMENTS.md § 1.3): typing into or over an embed changes nothing.
+      // Checked before the Return/Tab affordances, so they never rewrite an embed either.
+      if let embedInput {
+        switch embedInput.typingVerdict(range: selectedRange, text: text) {
+        case .veto: return
+        case .plain:
+          super.insertText(text)
+          return
+        case .normal: break
+        }
+      }
       if text == "\n", returnKeyHandler?() == true { return }
       if text == "\t", tabKeyHandler?() == true { return }
       super.insertText(text)
+    }
+
+    // MARK: Block embeds (REQUIREMENTS.md § 1.3)
+
+    /// The embed rules for this view's editor, or `nil` (no editor attached). Every input
+    /// funnel below asks it first; with no embed in the document each answer is the
+    /// pass-through one, so the stock behaviour is unchanged (§ 1.5).
+    var embedInput: IOSEmbedInput?
+
+    /// The embeds' accessibility elements (REQUIREMENTS.md § 1.4), kept over their rows by
+    /// ``layoutSubviews()``. `nil` only before the editor attaches.
+    var embedAccessibility: IOSEmbedAccessibility?
+
+    /// Set while the package performs its own edit (``EscriboTextView/performInputPathEdit(_:)``):
+    /// the edit rule guards the user's input, not the package's rewrites or the host's
+    /// external text.
+    var isPerformingPackageEdit = false
+
+    override var selectedTextRange: UITextRange? {
+      get { super.selectedTextRange }
+      set {
+        guard let embedInput, let newValue else {
+          super.selectedTextRange = newValue
+          return
+        }
+        let proposed = nsRange(of: newValue)
+        let constrained = embedInput.constrainSelection(proposed, current: super.selectedRange)
+        guard constrained != proposed, let range = textRange(for: constrained) else {
+          super.selectedTextRange = newValue
+          return
+        }
+        super.selectedTextRange = range
+      }
+    }
+
+    override var selectedRange: NSRange {
+      get { super.selectedRange }
+      set {
+        super.selectedRange =
+          embedInput?.constrainSelection(newValue, current: super.selectedRange) ?? newValue
+      }
+    }
+
+    override func setMarkedText(_ markedText: String?, selectedRange: NSRange) {
+      let target = markedTextRange.map(nsRange(of:)) ?? self.selectedRange
+      if embedInput?.allowsInput(range: target, text: markedText ?? "") == false { return }
+      super.setMarkedText(markedText, selectedRange: selectedRange)
+    }
+
+    override func replace(_ range: UITextRange, withText text: String) {
+      if !isPerformingPackageEdit,
+        embedInput?.allowsInput(range: nsRange(of: range), text: text) == false
+      {
+        return
+      }
+      super.replace(range, withText: text)
+    }
+
+    /// Whether a paste into the current selection passes the edit rule.
+    ///
+    /// `paste(_:)` bypasses `insertText`, `replace(_:withText:)` and `setMarkedText`
+    /// (IOS_LIVE_CHECK.md row c), so it is checked on its own. A paste always inserts
+    /// characters, so the rule is asked with a non-empty stand-in rather than the clipboard's
+    /// text: reading `UIPasteboard.general` here would raise the system paste prompt on every
+    /// menu validation, and it hangs the simulator test host.
+    func pasteAllowed() -> Bool {
+      embedInput?.allowsInput(range: selectedRange, text: "\u{FFFC}") != false
+    }
+
+    /// The paste-family actions the veto covers: Cmd-V and the edit menu (`paste:`), Paste
+    /// and Match Style, and `UIPasteControl` / item-provider paste.
+    static let pasteActions: Set<Selector> = [
+      #selector(UIResponderStandardEditActions.paste(_:)),
+      #selector(UIResponderStandardEditActions.pasteAndMatchStyle(_:)),
+      #selector(UIResponder.paste(itemProviders:)),
+    ]
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+      if Self.pasteActions.contains(action) {
+        // Decided before `super`, which may consult the pasteboard.
+        if !pasteAllowed() { return false }
+      } else if action == #selector(editEmbedAsText(_:)) {
+        return embedInput?.selectedEmbed() != nil
+      }
+      return super.canPerformAction(action, withSender: sender)
+    }
+
+    // The actions themselves are vetoed too: a key command or a host can send `paste:`
+    // without asking `canPerformAction` first. The pasteboard is never read when vetoed.
+    override func paste(_ sender: Any?) {
+      guard pasteAllowed() else { return }
+      super.paste(sender)
+    }
+
+    override func pasteAndMatchStyle(_ sender: Any?) {
+      guard pasteAllowed() else { return }
+      super.pasteAndMatchStyle(sender)
+    }
+
+    override func paste(itemProviders: [NSItemProvider]) {
+      guard pasteAllowed() else { return }
+      super.paste(itemProviders: itemProviders)
+    }
+
+    /// `⌥↩` (Edit as Text). It takes priority over UIKit's own handling of the key, and it
+    /// is enabled only while an embed is selected (``canPerformAction(_:withSender:)``);
+    /// otherwise `⌥↩` reaches the text system and inserts its newline as usual.
+    static let embedKeyCommands: [UIKeyCommand] = {
+      let editAsText = UIKeyCommand(
+        input: "\r", modifierFlags: .alternate, action: #selector(editEmbedAsText(_:)))
+      editAsText.wantsPriorityOverSystemBehavior = true
+      return [editAsText]
+    }()
+
+    override var keyCommands: [UIKeyCommand]? {
+      guard embedInput != nil else { return super.keyCommands }
+      return (super.keyCommands ?? []) + Self.embedKeyCommands
+    }
+
+    /// `⌥↩` with an embed selected: the host's *Edit as Text*.
+    @objc func editEmbedAsText(_ sender: Any?) {
+      embedInput?.editSelectedEmbedAsText()
+    }
+
+    // MARK: Hardware forward-delete
+
+    /// The forward-delete press this view consumed, so its key-up is consumed too.
+    private var consumedForwardDelete: UIPress?
+
+    /// Hardware forward-delete next to or on an embed.
+    ///
+    /// Checked on key-down, before UIKit's own handling. Observed live (iOS 26.5): UIKit
+    /// performs forward-delete with a caret by selecting one character forward and then
+    /// deleting, which the selection rule widens to the whole embed, so the embed went in
+    /// one key press; and a `UIKeyCommand` for `UIKeyCommand.inputDelete`, even with
+    /// `wantsPriorityOverSystemBehavior`, never fired. So the key is taken here.
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      if presses.count == 1, let press = presses.first, let key = press.key,
+        key.keyCode == .keyboardDeleteForward,
+        key.modifierFlags.isDisjoint(with: [.command, .alternate, .control, .shift]),
+        forwardDeleteAtEmbed()
+      {
+        consumedForwardDelete = press
+        return
+      }
+      super.pressesBegan(presses, with: event)
+    }
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      if let consumed = consumedForwardDelete, presses.contains(consumed) {
+        consumedForwardDelete = nil
+        let rest = presses.subtracting([consumed])
+        if !rest.isEmpty { super.pressesEnded(rest, with: event) }
+        return
+      }
+      super.pressesEnded(presses, with: event)
+    }
+
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+      if let consumed = consumedForwardDelete, presses.contains(consumed) {
+        consumedForwardDelete = nil
+        let rest = presses.subtracting([consumed])
+        if !rest.isEmpty { super.pressesCancelled(rest, with: event) }
+        return
+      }
+      super.pressesCancelled(presses, with: event)
+    }
+
+    /// Forward-delete through the embed rule when it acts on an embed (select it, or
+    /// delete it). Returns `false`, doing nothing, otherwise: the key is UIKit's.
+    func forwardDeleteAtEmbed() -> Bool {
+      guard let embedInput, embedInput.forwardDeleteActs() else { return false }
+      wellOverlay?.typed()
+      return embedInput.handleDeleteKey(forward: true)
+    }
+
+    /// `range` as UTF-16 offsets from the start of the document.
+    private func nsRange(of range: UITextRange) -> NSRange {
+      let start = offset(from: beginningOfDocument, to: range.start)
+      return NSRange(location: start, length: offset(from: range.start, to: range.end))
+    }
+
+    /// The `UITextRange` for UTF-16 `range`, or `nil` when UIKit will not vend one.
+    private func textRange(for range: NSRange) -> UITextRange? {
+      guard let start = position(from: beginningOfDocument, offset: range.location),
+        let end = position(from: start, offset: range.length)
+      else { return nil }
+      return textRange(from: start, to: end)
     }
 
     // MARK: The paragraph well's inputs (REQUIREMENTS-1.1.0 § 5.2)
@@ -265,14 +598,21 @@ struct CaretLineContext: Equatable {
 
     override func deleteBackward() {
       wellOverlay?.typed()
+      // Backspace — and forward-delete with a selection, which UIKit routes here
+      // (IOS_LIVE_CHECK.md row d) — goes through the embed delete rule first.
+      if embedInput?.handleDeleteKey(forward: false) == true { return }
       super.deleteBackward()
     }
 
     override func layoutSubviews() {
       super.layoutSubviews()
-      guard bounds.width != wellLayoutWidth else { return }
-      wellLayoutWidth = bounds.width
-      wellOverlay?.layoutDidChange()
+      if bounds.width != wellLayoutWidth {
+        wellLayoutWidth = bounds.width
+        wellOverlay?.layoutDidChange()
+        embedAccessibility?.layoutDidChange()
+      }
+      // A no-op unless the embeds, the text or the width changed since the last pass.
+      embedAccessibility?.syncIfNeeded()
     }
   }
 
@@ -349,6 +689,9 @@ extension EscriboTextView {
         let end = textView.position(from: start, offset: edit.range.length),
         let range = textView.textRange(from: start, to: end)
       {
+        let wasPackageEdit = textView.isPerformingPackageEdit
+        textView.isPerformingPackageEdit = true
+        defer { textView.isPerformingPackageEdit = wasPackageEdit }
         textView.replace(range, withText: edit.replacement)
         return true
       }

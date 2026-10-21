@@ -43,6 +43,13 @@ import Testing
 /// swift-testing runs tests in parallel by default. Two timing tests on two cores of a
 /// two-core runner measure each other. Serialization is not a nicety here; it is the
 /// difference between a measurement and a race.
+/// Where an edit aimed at the top of a long JSON note lands.
+private struct NoteTarget {
+  let note: ClosedRange<Int>
+  let line: Int
+  let valueOffset: Int
+}
+
 @Suite("EscriboCore performance", .serialized)
 struct PerformanceSuite {
 
@@ -88,6 +95,28 @@ struct PerformanceSuite {
       observe("fixture-bytes", "\(PerfFixture.byteCount)")
       observe("fixture-utf16", "\(PerfFixture.screenplay.utf16Count)")
       observe("fixture-lines", "\(PerfFixture.screenplay.lineCount)")
+    }
+
+    /// The multi-line JSON path is only exercised if the fixture has notes that cross
+    /// lines; a fixture without them passes every budget without touching it.
+    @Test("The fixture contains at least 10 multi-line JSON notes, none of them trivially short")
+    func fixtureHasMultiLineJSONNotes() {
+      let notes = PerfFixture.screenplay.multiLineJSONNotes
+      observe("fixture-json-notes", "\(notes.count)")
+      observe("fixture-json-notes-lines", "\(notes.map(\.count))")
+      #expect(notes.count >= 10, "fixture has \(notes.count) multi-line JSON notes; need ≥ 10")
+      #expect(notes.allSatisfy { (10...25).contains($0.count) }, "note lengths: \(notes.map(\.count))")
+      #expect(notes.contains { $0.count >= 20 }, "the in-note convergence case needs a ≥ 20-line note")
+
+      // They scan as JSON, not as plain notes: the first interior key is a JSON key span.
+      var scanner = EscriboScanner(language: .fountain)
+      let cold = scanner.fullScan(PerfFixture.screenplay.text)
+      for note in notes {
+        #expect(cold.lineRecords[note.lowerBound].element == .note)
+        #expect(cold.lineRecords[note.upperBound].element == .note)
+        #expect(cold.lineRecords[note.lowerBound + 1].startState.jsonNote.phase == .awaitingQuote)
+      }
+      #expect(cold.spans.contains { $0.kind == .glosaJSONKey })
     }
 
     /// The prologue technique in ``PerfFixture`` is only sound if the committed text
@@ -320,6 +349,165 @@ struct PerformanceSuite {
         facts.lineCount <= 600,
         "rescanned \(facts.lineCount) lines for a ~470-line paste; expected convergence")
       #expect(timing.bestMS <= 50.0)
+    }
+
+    // MARK: Multi-line JSON notes
+
+    /// Runs one edit against `document` the way every pathological case does and returns
+    /// what the scan produced.
+    private static func measure(
+      _ name: String, _ document: PerfDocument, replacement: String, over range: Range<Int>,
+      count: Int = 25
+    ) -> (facts: ScanFacts, timing: Timing) {
+      let (edited, edit) = document.applying(replacement, over: range)
+      let (timing, result) = repeated(count: count) {
+        var scanner = EscriboScanner(language: .fountain)
+        scanner.fullScan(document.text)
+        let run = timed { scanner.incrementalScan(edit, in: edited.text) }
+        return (run.value, run.seconds)
+      }
+      let facts = ScanFacts(result)
+      report(name, timing)
+      observe("\(name)-lines-rescanned", "\(facts.lineCount)")
+      return (facts, timing)
+    }
+
+    /// The first ≥ 20-line JSON note, the line of its first interior key (`"take": N,`),
+    /// and the UTF-16 offset just after that key's `": `.
+    private static func longNoteTarget(in document: PerfDocument) -> NoteTarget {
+      let note = document.multiLineJSONNotes.first { $0.count >= 20 }!
+      let line = note.lowerBound + 1
+      let text = document.lineText(line)
+      let prefix = text.prefix { $0 != ":" } + ": "
+      precondition(text.hasPrefix(String(prefix)), "unexpected note shape: \(text)")
+      return NoteTarget(
+        note: note, line: line, valueOffset: document.lineStarts[line] + prefix.utf16.count)
+    }
+
+    @Test("Pathological: an edit that opens a container near the top of a ≥ 20-line JSON note")
+    func editOpensContainerInJSONNote() {
+      let document = PerfFixture.screenplay
+      let target = Self.longNoteTarget(in: document)
+      // `"take": 1,` becomes `"take": {"x": 1,`: a well-formed inner object, so nothing
+      // errors, and every later line of the note carries a stack one level deeper than
+      // before. The end state changes until the note's closing `]]` ends the context.
+      let (facts, timing) = Self.measure(
+        "edit-opens-container-in-json-note", document, replacement: "{\"x\": ",
+        over: target.valueOffset..<target.valueOffset)
+
+      let linesToNoteEnd = target.note.upperBound - target.line + 1
+      observe("json-note-lines-to-end", "\(linesToNoteEnd) (note of \(target.note.count) lines)")
+
+      #expect(facts.dirtyRange.lowerBound <= target.valueOffset)
+      #expect(facts.dirtyRange.upperBound >= target.valueOffset + 6)
+      #expect(facts.tilesExactly)
+      #expect(facts.coveredUnits == facts.dirtyRange.count)
+      #expect(facts.spanCount > 0)
+      // The budget inside a JSON note: to the end of the enclosing note, plus 8.
+      #expect(
+        facts.lineCount <= linesToNoteEnd + 8,
+        "rescanned \(facts.lineCount) lines; budget is \(linesToNoteEnd) + 8")
+      // Teeth: the case is only about the in-note budget if the window really did run on
+      // past the ordinary 8 lines. If it did not, the edit is not pathological and the
+      // fixture or the edit has drifted.
+      #expect(facts.lineCount > 8, "window of \(facts.lineCount) lines is not an in-note case")
+      #expect(timing.bestMS <= 50.0)
+    }
+
+    @Test("Pathological: an edit that opens a string near the top of a ≥ 20-line JSON note")
+    func editOpensStringInJSONNote() {
+      let document = PerfFixture.screenplay
+      let target = Self.longNoteTarget(in: document)
+      // `"take": 1,` becomes `"take": "1,` — a string that cannot cross the line.
+      let (facts, timing) = Self.measure(
+        "edit-opens-string-in-json-note", document, replacement: "\"",
+        over: target.valueOffset..<target.valueOffset)
+
+      let linesToNoteEnd = target.note.upperBound - target.line + 1
+      #expect(facts.dirtyRange.lowerBound <= target.valueOffset)
+      #expect(facts.dirtyRange.upperBound >= target.valueOffset + 1)
+      #expect(facts.tilesExactly)
+      #expect(facts.coveredUnits == facts.dirtyRange.count)
+      #expect(facts.spanCount > 0)
+      #expect(
+        facts.lineCount <= linesToNoteEnd + 8,
+        "rescanned \(facts.lineCount) lines; budget is \(linesToNoteEnd) + 8")
+      #expect(timing.bestMS <= 50.0)
+    }
+
+    @Test("Pathological: an unterminated `[[{\"` prologue converges once the scan hits an error")
+    func editInUnterminatedJSONPrologue() {
+      let document = PerfFixture.jsonPrologued
+      let opener = 2
+      #expect(document.lineText(opener) == "[[{\"")
+
+      // The prologue really is a JSON note that fails: the string is open at the end of
+      // its line, the next line starts malformed, and the note is plain `note` text up to
+      // the first literal `]]` in the fixture.
+      var probe = EscriboScanner(language: .fountain)
+      let cold = probe.fullScan(document.text)
+      #expect(cold.lineRecords[opener].element == .note)
+      #expect(cold.lineRecords[opener + 1].startState.jsonNote.phase == .malformed)
+      let closing = (opener + 1..<document.lineCount).first { document.lineText($0).contains("]]") }!
+      #expect(cold.lineRecords[closing].element == .note)
+      #expect(cold.lineRecords[closing + 1].startState.jsonNote == JSONNoteContext())
+      let linesToNoteEnd = closing - opener + 1
+      observe("json-prologue-lines-to-note-end", "\(linesToNoteEnd)")
+
+      // An edit on the opener, inside the string: the state after it is unchanged, so
+      // the window is the line and a few after it, not the document.
+      let inString = document.lineStarts[opener] + 4
+      let (facts, timing) = Self.measure(
+        "edit-in-unterminated-json-prologue", document, replacement: "s",
+        over: inString..<inString)
+      #expect(facts.dirtyRange.lowerBound <= inString)
+      #expect(facts.dirtyRange.upperBound >= inString + 1)
+      #expect(facts.tilesExactly)
+      #expect(facts.coveredUnits == facts.dirtyRange.count)
+      #expect(facts.spanCount > 0)
+      #expect(
+        facts.lineCount <= linesToNoteEnd + 8,
+        "rescanned \(facts.lineCount) lines; budget is \(linesToNoteEnd) + 8")
+      #expect(timing.bestMS <= 50.0)
+
+      // An edit that repairs the prologue (`[[{"` -> `[[{}`) changes the state of every
+      // line down to the first `]]` and no further.
+      let repair = document.lineStarts[opener] + 3
+      let (repaired, _) = Self.measure(
+        "edit-repairs-unterminated-json-prologue", document, replacement: "}",
+        over: repair..<(repair + 1))
+      #expect(repaired.tilesExactly)
+      #expect(repaired.lineCount <= linesToNoteEnd + 8)
+    }
+
+    @Test("Edits outside JSON notes keep the 8-line budget on the fixture that contains them")
+    func editsOutsideJSONNotes() {
+      let document = PerfFixture.screenplay
+      let notes = document.multiLineJSONNotes
+      #expect(notes.count >= 10)
+      var probe = EscriboScanner(language: .fountain)
+      let cold = probe.fullScan(document.text)
+
+      // The action line before a note, the blank line after it, and prose after it: the
+      // places where a regression in the note-to-ordinary-text boundary would show.
+      var worst = 0
+      for note in notes {
+        let candidates = [note.lowerBound - 2, note.upperBound + 1, note.upperBound + 3]
+        for line in candidates {
+          let at = document.midpoint(ofLine: line)
+          #expect(cold.lineRecords[line].startState.jsonNote == JSONNoteContext())
+          let (edited, edit) = document.applying("s", over: at..<at)
+          var scanner = EscriboScanner(language: .fountain)
+          scanner.fullScan(document.text)
+          let result = scanner.incrementalScan(edit, in: edited.text)
+          let facts = ScanFacts(result)
+          worst = max(worst, facts.lineCount)
+          #expect(facts.tilesExactly)
+          #expect(
+            facts.lineCount <= 8, "edit on line \(line) rescanned \(facts.lineCount) lines")
+        }
+      }
+      observe("edits-outside-json-notes-worst-lines", "\(worst)")
     }
   }
 

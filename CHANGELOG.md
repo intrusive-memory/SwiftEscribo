@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo Changelog
-updated: 2026-10-18
+updated: 2026-10-20
 ---
 
 # Changelog
@@ -11,6 +11,94 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.5.0] — 2026-10-20
+
+A **minor** by the consumer's pin: every addition is source-compatible, and nothing is removed
+or renamed. A host that does not pass the new `EscriboEditor` parameters, or does not return an
+embed, gets the same geometry, attributes and behaviour as before. The new parameters all come
+**after** `onWellAction`, so a trailing `onWellAction` closure still binds to it.
+
+**Raise your pin to receive this release.** Hosts pinned `.upToNextMinor` from any `0.x`
+(`0.3.x` and `0.4.x` pins both exist downstream) will not resolve to it and must raise the
+pin to the new minor.
+
+### Added
+
+#### Block embeds
+
+A block can be drawn as one atomic **embed row** in place of its text. The package draws the
+row and reports what the user does; it never interprets what an embed represents.
+
+- `EscriboEmbedProvider`, `embed(for:in:) -> EscriboEmbed?`. Called synchronously on the
+  main thread (the protocol is deliberately not `@MainActor`) with the block and its own
+  source, line terminator included. `nil` draws the block as text.
+- `EscriboEmbed`: symbol, title, subtitle, an optional `Badge` (symbol, word, tint),
+  accessibility label, value and identifier, and `[Action]`. `EscriboEmbed.Action.editAsTextID`
+  (`"escribo.editAsText"`) is the conventional id for *Edit as Text*.
+- `EscriboEditor(embedProvider:onEmbedActivate:onEmbedAction:onFindMatchInEmbed:)`.
+- `EscriboEditorHandle.invalidateEmbeds()` asks the provider again for every block.
+  The editor asks on load, on any full rescan, for the blocks an edit rescans, and on
+  `invalidateEmbeds()`. It never asks in `EditorMode.source`, where every block is plain text.
+- *Edit as Text*: a host answers the action by returning `nil` for that block and calling
+  `invalidateEmbeds()`; the block then draws as text.
+- Behaviour, macOS and iOS: the caret steps over an embed and a selection touching one
+  extends to the whole block; click or tap selects the whole block and calls
+  `onEmbedActivate`; Backspace or forward-delete next to an embed selects it, and the next
+  press deletes it as one undo step; undo restores the text and re-selects the block;
+  typing, Return, Tab and paste over a selected embed are ignored; text cannot be inserted
+  into an embed or joined onto its first line (Return at its start edge pushes it down, a
+  paste there is ignored); copy yields the block's source. Option-Return with one embed
+  selected calls `onEmbedAction(block, EscriboEmbed.Action.editAsTextID)`. On iOS a paste
+  into an embed is vetoed before the pasteboard is read.
+- Accessibility: each embed is one button element carrying the host's label, value and
+  identifier; activating it behaves like a click, and `actions` are exposed as custom actions.
+- Find (macOS): the match `NSTextFinder` selects inside an embed is not snapped to the block;
+  `onFindMatchInEmbed` is called once per match so the host can stop returning the embed and
+  call `invalidateEmbeds()`, after which the block draws as text with the match still
+  selected. A documented no-op on iOS, like `findBar`.
+
+#### Well notice
+
+- `EscriboWellItem.notice` and `EscriboEditor(wellNotice:)`, returning a symbol name and help
+  text per block. A block with a notice shows its glyph in the well slot **at all times**:
+  glyph only, no hover, no span bar, regardless of `eligibleKinds` and whether the block has
+  content. It shares the one slot with `.readAloud` and **wins**, including while that item
+  is playing. A click or tap calls `onWellAction(.notice, block)`. Asked in both modes, at the
+  same points as the embed provider. Needs a non-nil `well`.
+
+#### JSON inside notes
+
+- Four span kinds, `glosaJSONKey`, `glosaJSONString`, `glosaJSONNumber` and
+  `glosaJSONLiteral`. A Fountain note is scanned as JSON only when its trimmed content is `{`,
+  optional whitespace (newlines included) and `"`, the glosa-av 0.9.0 block-directive rule,
+  so `[[{sic}]]` and `[[{}]]` stay plain notes.
+- Scanning spans lines: `[[` alone on a line, a `{` followed by a line break, and
+  pretty-printed objects are all handled, in standalone Fountain and in fenced Fountain inside
+  Markdown, with incremental scans converging as before. Malformed JSON stops at the first
+  error and the rest of the note stays `note`; strings never span lines; nesting is capped at
+  64 levels. Braces, brackets, colons and commas are `glosaPunctuation`.
+- The four built-in language themes set a colour for every `glosa*` kind, the new ones
+  included.
+
+### Changed
+
+- The incremental scan's rescan window is aligned to cached block edges, capped at 64 extra
+  lines, so typing in or near a multi-line block keeps the block cache spliced instead of
+  falling back to a full scan. Past the cap it declines as before.
+- iOS: embeds draw through TextKit 2's layout-manager delegate, and UIKit's own delegate is
+  chained rather than replaced (`UIKitLayoutDelegateChain`). This is an accepted risk on a
+  UIKit-internal seam; `UIKitLayoutDelegateChainTests` is the tripwire that fails if UIKit
+  stops providing that delegate. Nothing is installed until the first embed appears.
+- `-test-timeouts-enabled YES` is on every `xcodebuild test` invocation in the Makefile and
+  the CI workflows, so a hung test fails instead of stalling the job.
+
+### Fixed
+
+- A font-registry hang in tests: `FontResolver` no longer issues a named lookup for a family
+  that is not installed, and serialises and caches the ones that are.
+- Flaky font tests: the serif check asserts what the resolver guarantees, and a system-font
+  reply at the wrong point size (seen under load) is retried and never cached.
 
 ## [0.4.5] — 2026-10-18
 

@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo
-updated: 2026-10-18
+updated: 2026-10-20
 ---
 
 # SwiftEscribo
@@ -79,7 +79,7 @@ breaking change.
 ## Installing it
 
 ```swift
-.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.4.5"))
+.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.5.0"))
 ```
 
 Then depend on whichever products you need — they are independent:
@@ -93,8 +93,8 @@ Then depend on whichever products you need — they are independent:
 **Note the `.upToNextMinor`.** This is a `0.x` release: the API is complete and
 audited but not yet frozen, and SwiftPM treats the **minor** as the breaking axis
 below `1.0`. SwiftPM does **not** apply that rule to `.upToNextMajor`:
-`.upToNextMajor(from: "0.4.5")` resolves to `>=0.4.5 <1.0.0`, so it will pick up a
-breaking `0.5.0` without asking. Pin with `.upToNextMinor`.
+`.upToNextMajor(from: "0.5.0")` resolves to `>=0.5.0 <1.0.0`, so it will pick up a
+breaking `0.6.0` without asking. Pin with `.upToNextMinor`.
 [CHANGELOG.md § Stability](CHANGELOG.md#stability) has the full statement of what
 `0.x` reserves and what reaching `1.0` requires.
 
@@ -116,6 +116,69 @@ let next = scanner.incrementalScan(TextEdit(range: 12..<12, replacementLength: 1
 
 The full public surface, type by type, is in
 [CHANGELOG.md](CHANGELOG.md#escribocore--the-parser-foundation-only).
+
+## Block embeds
+
+A host can draw any block as one atomic **embed row** instead of its text. The package
+draws the row, keeps the caret out of it, and reports clicks and actions; what an embed
+*means* is the host's business. The document string is untouched: an embed is only a
+different way to draw a block of the same source.
+
+```swift
+import EscriboCore
+import SwiftEscribo
+
+struct NoteEmbeds: EscriboEmbedProvider {
+    // Called synchronously on the main thread, once per block that needs an answer.
+    func embed(for block: EscriboBlock, in text: String) -> EscriboEmbed? {
+        guard block.kind == .note, text.hasPrefix("[[{") else { return nil }
+        return EscriboEmbed(
+            symbolName: "doc.text",
+            title: "Directive",
+            subtitle: "\(block.lines.count) lines",
+            badge: .init(symbolName: "checkmark", word: "OK", tint: EscriboColor(red: 0.1, green: 0.6, blue: 0.3)),
+            actions: [.init(id: EscriboEmbed.Action.editAsTextID, title: "Edit as Text")])
+    }
+}
+
+EscriboEditor(
+    text: $text, language: .fountain, handle: editor,
+    embedProvider: NoteEmbeds(),
+    onEmbedActivate: { block in /* click, tap, or the accessibility action */ },
+    onEmbedAction: { block, actionID in /* ⌥↩ sends editAsTextID */ })
+```
+
+**When the editor asks.** On load and on any full rescan (reset, language or mode change),
+for the blocks an edit rescans, and when you call `editor.invalidateEmbeds()`, which asks
+for every block. A provider that changes its mind without a text edit has to say so with
+`invalidateEmbeds()`. Embeds exist in `EditorMode.live` only; `.source` never asks.
+
+**Edit as Text.** There is no built-in toggle. Handle `EscriboEmbed.Action.editAsTextID`
+(the action menu entry, VoiceOver action, or ⌥↩) by remembering a stable key for that
+block in the host, returning `nil` for it from the provider, and calling
+`editor.invalidateEmbeds()`; the block draws as text. `EscriboBlock.ID` is not stable
+across edits, so do not key on it.
+
+**Find on macOS.** The find bar selecting a match inside an embed is not snapped to the
+whole block. `onFindMatchInEmbed` is called once per match, so the host can expand that
+embed the same way; the match stays selected. It is never called on iOS.
+
+Caret, selection, delete, undo, paste and accessibility rules are in the
+[CHANGELOG](CHANGELOG.md).
+
+### Notices
+
+`EscriboEditor(well:…, wellNotice:)` takes a per-block closure returning an SF Symbol name
+and help text, or `nil`. A block with a notice shows that glyph in the well slot at all
+times, wins the slot over `.readAloud`, and a click calls `onWellAction(.notice, block)`.
+Unlike embeds, it works in both modes.
+
+### JSON inside notes
+
+A Fountain note whose content starts with `{` and a `"` (the glosa-av block-directive
+rule) is scanned as JSON across lines: keys, strings, numbers and literals get their own
+span kinds (`glosaJSON*`) and every built-in theme colours them. Malformed JSON stays a
+plain note from the first error on.
 
 ## Known limitations
 

@@ -219,9 +219,13 @@ extension EscriboTextView {
     // path replaces the full range with `replaceCharacters(in:with:)` inside
     // `beginEditing()`/`endEditing()` — never `setAttributedString` (Architecture §8) — and
     // registers exactly one undo action while doing it.
-    performInputPathEdit(
-      InputPathEdit(
-        replacing: NSRange(location: 0, length: storage.length), with: incoming))
+    //
+    // The edit's own embed re-ask is deferred: rule 2's full scan below asks every block.
+    coordinator.withEmbedEditRefreshDeferred {
+      performInputPathEdit(
+        InputPathEdit(
+          replacing: NSRange(location: 0, length: storage.length), with: incoming))
+    }
 
     // Rule 2, second half.
     coordinator.restyleEverything()

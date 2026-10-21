@@ -89,4 +89,21 @@ public final class EscriboEditorHandle: ObservableObject {
   public func blocks(in visibleRect: CGRect) -> [EscriboBlock] {
     coordinator?.blocks(in: visibleRect) ?? []
   }
+
+  // MARK: - Embeds (REQUIREMENTS.md § 1.1)
+
+  /// Tells the editor its ``EscriboEmbedProvider``'s answers changed, so it asks the
+  /// provider again for **every block** and redraws the blocks whose answer changed.
+  ///
+  /// Call it whenever the provider would now answer differently **without** a text edit —
+  /// the writer chose *Edit as Text* and the provider returns `nil` for that block, Find
+  /// expanded the embed holding a match, or the host swapped in a provider that answers
+  /// differently. Edits need no call: the editor re-asks each edit's rescanned blocks
+  /// itself.
+  ///
+  /// Ignored when no editor is attached, like every other method on the handle, and a
+  /// no-op in ``EditorMode/source`` or with no provider installed.
+  public func invalidateEmbeds() {
+    coordinator?.invalidateEmbeds()
+  }
 }

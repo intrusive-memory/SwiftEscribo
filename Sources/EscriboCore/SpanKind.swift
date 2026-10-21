@@ -329,4 +329,25 @@ extension SpanKind {
   /// the same, so a theme dims it the way every other piece of syntax in this vocabulary
   /// is dimmed.
   public static let glosaPunctuation = SpanKind(rawValue: "glosaPunctuation")
+
+  // MARK: - JSON inside Fountain notes
+
+  /// An object key inside a JSON note — the `"a"` of `[[{"a": 1}]]`, quotes included.
+  ///
+  /// A note is scanned as JSON only when its trimmed content is `{`, optional whitespace,
+  /// then `"` (the rule the GLOSA compiler uses to recognise a block directive), so
+  /// `[[{sic}]]` and `[[{}]]` stay plain ``note``. Braces, brackets, colons and commas are
+  /// ``glosaPunctuation``; whitespace between tokens stays ``note``.
+  public static let glosaJSONKey = SpanKind(rawValue: "glosaJSONKey")
+
+  /// A JSON string value — the `"x"` of `[[{"a": "x"}]]`, quotes included, escapes left
+  /// in place. Object keys are ``glosaJSONKey`` instead.
+  public static let glosaJSONString = SpanKind(rawValue: "glosaJSONString")
+
+  /// A JSON number — `-1`, `3.5`, `2e10`. Structural only: the scanner checks the JSON
+  /// number grammar so malformed text stops the subdivision, and never interprets the value.
+  public static let glosaJSONNumber = SpanKind(rawValue: "glosaJSONNumber")
+
+  /// A JSON literal — exactly `true`, `false` or `null`.
+  public static let glosaJSONLiteral = SpanKind(rawValue: "glosaJSONLiteral")
 }
