@@ -28,6 +28,7 @@ build:
 
 test:
 	xcodebuild test -scheme $(SCHEME) \
+	  -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
 	  -destination $(DESTINATION) \
 	  -skip-testing:EscriboPerformanceTests \
 	  $(ARCH)
@@ -36,12 +37,14 @@ test:
 # inner loop while working on scanners.
 test-core:
 	xcodebuild test -scheme $(SCHEME) \
+	  -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
 	  -destination $(DESTINATION) \
 	  -only-testing:EscriboCoreTests \
 	  $(ARCH)
 
 test-ios:
 	xcodebuild test -scheme $(SCHEME) \
+	  -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
 	  -destination $(IOS_DESTINATION) \
 	  -skip-testing:EscriboPerformanceTests \
 	  -skipPackagePluginValidation \
@@ -60,6 +63,7 @@ test-ios:
 # build the `@testable import` the LineIndex linearity case needs.
 test-performance:
 	xcodebuild test -scheme $(SCHEME) \
+	  -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
 	  -destination $(DESTINATION) \
 	  -only-testing:EscriboPerformanceTests \
 	  -configuration Release \
