@@ -99,6 +99,14 @@ enum GlosaScanner {
   static func scan(_ units: [UInt16], in range: Range<Int>, base: Int) -> [EscriboSpan] {
     guard !range.isEmpty else { return [] }
 
+    // A note whose content opens like a block directive (`{`, whitespace, `"`) is JSON,
+    // not a tag directive; everything else keeps the tag scan below.
+    if JSONNoteState.startsJSONNote(units, in: range) {
+      var json = JSONNoteState()
+      let tokens = json.consume(units, in: range, base: base)
+      return JSONNoteState.fill(tokens, in: range, base: base)
+    }
+
     var spans: [EscriboSpan] = []
     var cursor = range.lowerBound
     var proseStart = range.lowerBound

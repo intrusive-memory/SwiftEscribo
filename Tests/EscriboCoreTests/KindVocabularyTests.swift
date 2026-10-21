@@ -159,6 +159,10 @@ struct KindVocabularyTests {
     (SpanKind.glosaAttributeName, "glosaAttributeName"),
     (SpanKind.glosaAttributeValue, "glosaAttributeValue"),
     (SpanKind.glosaPunctuation, "glosaPunctuation"),
+    (SpanKind.glosaJSONKey, "glosaJSONKey"),
+    (SpanKind.glosaJSONString, "glosaJSONString"),
+    (SpanKind.glosaJSONNumber, "glosaJSONNumber"),
+    (SpanKind.glosaJSONLiteral, "glosaJSONLiteral"),
   ]
 
   static let elementKindRawValueTable: [(ElementKind, String)] = [
@@ -203,13 +207,13 @@ struct KindVocabularyTests {
   func rawValueTablesAreExhaustive() {
     // The counts in `Sources/EscriboCore/{SpanKind,ElementKind}.swift` at 1.0. See the
     // comment above on which direction of drift this catches and which it does not.
-    #expect(Self.spanKindRawValueTable.count == 39)
+    #expect(Self.spanKindRawValueTable.count == 43)
     #expect(Self.elementKindRawValueTable.count == 28)
 
     // No kind listed twice, in either column — a duplicated row would inflate the count
     // and hide a missing one.
-    #expect(Set(Self.spanKindRawValueTable.map(\.0)).count == 39)
-    #expect(Set(Self.spanKindRawValueTable.map(\.1)).count == 39)
+    #expect(Set(Self.spanKindRawValueTable.map(\.0)).count == 43)
+    #expect(Set(Self.spanKindRawValueTable.map(\.1)).count == 43)
     #expect(Set(Self.elementKindRawValueTable.map(\.0)).count == 28)
     #expect(Set(Self.elementKindRawValueTable.map(\.1)).count == 28)
   }
