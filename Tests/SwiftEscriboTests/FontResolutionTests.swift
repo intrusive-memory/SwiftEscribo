@@ -209,6 +209,25 @@ struct FontResolutionTests {
     #expect(body.pointSize == 14)
   }
 
+  @Test("A failed system-font reply is retried, not returned or trusted")
+  func failedSystemFontReplyIsRetried() {
+    // Reproduces the CI flake deterministically: the font service answering
+    // Helvetica 12 whatever size was asked for. Before the retry, that reply was the
+    // body face (and was cached).
+    var calls = 0
+    let real = PlatformFont.systemFont(ofSize: 14)
+    let font = FontResolver.systemFont(
+      ofSize: 14,
+      provider: { _ in
+        calls += 1
+        return calls <= 2 ? PlatformFont(name: "Helvetica", size: 12) ?? real : real
+      })
+
+    #expect(calls == 3)
+    #expect(font.pointSize == 14)
+    #expect(font.familyName == real.familyName)
+  }
+
   @Test("Traits still apply on a serif spec, and the serif design survives them")
   func traitsApplyToTheSerifFace() {
     // The trait path is a second descriptor round trip after the design one. Both
