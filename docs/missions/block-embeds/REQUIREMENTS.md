@@ -1,7 +1,7 @@
 ---
 type: project
 title: SwiftEscribo — block embeds, notice well slot, and JSON in notes (minor release)
-updated: 2026-10-20
+updated: 2026-10-22
 state: complete
 depends_on: docs/missions/embed-spike (go on both platforms, accepted by the user)
 ---
@@ -150,6 +150,23 @@ same places. Spike + recon estimate: about 17–18 sorties.
    live VoiceOver check shows that UIKit's default is correct.
 5. **Off by default:** no provider → no change to layout, insets or behaviour; the
    existing tests pass untouched (the package has no UI test target).
+6. **Follow-ups (after 0.5.0, for Escribir's storyboard spec).** All additive, all off by
+   default, and nothing is created for a document with no embeds:
+   - **State element.** `EscriboEmbed.stateElement: StateElement?` (`label`, `value`,
+     `identifier`). When set, a second accessibility element follows the embed's own as its
+     **sibling** (an accessible iOS view cannot have accessible children; macOS does the same
+     for consistency): static text, no actions, framed on the drawn badge capsule, or on a
+     square one text line tall at the row's trailing edge when no badge is drawn. The capsule
+     is computed by one function (`EmbedRowGeometry`) the renderer and accessibility share.
+   - **De-emphasized subtitle runs.** `EscriboEmbed.subtitleRuns: [SubtitleRun]` (`text`,
+     `isDeEmphasized`); `subtitle` stays as a computed, source-compatible view (joined text;
+     set = one plain run). Plain runs draw in the secondary colour (foreground × 0.6),
+     de-emphasized ones in foreground × 0.35; the line truncates at the tail as a whole.
+   - **Tool tip.** `EscriboEmbed.toolTip: String?`. macOS: `addToolTip(_:owner:userData:)`
+     over each row, refreshed on the next run-loop turn after an embed-set change, an edit or
+     a width change; only the editor's own tags are removed (never `removeAllToolTips()`).
+     iPadOS: a `UIToolTipInteraction` on the text view whose delegate answers the row under the
+     pointer, or `nil`.
 
 ## 2. Notice well slot
 
