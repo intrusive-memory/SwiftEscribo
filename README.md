@@ -79,7 +79,7 @@ breaking change.
 ## Installing it
 
 ```swift
-.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.5.0"))
+.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.6.0"))
 ```
 
 Then depend on whichever products you need — they are independent:

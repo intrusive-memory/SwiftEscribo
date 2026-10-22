@@ -10,7 +10,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] — 2026-10-22
 
 Source-compatible additions to `EscriboEmbed`. Every new field defaults to "off", so an embed
 built with the 0.5.0 initializer draws and reads exactly as before, and a document with no
