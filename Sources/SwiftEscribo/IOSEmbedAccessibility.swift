@@ -46,6 +46,14 @@
   /// - Edits and restyles: the text storage's did-process-editing notification.
   /// - Width: ``EscriboNativeTextView/layoutSubviews()``.
   ///
+  /// ## State elements
+  ///
+  /// An embed with a ``EscriboEmbed/stateElement`` gets a second view, an
+  /// ``EmbedStateAccessibilityElement`` over its badge (or a small square at the row's
+  /// trailing edge), placed in the container right after the embed's own view. It has to be
+  /// a sibling: an accessible view's subviews are never asked. Inside the same container,
+  /// its identifier is listed once too.
+  ///
   /// With no embed in the document there are no views, and a sync does nothing (§ 1.5).
   @MainActor
   final class IOSEmbedAccessibility: NSObject {
@@ -54,6 +62,10 @@
 
     /// One view per drawn embed, in document order. Valid after ``syncIfNeeded()``.
     private(set) var elements: [EmbedAccessibilityElement] = []
+
+    /// One view per drawn embed that has a ``EscriboEmbed/stateElement``, in document order.
+    /// Valid after ``syncIfNeeded()``.
+    private(set) var stateElements: [EmbedStateAccessibilityElement] = []
 
     /// The view the elements live in. Created with the first element.
     private(set) var container: EmbedAccessibilityContainer?
@@ -92,7 +104,8 @@
     /// Marks the views stale and asks for a layout pass. Cheap without embeds: nothing to
     /// move, so no layout pass is requested.
     private func invalidate() {
-      guard let editor, !elements.isEmpty || !editor.coordinator.embeddedBlocks.isEmpty
+      guard let editor,
+        !elements.isEmpty || !stateElements.isEmpty || !editor.coordinator.embeddedBlocks.isEmpty
       else { return }
       isStale = true
       editor.textView.setNeedsLayout()
@@ -107,7 +120,8 @@
       sync()
     }
 
-    /// Makes one view per drawn embed, over its row, with the embed's accessibility.
+    /// Makes one view per drawn embed, over its row, with the embed's accessibility, each
+    /// followed by its state view when the embed has a ``EscriboEmbed/stateElement``.
     func sync() {
       isStale = false
       guard let editor else { return }
@@ -115,16 +129,21 @@
       let textView = editor.textView
       let length = editor.documentStorage.length
       let layout = editor.embedLayout
-      var placed: [(EmbeddedBlock, CGRect)] = []
+      var placed: [PlacedEmbed] = []
       for embedded in editor.coordinator.embeddedBlocks
       where embedded.block.range.upperBound <= length {
         guard let layout, let row = layout.rowRect(for: embedded) else { continue }
-        placed.append((embedded, row))
+        let state = embedded.embed.stateElement == nil ? nil : layout.stateRect(for: embedded)
+        placed.append(PlacedEmbed(embedded: embedded, row: row, state: state))
       }
+      let stateCount = placed.count(where: { $0.state != nil })
 
-      let countChanged = placed.count != elements.count
+      let countChanged = placed.count != elements.count || stateCount != stateElements.count
       while elements.count > placed.count {
         elements.removeLast().removeFromSuperview()
+      }
+      while stateElements.count > stateCount {
+        stateElements.removeLast().removeFromSuperview()
       }
       if !placed.isEmpty, container == nil {
         let container = EmbedAccessibilityContainer()
@@ -140,12 +159,37 @@
         container?.addSubview(element)
         elements.append(element)
       }
-      for (element, (embedded, row)) in zip(elements, placed) {
-        element.update(embedded: embedded, frame: row)
+      while stateElements.count < stateCount {
+        let element = EmbedStateAccessibilityElement()
+        container?.addSubview(element)
+        stateElements.append(element)
+      }
+
+      // Each embed's view, then its state view: the order the container lists them in.
+      var ordered: [UIView] = []
+      var nextState = stateElements.makeIterator()
+      for (element, entry) in zip(elements, placed) {
+        element.update(embedded: entry.embedded, frame: entry.row)
+        ordered.append(element)
+        guard let frame = entry.state, let state = entry.embedded.embed.stateElement,
+          let view = nextState.next()
+        else { continue }
+        view.update(state: state, frame: frame)
+        ordered.append(view)
+      }
+      if let container, container.subviews != ordered {
+        for view in ordered { container.bringSubviewToFront(view) }
       }
       if countChanged {
         UIAccessibility.post(notification: .layoutChanged, argument: nil)
       }
+    }
+
+    /// One drawn embed, where its row is, and where its state element goes (if it has one).
+    private struct PlacedEmbed {
+      var embedded: EmbeddedBlock
+      var row: CGRect
+      var state: CGRect?
     }
 
     // MARK: - Actions
@@ -245,6 +289,45 @@
 
     override func accessibilityActivate() -> Bool {
       owner?.activate(self) ?? false
+    }
+  }
+
+  // MARK: - The state element
+
+  /// The accessibility element of an embed's state (``EscriboEmbed/StateElement``): static
+  /// text over the badge, or over a small square at the row's trailing edge when no badge is
+  /// drawn. A transparent, touch-free view, the embed element's sibling in the
+  /// ``EmbedAccessibilityContainer``. It has no actions.
+  final class EmbedStateAccessibilityElement: UIView {
+
+    override init(frame: CGRect) {
+      super.init(frame: frame)
+      isUserInteractionEnabled = false
+      isOpaque = false
+      backgroundColor = nil
+      isAccessibilityElement = true
+      accessibilityTraits = .staticText
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Shows `state`, over `frame` (text-view coordinates).
+    func update(state: EscriboEmbed.StateElement, frame: CGRect) {
+      if self.frame != frame { self.frame = frame }
+      accessibilityLabel = state.label
+      accessibilityValue = state.value
+      accessibilityIdentifier = state.identifier
+    }
+
+    /// Converted explicitly, as ``EmbedAccessibilityElement/accessibilityFrame`` is.
+    override var accessibilityFrame: CGRect {
+      get {
+        guard let textView = superview?.superview else { return .zero }
+        return UIAccessibility.convertToScreenCoordinates(
+          convert(bounds, to: textView), in: textView)
+      }
+      set {}
     }
   }
 
