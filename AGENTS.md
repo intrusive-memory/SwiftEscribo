@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo — Agent Instructions
-updated: 2026-10-20
+updated: 2026-10-22
 ---
 
 # AGENTS.md
@@ -11,7 +11,7 @@ SwiftEscribo.
 
 ## Current version
 
-**`0.5.0`** — the `v0.5.0` release. Between releases this line carries
+**`0.6.0`** — the `v0.6.0` release. Between releases this line carries
 a `-dev` suffix (`X.Y.Z-dev`), which the next release strips. README's install snippet
 always names the last resolvable release, never a `-dev` marker.
 

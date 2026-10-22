@@ -341,10 +341,18 @@ struct CaretLineContext: Equatable {
       wellOverlay?.dragEnded()
     }
 
-    /// A resize reflows the text, so every placed well may be beside the wrong line.
+    /// The drawn embeds' tool tips (``EscriboEmbed/toolTip``). `nil` until the editor's
+    /// embed cache first holds an embed. Held here, by the view the tool tips are registered
+    /// on, because AppKit does not retain a tool tip's owner: the owner must live as long as
+    /// the view does.
+    var embedToolTips: MacEmbedToolTips?
+
+    /// A resize reflows the text, so every placed well may be beside the wrong line, and
+    /// every embed tool tip over the wrong rectangle.
     override func setFrameSize(_ newSize: NSSize) {
       super.setFrameSize(newSize)
       wellOverlay?.layoutDidChange()
+      embedToolTips?.setNeedsRefresh()
     }
   }
 
@@ -407,6 +415,10 @@ struct CaretLineContext: Equatable {
     /// The embeds' accessibility elements (REQUIREMENTS.md § 1.4), kept over their rows by
     /// ``layoutSubviews()``. `nil` only before the editor attaches.
     var embedAccessibility: IOSEmbedAccessibility?
+
+    /// The drawn embeds' pointer tool tips (``EscriboEmbed/toolTip``). `nil` until the
+    /// editor's embed cache first holds an embed.
+    var embedToolTips: IOSEmbedToolTips?
 
     /// Set while the package performs its own edit (``EscriboTextView/performInputPathEdit(_:)``):
     /// the edit rule guards the user's input, not the package's rewrites or the host's

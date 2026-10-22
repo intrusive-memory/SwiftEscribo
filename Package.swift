@@ -47,7 +47,7 @@ let package = Package(
     // latest published release (`gh release list --repo swiftlang/swift-markdown`).
     //
     // TEST-ONLY. Referenced by `EscriboCoreTests` and by nothing else, ever.
-    .package(url: "https://github.com/swiftlang/swift-markdown.git", .upToNextMajor(from: "0.8.0"))
+    .package(url: "https://github.com/swiftlang/swift-markdown.git", .upToNextMajor(from: "0.9.0"))
   ],
   targets: [
     .target(

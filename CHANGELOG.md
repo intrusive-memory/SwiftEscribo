@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo Changelog
-updated: 2026-10-20
+updated: 2026-10-22
 ---
 
 # Changelog
@@ -10,7 +10,48 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] — 2026-10-22
+
+Source-compatible additions to `EscriboEmbed`. Every new field defaults to "off", so an embed
+built with the 0.5.0 initializer draws and reads exactly as before, and a document with no
+embeds creates nothing new.
+
+### Added
+
+#### Embed state elements
+
+- `EscriboEmbed.StateElement` (`label`, `value`, `identifier: String?`) and
+  `EscriboEmbed.stateElement: StateElement?` (init parameter `stateElement:`, default `nil`).
+  When set, the embed is exposed as two accessibility elements: its button, then a **sibling**
+  static-text element for its state (`.staticText` role on macOS, `.staticText` trait on iOS,
+  no actions). The state element's frame is the drawn badge capsule, or a square one text line
+  tall at the row's trailing edge when no badge is drawn, so a state that draws no badge still
+  has an element. On iOS it sits in the same container as the embed's element, so its
+  identifier is listed once in the accessibility tree.
+- The badge capsule's geometry moved out of the row renderer into one function the renderer and
+  the accessibility code share, so the element cannot drift from the drawing.
+
+#### De-emphasized subtitle runs
+
+- `EscriboEmbed.SubtitleRun` (`text`, `isDeEmphasized`) and `EscriboEmbed.subtitleRuns:
+  [SubtitleRun]` (init parameter `subtitleRuns:`, default `nil`; when given it wins over
+  `subtitle:`). Plain runs draw in the row's secondary colour (base foreground × 0.6),
+  de-emphasized runs in a fainter one (base foreground × 0.35). The line still truncates at the
+  tail as a whole.
+- `subtitle` is now computed: it reads the runs' text joined, and setting it makes one plain run
+  (none for `""`). `EscriboEmbed(subtitle: "x")` and `EscriboEmbed(subtitleRuns: [.init("x")])`
+  are equal. The default `accessibilityValue` is still the subtitle's text.
+
+#### Embed tool tips
+
+- `EscriboEmbed.toolTip: String?` (init parameter `toolTip:`, default `nil`).
+  - **macOS:** one tool tip rectangle per row with a tool tip, registered with
+    `addToolTip(_:owner:userData:)` and kept on the row when the embed set, an edit above it, or
+    the width changes. Only the tags the editor added are removed; the text view's own tool tips
+    are left alone.
+  - **iPadOS with a pointer:** a `UIToolTipInteraction` on the text view whose delegate answers
+    the tool tip of the embed row under the pointer, or `nil`.
+  - Both are created with the first embed; an editor with no embeds has neither.
 
 ## [0.5.0] — 2026-10-20
 

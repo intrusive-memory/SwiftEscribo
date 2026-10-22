@@ -139,42 +139,125 @@ public struct EscriboEmbed: Equatable, Sendable {
     }
   }
 
+  /// One stretch of the subtitle, drawn either in the row's secondary colour or, when
+  /// ``isDeEmphasized``, in a fainter one.
+  ///
+  /// A host uses de-emphasized runs for text that is shown but not the block's own — a
+  /// value inherited from a default, say — so the reader can tell the two apart at a
+  /// glance. Both colours derive from the theme's base foreground; the package assigns no
+  /// meaning to either.
+  public struct SubtitleRun: Equatable, Sendable {
+
+    /// The run's text.
+    public var text: String
+
+    /// Whether the run is drawn in the fainter, de-emphasized colour.
+    public var isDeEmphasized: Bool
+
+    /// Creates a run.
+    ///
+    /// - Parameters:
+    ///   - text: The run's text.
+    ///   - isDeEmphasized: Whether the run is drawn in the fainter colour. Defaults to
+    ///     `false`, the subtitle's ordinary secondary colour.
+    public init(_ text: String, isDeEmphasized: Bool = false) {
+      self.text = text
+      self.isDeEmphasized = isDeEmphasized
+    }
+  }
+
+  /// A second accessibility element for the embed's state — typically what its ``badge``
+  /// says — so UI automation and assistive technology can read the state on its own.
+  ///
+  /// The element is exposed **right after** the embed's own element, as its sibling (on iOS
+  /// an accessible view cannot have accessible children, so a sibling is the only shape
+  /// that works on both platforms). It is static text, not a button, and has no actions.
+  /// Its frame is the badge's capsule when a badge is drawn, otherwise a small square at
+  /// the row's trailing edge, so it exists even for a state that draws no badge.
+  public struct StateElement: Equatable, Sendable {
+
+    /// The element's accessibility label.
+    public var label: String
+
+    /// The element's accessibility value — the state itself.
+    public var value: String
+
+    /// The element's accessibility identifier, for UI automation, or `nil` for none.
+    public var identifier: String?
+
+    /// Creates a state element.
+    ///
+    /// - Parameters:
+    ///   - label: The accessibility label.
+    ///   - value: The accessibility value.
+    ///   - identifier: The accessibility identifier. Defaults to none.
+    public init(label: String, value: String, identifier: String? = nil) {
+      self.label = label
+      self.value = value
+      self.identifier = identifier
+    }
+  }
+
   /// The row's leading SF Symbol name.
   public var symbolName: String
 
   /// The row's first line.
   public var title: String
 
-  /// The row's second line, or `""` for none.
-  public var subtitle: String
+  /// The row's second line, as runs drawn in turn on one line, truncated at the tail as a
+  /// whole. Empty for none.
+  public var subtitleRuns: [SubtitleRun]
+
+  /// The row's second line as plain text: the runs' text, joined, or `""` for none.
+  ///
+  /// Setting it replaces the runs with one ordinary run (none for `""`).
+  public var subtitle: String {
+    get { subtitleRuns.map(\.text).joined() }
+    set { subtitleRuns = Self.runs(plain: newValue) }
+  }
 
   /// The trailing badge, or `nil` for none.
   public var badge: Badge?
 
-  /// The accessibility label of the embed's single element. Defaults to ``title``.
+  /// The accessibility label of the embed's element. Defaults to ``title``.
   public var accessibilityLabel: String
 
-  /// The accessibility value of the embed's single element. Defaults to ``subtitle``.
+  /// The accessibility value of the embed's element. Defaults to ``subtitle``.
   public var accessibilityValue: String
 
-  /// The accessibility identifier of the embed's single element, for UI automation, or
-  /// `nil` for none.
+  /// The accessibility identifier of the embed's element, for UI automation, or `nil` for
+  /// none.
   public var accessibilityIdentifier: String?
 
   /// The host's actions on the embed, in the order they are offered.
   public var actions: [Action]
+
+  /// The embed's separate state element, or `nil` for none — the default, which exposes
+  /// the embed as exactly one element.
+  public var stateElement: StateElement?
+
+  /// Help text shown when the pointer rests on the row, or `nil` for none.
+  ///
+  /// On macOS a tool tip over the row; on iPadOS with a pointer, a `UIToolTipInteraction`
+  /// tool tip.
+  public var toolTip: String?
 
   /// Creates an embed.
   ///
   /// - Parameters:
   ///   - symbolName: The row's leading SF Symbol name.
   ///   - title: The row's first line.
-  ///   - subtitle: The row's second line. Defaults to none.
+  ///   - subtitle: The row's second line, as plain text. Defaults to none. Ignored when
+  ///     `subtitleRuns` is given.
   ///   - badge: The trailing badge. Defaults to none.
   ///   - accessibilityLabel: The element's label, or `nil` to use `title`.
-  ///   - accessibilityValue: The element's value, or `nil` to use `subtitle`.
+  ///   - accessibilityValue: The element's value, or `nil` to use the subtitle's text.
   ///   - accessibilityIdentifier: The element's identifier. Defaults to none.
   ///   - actions: The host's actions. Defaults to none.
+  ///   - subtitleRuns: The row's second line as runs, or `nil` to use `subtitle`.
+  ///   - stateElement: A separate accessibility element for the embed's state. Defaults to
+  ///     none.
+  ///   - toolTip: Help text shown when the pointer rests on the row. Defaults to none.
   public init(
     symbolName: String,
     title: String,
@@ -183,15 +266,26 @@ public struct EscriboEmbed: Equatable, Sendable {
     accessibilityLabel: String? = nil,
     accessibilityValue: String? = nil,
     accessibilityIdentifier: String? = nil,
-    actions: [Action] = []
+    actions: [Action] = [],
+    subtitleRuns: [SubtitleRun]? = nil,
+    stateElement: StateElement? = nil,
+    toolTip: String? = nil
   ) {
     self.symbolName = symbolName
     self.title = title
-    self.subtitle = subtitle
+    self.subtitleRuns = subtitleRuns ?? Self.runs(plain: subtitle)
     self.badge = badge
     self.accessibilityLabel = accessibilityLabel ?? title
-    self.accessibilityValue = accessibilityValue ?? subtitle
+    self.accessibilityValue = accessibilityValue ?? self.subtitleRuns.map(\.text).joined()
     self.accessibilityIdentifier = accessibilityIdentifier
     self.actions = actions
+    self.stateElement = stateElement
+    self.toolTip = toolTip
+  }
+
+  /// One ordinary run for `text`, or none for `""`, so a plain subtitle and the same text
+  /// given as one ordinary run compare equal.
+  private static func runs(plain text: String) -> [SubtitleRun] {
+    text.isEmpty ? [] : [SubtitleRun(text)]
   }
 }

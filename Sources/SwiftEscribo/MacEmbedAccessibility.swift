@@ -3,26 +3,37 @@
   import EscriboCore
   import Foundation
 
+  /// An accessibility element laid over a rectangle of the text view.
+  ///
+  /// AppKit's default conversion from the frame in parent space is wrong for the flipped
+  /// text view, so the screen frame is converted through the view explicitly.
+  class EmbedAnchoredAccessibilityElement: NSAccessibilityElement {
+
+    /// The text view the element lives in; the frame is converted from its coordinates.
+    weak var view: NSView?
+
+    /// The element's rectangle in `view`'s (flipped) coordinates.
+    var rectInView: CGRect = .zero
+
+    override func accessibilityFrame() -> NSRect {
+      guard let view, view.window != nil else { return super.accessibilityFrame() }
+      return NSAccessibility.screenRect(fromView: view, rect: rectInView)
+    }
+  }
+
   /// The accessibility element standing for one embed row (REQUIREMENTS.md § 1.4).
   ///
   /// A button whose label, value and identifier come from the host's ``EscriboEmbed``,
   /// whose press activates the embed, and whose custom actions are the embed's actions.
-  final class EmbedAccessibilityElement: NSAccessibilityElement {
+  final class EmbedAccessibilityElement: EmbedAnchoredAccessibilityElement {
 
     /// Called when the element is pressed (VoiceOver's default action).
     var onPress: (@MainActor () -> Void)?
 
-    /// The text view the row lives in; the frame is converted from its coordinates.
-    weak var view: NSView?
-
     /// The row in `view`'s (flipped) coordinates.
-    var rowRect: CGRect = .zero
-
-    /// Screen coordinates. AppKit's default conversion from the frame in parent space is
-    /// wrong for the flipped text view, so convert through the view explicitly.
-    override func accessibilityFrame() -> NSRect {
-      guard let view, view.window != nil else { return super.accessibilityFrame() }
-      return NSAccessibility.screenRect(fromView: view, rect: rowRect)
+    var rowRect: CGRect {
+      get { rectInView }
+      set { rectInView = newValue }
     }
 
     override func accessibilityPerformPress() -> Bool {
@@ -31,6 +42,11 @@
       return true
     }
   }
+
+  /// The accessibility element of an embed's state (``EscriboEmbed/StateElement``): static
+  /// text over the badge, or over a small square at the row's trailing edge when no badge is
+  /// drawn. A sibling placed right after the embed's own element; it has no actions.
+  final class EmbedStateAccessibilityElement: EmbedAnchoredAccessibilityElement {}
 
   extension EscriboTextView {
 
@@ -43,17 +59,20 @@
       }
     }
 
-    /// One element per drawn embed, in document order. Elements are cached by block start
-    /// so VoiceOver sees stable identities, and refreshed from the coordinator's embed
-    /// cache on every query, so they follow the embeds without any further bookkeeping.
+    /// One element per drawn embed, in document order, each followed by its state element
+    /// when the embed has one. Elements are cached by block start so VoiceOver sees stable
+    /// identities, and refreshed from the coordinator's embed cache on every query, so they
+    /// follow the embeds without any further bookkeeping.
     func embedAccessibilityElements() -> [Any] {
       let entries = coordinator.embeddedBlocks
       guard !entries.isEmpty, let controller = embedLayout else {
         embedAccessibilityCache = [:]
+        embedStateAccessibilityCache = [:]
         return []
       }
       let length = documentStorage.length
       var live: [Int: EmbedAccessibilityElement] = [:]
+      var liveStates: [Int: EmbedStateAccessibilityElement] = [:]
       var result: [Any] = []
       for entry in entries where entry.block.range.upperBound <= length {
         let start = entry.block.range.lowerBound
@@ -77,8 +96,22 @@
           })
         live[start] = element
         result.append(element)
+
+        guard let state = entry.embed.stateElement else { continue }
+        let stateElement = embedStateAccessibilityCache[start] ?? EmbedStateAccessibilityElement()
+        stateElement.setAccessibilityRole(.staticText)
+        stateElement.setAccessibilityLabel(state.label)
+        stateElement.setAccessibilityValue(state.value)
+        stateElement.setAccessibilityIdentifier(state.identifier)
+        stateElement.setAccessibilityParent(textView)
+        stateElement.view = textView
+        stateElement.rectInView = controller.stateRect(for: entry) ?? .zero
+        stateElement.setAccessibilityFrameInParentSpace(stateElement.rectInView)
+        liveStates[start] = stateElement
+        result.append(stateElement)
       }
       embedAccessibilityCache = live
+      embedStateAccessibilityCache = liveStates
       return result
     }
 
