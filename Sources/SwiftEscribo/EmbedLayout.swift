@@ -123,6 +123,22 @@
     /// Lays out up to the block first, so the answer is right even for a row that has not
     /// been scrolled into view.
     func rowRect(for embedded: EmbeddedBlock) -> CGRect? {
+      guard let (fragment, origin) = rowFragment(for: embedded) else { return nil }
+      return fragment.rowRect.offsetBy(dx: origin.x, dy: origin.y)
+    }
+
+    /// The frame of `embedded`'s state element (``EscriboEmbed/StateElement``), in the text
+    /// view's coordinates, or `nil` when it is not laid out as a row: the drawn badge's
+    /// capsule, else a small square at the row's trailing edge
+    /// (``EmbedRowGeometry/stateRect(in:)``).
+    func stateRect(for embedded: EmbeddedBlock) -> CGRect? {
+      guard let (fragment, origin) = rowFragment(for: embedded) else { return nil }
+      return fragment.stateRect.offsetBy(dx: origin.x, dy: origin.y)
+    }
+
+    /// `embedded`'s row fragment, and the offset from the fragment's coordinates to the text
+    /// view's. Lays out up to the block first.
+    private func rowFragment(for embedded: EmbeddedBlock) -> (EmbedRowFragment, CGPoint)? {
       guard let textView, let layoutManager = textView.textLayoutManager,
         let contentManager = layoutManager.textContentManager,
         let location = contentManager.location(
@@ -132,11 +148,8 @@
       guard let fragment = layoutManager.textLayoutFragment(for: location) as? EmbedRowFragment
       else { return nil }
       let origin = Self.containerOrigin(of: textView)
-      let row = fragment.rowRect
       let frame = fragment.layoutFragmentFrame
-      return CGRect(
-        x: frame.minX + origin.x + row.minX, y: frame.minY + origin.y + row.minY,
-        width: row.width, height: row.height)
+      return (fragment, CGPoint(x: frame.minX + origin.x, y: frame.minY + origin.y))
     }
 
     /// The row height: two lines of the theme's base font at its declared size, times the
@@ -373,10 +386,19 @@
       CGRect(x: 0, y: 0, width: max(columnWidth, rowRect.maxX), height: rowHeight)
     }
 
+    /// The state element's frame relative to the fragment's origin; see
+    /// ``EmbedRowGeometry/stateRect(in:)``. `.zero` with no embed.
+    var stateRect: CGRect {
+      guard let embed else { return .zero }
+      return EmbedRowGeometry(embed: embed, fontSpec: fontSpec, scale: scale)
+        .stateRect(in: EmbedRowGeometry.drawnRect(forRow: rowRect, scale: scale))
+    }
+
     override func draw(at point: CGPoint, in context: CGContext) {
       guard let embed else { return }
       drawCount += 1
-      let rect = rowRect.offsetBy(dx: point.x, dy: point.y).insetBy(dx: 0, dy: 2 * scale)
+      let rect = EmbedRowGeometry.drawnRect(
+        forRow: rowRect.offsetBy(dx: point.x, dy: point.y), scale: scale)
       EmbedRowRenderer(
         embed: embed, colors: colors, fontSpec: fontSpec, scale: scale
       ).draw(in: rect, context: context)
@@ -419,8 +441,13 @@
         let controller = EmbedLayoutController(textView: textView, coordinator: coordinator)
         controller.install()
         embedLayout = controller
+        installEmbedToolTips()
       }
       embedLayout?.redraw(ranges)
+      #if os(macOS)
+        // After the re-vend is queued, so the refresh finds the new rows.
+        textView.embedToolTips?.setNeedsRefresh()
+      #endif
     }
   }
 #endif

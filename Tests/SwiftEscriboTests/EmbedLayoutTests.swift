@@ -19,7 +19,9 @@
 
     static let embed = EscriboEmbed(
       symbolName: "note.text", title: "Note", subtitle: "First line of the note",
-      badge: .init(symbolName: "checkmark.circle", word: "valid", tint: EscriboColor(red: 0, green: 0.6, blue: 0)))
+      badge: .init(
+        symbolName: "checkmark.circle", word: "valid",
+        tint: EscriboColor(red: 0, green: 0.6, blue: 0)))
   }
 
   /// Answers with ``EmbedLayoutFixture/embed`` for every note block it has not been told to
@@ -140,8 +142,9 @@
       #expect(row.embed == EmbedLayoutFixture.embed)
 
       // At the block's indent, as the coordinator wrote it into storage.
-      let style = harness.storage.attribute(
-        .paragraphStyle, at: harness.note.lowerBound, effectiveRange: nil) as? NSParagraphStyle
+      let style =
+        harness.storage.attribute(
+          .paragraphStyle, at: harness.note.lowerBound, effectiveRange: nil) as? NSParagraphStyle
       #expect(row.rowRect.minX == (style?.firstLineHeadIndent ?? 0))
       // No wider than the text column.
       let container = try #require(harness.layoutManager?.textContainer)
@@ -356,6 +359,96 @@
         }
       }
       #expect(painted > width * height / 4)
+    }
+
+    @Test("Subtitle runs: plain in secondary, de-emphasized fainter, one truncating line")
+    func subtitleRunColours() throws {
+      let colors = EmbedRowColors(theme: .fountainLight)
+      #expect(colors.deEmphasized != colors.secondary)
+      let foreground = EscriboTheme.fountainLight.base.foreground ?? .black
+      #expect(colors.deEmphasized == foreground.withAlphaMultiplied(by: 0.35))
+
+      let runs: [EscriboEmbed.SubtitleRun] = [
+        .init("MS · "), .init("35mm", isDeEmphasized: true), .init(" · dolly"),
+      ]
+      let embed = EscriboEmbed(symbolName: "film", title: "Shot", subtitleRuns: runs)
+      let renderer = EmbedRowRenderer(
+        embed: embed, colors: colors, fontSpec: FontSpec(family: .monospaced, pointSize: 12),
+        scale: 1)
+      let line = renderer.subtitle(fontSize: 10)
+      #expect(line.string == embed.subtitle)
+      var location = 0
+      for run in runs {
+        let length = (run.text as NSString).length
+        var effective = NSRange()
+        let color =
+          line.attribute(.foregroundColor, at: location, effectiveRange: &effective)
+          as? PlatformColor
+        let expected = run.isDeEmphasized ? colors.deEmphasized : colors.secondary
+        #expect(color == expected.platformColor, "run \(run.text)")
+        #expect(effective == NSRange(location: location, length: length))
+        let style =
+          line.attribute(.paragraphStyle, at: location, effectiveRange: nil)
+          as? NSParagraphStyle
+        #expect(style?.lineBreakMode == .byTruncatingTail)
+        location += length
+      }
+    }
+
+    @Test("A de-emphasized subtitle draws different pixels from the same plain subtitle")
+    func deEmphasizedRunsDraw() throws {
+      func pixels(_ embed: EscriboEmbed) throws -> [UInt8] {
+        let width = 400
+        let height = 48
+        let context = try #require(
+          CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        EmbedRowRenderer(
+          embed: embed, colors: EmbedRowColors(theme: .fountainLight),
+          fontSpec: FontSpec(family: .monospaced, pointSize: 12), scale: 1
+        ).draw(in: CGRect(x: 0, y: 0, width: width, height: height), context: context)
+        let data = try #require(context.data)
+        return Array(
+          UnsafeBufferPointer(
+            start: data.bindMemory(to: UInt8.self, capacity: width * height * 4),
+            count: width * height * 4))
+      }
+      let plain = try pixels(
+        EscriboEmbed(symbolName: "film", title: "Shot", subtitleRuns: [.init("inherited 35mm")]))
+      let dimmed = try pixels(
+        EscriboEmbed(
+          symbolName: "film", title: "Shot",
+          subtitleRuns: [.init("inherited 35mm", isDeEmphasized: true)]))
+      let same = try pixels(
+        EscriboEmbed(symbolName: "film", title: "Shot", subtitle: "inherited 35mm"))
+      #expect(plain == same)
+      #expect(plain != dimmed)
+    }
+
+    @Test("The state rectangle is the drawn badge capsule, else a trailing square")
+    func stateRectGeometry() throws {
+      let spec = FontSpec(family: .monospaced, pointSize: 12)
+      let row = CGRect(x: 10, y: 20, width: 400, height: 40)
+      let drawn = EmbedRowGeometry.drawnRect(forRow: row, scale: 1)
+      let badged = EmbedRowGeometry(embed: EmbedLayoutFixture.embed, fontSpec: spec, scale: 1)
+      let capsule = try #require(badged.badge(in: drawn)).capsule
+      #expect(badged.stateRect(in: drawn) == capsule)
+      #expect(capsule.maxX <= drawn.maxX && capsule.minX > badged.textLeft(in: drawn))
+
+      var bare = badged
+      bare.embed.badge = nil
+      let square = bare.stateRect(in: drawn)
+      #expect(square.width == square.height && square.width > 0)
+      #expect(abs(square.maxX - (drawn.maxX - bare.pad)) < 0.001)
+      #expect(abs(square.midY - drawn.midY) < 0.001)
+
+      // A row too narrow for the badge draws none, so the state falls back to the square.
+      let narrow = EmbedRowGeometry.drawnRect(
+        forRow: CGRect(x: 0, y: 0, width: 60, height: 40), scale: 1)
+      #expect(badged.badge(in: narrow) == nil)
+      #expect(badged.stateRect(in: narrow).width == badged.stateRect(in: narrow).height)
     }
   }
 #endif

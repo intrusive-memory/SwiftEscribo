@@ -111,6 +111,76 @@ struct EmbedAPITests {
     #expect(full.actions.first?.id == "edit-as-text")
   }
 
+  @Test("Escribir's pre-0.6 call shape compiles and leaves the new fields at their defaults")
+  func preFollowUpCallShapeCompiles() {
+    let embed = EscriboEmbed(
+      symbolName: "film", title: "Shot", subtitle: "wide",
+      badge: .init(symbolName: "checkmark", word: "valid", tint: .black),
+      accessibilityLabel: "Camera shot", accessibilityValue: "Wide",
+      accessibilityIdentifier: "embed.shot",
+      actions: [.init(id: "edit-as-text", title: "Edit as Text")])
+    #expect(embed.stateElement == nil)
+    #expect(embed.toolTip == nil)
+    #expect(embed.subtitleRuns == [EscriboEmbed.SubtitleRun("wide")])
+    #expect(embed.subtitle == "wide")
+  }
+
+  @Test("subtitle is the runs' joined text; setting it makes one plain run; runs win in init")
+  func subtitleRunsCompatibility() {
+    let runs: [EscriboEmbed.SubtitleRun] = [
+      .init("MS · "), .init("35mm", isDeEmphasized: true), .init(" · dolly"),
+    ]
+    var embed = EscriboEmbed(
+      symbolName: "film", title: "Shot", subtitle: "ignored", subtitleRuns: runs)
+    #expect(embed.subtitleRuns == runs)
+    #expect(embed.subtitle == "MS · 35mm · dolly")
+    // The default accessibility value is the joined text, not the ignored plain subtitle.
+    #expect(embed.accessibilityValue == "MS · 35mm · dolly")
+
+    embed.subtitle = "wide"
+    #expect(embed.subtitleRuns == [.init("wide")])
+    embed.subtitle = ""
+    #expect(embed.subtitleRuns.isEmpty)
+
+    // A plain subtitle and the same text as one plain run are the same embed.
+    #expect(
+      EscriboEmbed(symbolName: "film", title: "Shot", subtitle: "wide")
+        == EscriboEmbed(symbolName: "film", title: "Shot", subtitleRuns: [.init("wide")]))
+    #expect(
+      EscriboEmbed(symbolName: "film", title: "Shot")
+        == EscriboEmbed(symbolName: "film", title: "Shot", subtitle: ""))
+    // De-emphasis is part of equality.
+    #expect(
+      EscriboEmbed(symbolName: "film", title: "Shot", subtitleRuns: [.init("wide")])
+        != EscriboEmbed(
+          symbolName: "film", title: "Shot", subtitleRuns: [.init("wide", isDeEmphasized: true)]))
+    // An explicit accessibility value still wins.
+    #expect(
+      EscriboEmbed(symbolName: "f", title: "t", accessibilityValue: "v", subtitleRuns: runs)
+        .accessibilityValue == "v")
+  }
+
+  @Test("stateElement and toolTip are stored, default to nil, and take part in equality")
+  func stateElementAndToolTip() {
+    let state = EscriboEmbed.StateElement(
+      label: "Render state", value: "unknown", identifier: "storyboard.embed.0.state")
+    #expect(state.label == "Render state")
+    #expect(state.value == "unknown")
+    #expect(state.identifier == "storyboard.embed.0.state")
+    #expect(EscriboEmbed.StateElement(label: "l", value: "v").identifier == nil)
+
+    let plain = EscriboEmbed(symbolName: "film", title: "Shot")
+    let withState = EscriboEmbed(symbolName: "film", title: "Shot", stateElement: state)
+    let withTip = EscriboEmbed(symbolName: "film", title: "Shot", toolTip: "No render record")
+    #expect(withState.stateElement == state)
+    #expect(withTip.toolTip == "No render record")
+    #expect(plain != withState)
+    #expect(plain != withTip)
+    var changed = withState
+    changed.stateElement?.value = "current"
+    #expect(changed != withState)
+  }
+
   // MARK: - No provider changes nothing
 
   @Test("No provider: insets, paragraph attributes, and layout geometry are today's")

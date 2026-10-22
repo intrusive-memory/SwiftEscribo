@@ -74,6 +74,9 @@
     /// The accessibility elements of the drawn embeds, by block start (§ 1.4).
     var embedAccessibilityCache: [Int: EmbedAccessibilityElement] = [:]
 
+    /// The embeds' state elements (``EscriboEmbed/StateElement``), by block start.
+    var embedStateAccessibilityCache: [Int: EmbedStateAccessibilityElement] = [:]
+
     /// Builds the view over `styler`.
     ///
     /// - Parameters:

@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo
-updated: 2026-10-20
+updated: 2026-10-22
 ---
 
 # SwiftEscribo
@@ -162,6 +162,23 @@ across edits, so do not key on it.
 **Find on macOS.** The find bar selecting a match inside an embed is not snapped to the
 whole block. `onFindMatchInEmbed` is called once per match, so the host can expand that
 embed the same way; the match stays selected. It is never called on iOS.
+
+**State, inherited values and tool tips.** Three optional fields, all off by default:
+
+```swift
+EscriboEmbed(
+    symbolName: "film", title: "Shot 3",
+    accessibilityIdentifier: "storyboard.embed.3",
+    // Runs share one line; de-emphasized ones draw fainter (e.g. values inherited from a default).
+    subtitleRuns: [.init("MS · "), .init("35mm", isDeEmphasized: true)],
+    // A second, static-text element after the embed's button, over the badge (or a small
+    // square at the trailing edge when there is no badge).
+    stateElement: .init(label: "Render state", value: "unknown", identifier: "storyboard.embed.3.state"),
+    // Shown on hover: macOS, and iPadOS with a pointer.
+    toolTip: "No render record")
+```
+
+`subtitle` still works: it reads the runs' text joined, and setting it makes one plain run.
 
 Caret, selection, delete, undo, paste and accessibility rules are in the
 [CHANGELOG](CHANGELOG.md).
