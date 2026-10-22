@@ -441,8 +441,13 @@
         let controller = EmbedLayoutController(textView: textView, coordinator: coordinator)
         controller.install()
         embedLayout = controller
+        installEmbedToolTips()
       }
       embedLayout?.redraw(ranges)
+      #if os(macOS)
+        // After the re-vend is queued, so the refresh finds the new rows.
+        textView.embedToolTips?.setNeedsRefresh()
+      #endif
     }
   }
 #endif
