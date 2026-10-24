@@ -290,7 +290,7 @@
     }
 
     /// Where the text container's origin sits in the text view.
-    private static func containerOrigin(of textView: EscriboNativeTextView) -> CGPoint {
+    static func containerOrigin(of textView: EscriboNativeTextView) -> CGPoint {
       #if os(macOS)
         textView.textContainerOrigin
       #else
@@ -338,6 +338,20 @@
       var frame = super.layoutFragmentFrame
       frame.size.height = claimedHeight
       return frame
+    }
+
+    /// Only the lines that fit inside the claimed height.
+    ///
+    /// TextKit still lays the paragraph's text out at its natural size under the row, and
+    /// the selection highlight takes its geometry from these lines. A long note wraps to many lines, so without this its selection reached
+    /// down over the blank lines and paragraphs drawn below the row. A row keeps at least
+    /// its first line, so a selected row always shows a highlight.
+    override var textLineFragments: [NSTextLineFragment] {
+      let lines = super.textLineFragments
+      guard claimedHeight > 0 else { return [] }
+      let fitting = lines.filter { $0.typographicBounds.maxY <= claimedHeight + 0.5 }
+      if fitting.isEmpty, let first = lines.first { return [first] }
+      return fitting
     }
   }
 

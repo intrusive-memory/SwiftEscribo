@@ -28,8 +28,8 @@
     let note: NSRange
     let original: String
 
-    init() throws {
-      let layout = try EmbedLayoutHarness()
+    init(text: String = EmbedLayoutFixture.text) throws {
+      let layout = try EmbedLayoutHarness(text: text)
       self.layout = layout
       note = NSRange(location: layout.note.lowerBound, length: layout.note.count)
       original = layout.editor.textView.string
@@ -352,6 +352,70 @@
       // A point beside the row is not a row click: AppKit handles it.
       #expect(!h.editor.handleEmbedClick(at: CGPoint(x: row.midX, y: row.minY - 20)))
       #expect(h.activations.count == points.count)
+    }
+
+    /// A one-paragraph note long enough to wrap to several lines under its two-line row —
+    /// the shape of a storyboard shot note — followed by a blank run.
+    nonisolated static let longWrappingNote =
+      "INT. HOUSE - DAY\n\nBob waits by the door.\n\n"
+      + "[["
+      + String(repeating: "A long one-line note that wraps across many visual lines. ", count: 8)
+      + "]]\n\n\nJane enters.\n"
+
+    @Test("A click anywhere on a long note's row selects it and activates it once")
+    func clickOnLongNoteRow() throws {
+      let h = try MacEmbedHarness(text: Self.longWrappingNote)
+      let (window, row) = try windowed(h)
+      defer { window.close() }
+
+      var clicks = 0
+      for fy in stride(from: 0.05, through: 0.95, by: 0.15) {
+        for fx in [0.1, 0.5, 0.9] {
+          let point = CGPoint(x: row.minX + row.width * fx, y: row.minY + row.height * fy)
+          h.caret(0)
+          click(h, window, at: point)
+          clicks += 1
+          #expect(h.selection == h.note, "click at \(point) in \(row)")
+          #expect(h.activations.count == clicks, "click at \(point): not activated")
+        }
+      }
+      #expect(h.activations.allSatisfy { $0.range == h.layout.note })
+    }
+
+    /// The selection highlight's rectangles for `range`, in text-container coordinates.
+    private func selectionRects(_ h: MacEmbedHarness, _ range: NSRange) throws -> [CGRect] {
+      let manager = try #require(h.textView.textLayoutManager)
+      let content = try #require(manager.textContentManager)
+      let start = try #require(
+        content.location(content.documentRange.location, offsetBy: range.location))
+      let end = try #require(content.location(start, offsetBy: range.length))
+      var rects: [CGRect] = []
+      manager.enumerateTextSegments(
+        in: try #require(NSTextRange(location: start, end: end)), type: .selection, options: []
+      ) { _, rect, _, _ in
+        rects.append(rect)
+        return true
+      }
+      return rects
+    }
+
+    /// The hidden text under a row is laid out at its natural size; a long note's wrap used
+    /// to give the selection a highlight that reached over the paragraphs below the row.
+    @Test(
+      "A selected row's highlight stays inside the row",
+      arguments: [EmbedLayoutFixture.text, MacEmbedBehaviourTests.longWrappingNote])
+    func selectionHighlightStaysInRow(text: String) throws {
+      let h = try MacEmbedHarness(text: text)
+      let (window, row) = try windowed(h)
+      defer { window.close() }
+      let origin = EmbedLayoutController.containerOrigin(of: h.textView)
+
+      let rects = try selectionRects(h, h.note).map { $0.offsetBy(dx: origin.x, dy: origin.y) }
+      #expect(!rects.isEmpty)
+      for rect in rects where !rect.isEmpty {
+        #expect(
+          rect.minY >= row.minY - 0.5 && rect.maxY <= row.maxY + 0.5, "\(rect) vs row \(row)")
+      }
     }
 
     @Test("Programmatic selection never activates an embed")

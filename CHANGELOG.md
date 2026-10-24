@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo Changelog
-updated: 2026-10-22
+updated: 2026-10-24
 ---
 
 # Changelog
@@ -9,6 +9,18 @@ updated: 2026-10-22
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.6.1] — 2026-10-24
+
+### Fixed
+
+- A selected embed row's highlight no longer spills below the row. TextKit still lays a
+  block's hidden text out at its natural size under the row, and the selection highlight took
+  its geometry from those lines, so a long one-paragraph note (a storyboard shot note, say)
+  highlighted the blank lines and paragraphs drawn below it, and the paragraphs of a
+  multi-paragraph note did the same. `EmbedLayoutFragment` now reports only the lines that fit
+  inside the height it claims (a row keeps at least its first line; a collapsed paragraph
+  reports none).
 
 ## [0.6.0] — 2026-10-22
 
