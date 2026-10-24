@@ -54,7 +54,7 @@
     let note: Range<Int>
     let provider = NoteEmbedProvider()
 
-    init(scale: Double = 1) throws {
+    init(scale: Double = 1, text: String = EmbedLayoutFixture.text) throws {
       let editor = EscriboTextView(language: .fountain, theme: .fountainLight)
       #if os(macOS)
         editor.scrollView.frame = CGRect(x: 0, y: 0, width: 600, height: 800)
@@ -65,7 +65,7 @@
       if scale != 1 {
         editor.coordinator.styler.environment.metrics = FontMetrics(pointSizeScale: scale)
       }
-      _ = editor.applyExternalText(EmbedLayoutFixture.text)
+      _ = editor.applyExternalText(text)
       editor.coordinator.restyleEverything()
       let block = try #require(editor.coordinator.documentBlocks.first { $0.kind == .note })
       self.editor = editor
