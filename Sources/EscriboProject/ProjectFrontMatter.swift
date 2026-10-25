@@ -523,38 +523,51 @@ extension ProjectFrontMatter {
 
   /// Convert a single path string to a path relative to `baseDirectory`.
   /// Relative inputs pass through unchanged.
+  ///
+  /// Paths are compared as `URL.standardizedFileURL.pathComponents`, never as strings
+  /// split on `"/"`. String surgery only works where the separator is `/` and every
+  /// absolute path starts with one; on Windows an absolute path starts with a drive
+  /// letter (`C:\`) or a UNC prefix, the separator is usually `\`, and volumes compare
+  /// case-insensitively. Component comparison gets all three right and returns the
+  /// same answers as the old string version on macOS and iOS.
+  ///
+  /// The result is always joined with `"/"`, on every platform, and that is a
+  /// decision rather than an accident: this value is written into PROJECT.md, and a
+  /// project folder has to open on a Mac after it was saved on Windows (and the
+  /// reverse). Windows accepts `/` as a separator; macOS does not accept `\`.
   static func makeRelative(_ path: String, to baseDirectory: URL) -> String {
     if path.isEmpty { return path }
 
-    // Expand leading ~ to absolute before deciding how to relativize.
-    let expanded: String
-    if path.hasPrefix("~") {
-      expanded = NSString(string: path).expandingTildeInPath
-    } else {
-      expanded = path
-    }
+    // Expand leading ~ to absolute before deciding how to relativize. Windows has no
+    // shell tilde convention, so there a leading ~ is an ordinary (relative) name.
+    #if os(Windows)
+      let expanded = path
+    #else
+      let expanded = path.hasPrefix("~") ? NSString(string: path).expandingTildeInPath : path
+    #endif
 
     // Non-absolute paths are already relative to PROJECT.md — leave alone.
-    guard expanded.hasPrefix("/") else { return path }
+    guard isAbsolutePath(expanded) else { return path }
 
-    let baseStandardized = baseDirectory.standardizedFileURL.path
-    let targetStandardized = URL(fileURLWithPath: expanded).standardizedFileURL.path
+    let baseComponents = baseDirectory.standardizedFileURL.pathComponents
+    let targetComponents = URL(fileURLWithPath: expanded).standardizedFileURL.pathComponents
 
-    if targetStandardized == baseStandardized {
-      return "."
-    }
-    let prefix = baseStandardized.hasSuffix("/") ? baseStandardized : baseStandardized + "/"
-    if targetStandardized.hasPrefix(prefix) {
-      return String(targetStandardized.dropFirst(prefix.count))
-    }
+    #if os(Windows)
+      // Different volumes (C: vs D:) share no relative path. Write the absolute path,
+      // still "/"-separated, rather than a ../ traversal that leads nowhere.
+      let baseVolume = baseComponents.first { $0 != "/" } ?? ""
+      let targetVolume = targetComponents.first { $0 != "/" } ?? ""
+      guard componentsMatch(baseVolume, targetVolume) else {
+        return targetComponents.filter { $0 != "/" }.joined(separator: "/")
+      }
+    #endif
 
-    // Path lies outside baseDirectory — build a ../-style traversal.
-    let baseComponents = baseStandardized.split(separator: "/").map(String.init)
-    let targetComponents = targetStandardized.split(separator: "/").map(String.init)
+    // Shared leading components, then ../ for each remaining base component and the
+    // rest of the target. Inside the base this is just the tail; equal paths give ".".
     var commonCount = 0
     while commonCount < baseComponents.count,
       commonCount < targetComponents.count,
-      baseComponents[commonCount] == targetComponents[commonCount]
+      componentsMatch(baseComponents[commonCount], targetComponents[commonCount])
     {
       commonCount += 1
     }
@@ -562,6 +575,30 @@ extension ProjectFrontMatter {
     let downs = Array(targetComponents[commonCount...])
     let joined = (ups + downs).joined(separator: "/")
     return joined.isEmpty ? "." : joined
+  }
+
+  /// Whether `path` is absolute on the current platform. On Windows that is a drive
+  /// letter followed by a separator (`C:\`, `C:/`) or a leading separator (UNC
+  /// `\\server\share`, or rooted `\dir`); everywhere else it is a leading `/`.
+  private static func isAbsolutePath(_ path: String) -> Bool {
+    #if os(Windows)
+      if path.hasPrefix("/") || path.hasPrefix("\\") { return true }
+      let chars = Array(path.prefix(3))
+      return chars.count == 3 && chars[0].isLetter && chars[1] == ":"
+        && (chars[2] == "\\" || chars[2] == "/")
+    #else
+      return path.hasPrefix("/")
+    #endif
+  }
+
+  /// Path components are compared case-insensitively on Windows, whose file systems
+  /// are, and exactly everywhere else.
+  private static func componentsMatch(_ lhs: String, _ rhs: String) -> Bool {
+    #if os(Windows)
+      return lhs.caseInsensitiveCompare(rhs) == .orderedSame
+    #else
+      return lhs == rhs
+    #endif
   }
 }
 
