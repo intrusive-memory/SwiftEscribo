@@ -46,9 +46,18 @@ import Testing
       #expect(rel(path) == path)
     }
 
-    @Test("a tilde naming no known user is not absolute and passes through")
-    func unknownUserTildePassesThrough() {
-      #expect(rel("~no-such-user-escribo/audio") == "~no-such-user-escribo/audio")
+    /// `expandingTildeInPath` decides this, not the helper, and it differs by platform:
+    /// macOS leaves `~unknownuser` unexpanded (so it is relative and passes through),
+    /// while iOS expands any `~name` to the app's own home directory.
+    @Test("a tilde naming no known user follows expandingTildeInPath")
+    func unknownUserTilde() {
+      #if os(macOS)
+        #expect(rel("~no-such-user-escribo/audio") == "~no-such-user-escribo/audio")
+      #else
+        let home = URL(
+          fileURLWithPath: NSString(string: "~").expandingTildeInPath, isDirectory: true)
+        #expect(rel("~no-such-user-escribo/audio", home) == "audio")
+      #endif
     }
 
     // MARK: Inside the base
