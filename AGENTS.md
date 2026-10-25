@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo — Agent Instructions
-updated: 2026-10-24
+updated: 2026-10-25
 ---
 
 # AGENTS.md
@@ -11,7 +11,7 @@ SwiftEscribo.
 
 ## Current version
 
-**`0.6.1-dev`** — the post-`v0.6.1` development cycle. Between releases this line carries
+**`0.6.2`** — the `v0.6.2` release. Between releases this line carries
 a `-dev` suffix (`X.Y.Z-dev`), which the next release strips. README's install snippet
 always names the last resolvable release, never a `-dev` marker.
 
@@ -235,7 +235,7 @@ An unknown `SpanKind` resolves to the base style. Never `fatalError` in a `defau
 ## Queryable Codemap
 
 A prebuilt [graphify](https://pypi.org/project/graphifyy/) knowledge graph of this
-codebase lives in [`graphify-out/`](graphify-out/) (2754 nodes · 5901 edges). **Prefer
+codebase lives in [`graphify-out/`](graphify-out/) (4024 nodes · 8849 edges). **Prefer
 querying it before grepping** for architecture or "what connects to what" questions:
 
 ```bash
