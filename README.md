@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo
-updated: 2026-10-24
+updated: 2026-10-25
 ---
 
 # SwiftEscribo
@@ -79,7 +79,7 @@ breaking change.
 ## Installing it
 
 ```swift
-.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.6.1"))
+.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.6.2"))
 ```
 
 Then depend on whichever products you need — they are independent:
