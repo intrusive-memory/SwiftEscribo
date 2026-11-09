@@ -23,7 +23,7 @@ concurrency:
 jobs:
   performance-macos:
     name: Scan-time budgets on macOS
-    runs-on: macos-26
+    runs-on: xcode-27
 
     # DL-61. A `fontd` hang on a macOS runner produces a six-hour stall, not a failure —
     # the job never reports, and nothing distinguishes "wedged" from "slow" without a

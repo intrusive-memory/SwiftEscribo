@@ -30,7 +30,7 @@ jobs:
   swiftlint:
     name: SwiftLint
     if: ${{ !github.event.pull_request.draft }}
-    runs-on: macos-26
+    runs-on: xcode-27
 
     # DL-180. Every gating job in this repo declares a deadline. A hung job burns the
     # GitHub Actions default of six hours and never reports, which is strictly worse
