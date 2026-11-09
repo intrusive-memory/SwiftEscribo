@@ -17,7 +17,7 @@ jobs:
   test-macos:
     name: Test on macOS
     if: ${{ !github.event.pull_request.draft }}
-    runs-on: macos-26
+    runs-on: xcode-27
 
     # DL-180 / DL-61. Neither job here declared a deadline, so a hang consumed the
     # GitHub Actions default of six hours per job instead of failing.
@@ -40,8 +40,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Show Swift version
-        run: swift --version
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
 
       # `SwiftEscribo-Package` — not `SwiftEscribo`. SwiftPM's per-product
       # scheme has no test action, so `xcodebuild test -scheme SwiftEscribo`
@@ -75,7 +77,7 @@ jobs:
   test-ios:
     name: Test on iOS Simulator
     if: ${{ !github.event.pull_request.draft }}
-    runs-on: macos-26
+    runs-on: xcode-27
 
     # DL-180 / DL-61, as above. Longer than the macOS job because this one also boots
     # an iPhone 17 simulator before it can run anything, and a cold first boot on a
@@ -88,6 +90,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
 
       # `make test-ios`, not a spelled-out xcodebuild, for the same reason the lint job
       # invokes `make lint`: a duplicated destination string drifts. This job failed on its

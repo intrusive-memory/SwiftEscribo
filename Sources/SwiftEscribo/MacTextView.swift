@@ -47,6 +47,11 @@
     /// The platform-neutral coordinator, adopted unchanged (Sortie 9).
     let coordinator: EditorCoordinator
 
+    /// The document as last pushed to the host's binding, and the coordinator's
+    /// ``EditorCoordinator/characterEditCount`` at that moment — the evidence
+    /// ``applyExternalText(_:)``'s fast path reasons from. See ``PushedText``.
+    var lastPushedText: PushedText?
+
     // MARK: - The paragraph well (REQUIREMENTS-1.1.0 § 5)
 
     /// The host's well, or `nil`. Written only by ``applyWell(_:horizontalSizeClass:)``,

@@ -1,5 +1,6 @@
 import EscriboCore
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import SwiftEscribo
@@ -234,6 +235,65 @@ struct ExternalTextReplacementTests {
     let counter = TextStorageMutationCounter(observing: editor.documentStorage)
     #expect(editor.applyExternalText(rebuilt) == false)
     #expect(counter.count == 0)
+  }
+
+  // MARK: - Rule 1, the push fast path
+
+  /// A binding over a box, so a test can see exactly what the bridge pushed.
+  final class BindingBox {
+    var value: String
+    init(_ value: String) { self.value = value }
+    var binding: Binding<String> {
+      Binding(get: { self.value }, set: { self.value = $0 })
+    }
+  }
+
+  /// Non-ASCII on purpose: an ASCII `NSString` bridges to fast UTF-8 and would not exercise
+  /// the slow comparison the native push exists to avoid.
+  static let accentedScript = "INT. CAFÉ – NIGHT\n\nZOË\n¿Qué pasó?\n\nShe sips. Ñandú.\n"
+
+  @Test("The push hands the binding a native string, and the update it causes mutates nothing")
+  func pushIsNativeAndItsEchoIsANoOp() {
+    let box = BindingBox(Self.accentedScript)
+    let bridge = EscriboEditorBridge(text: box.binding)
+    let editor = bridge.makeEditor(
+      language: .fountain, mode: .live, theme: .fountainLight, appearance: .light)
+
+    editor.documentStorage.replaceCharacters(in: NSRange(location: 0, length: 0), with: "X")
+    bridge.pushToBinding()
+
+    #expect(box.value == "X" + Self.accentedScript)
+    #expect(box.value == editor.currentText)
+    #expect(
+      box.value.utf8.withContiguousStorageIfAvailable { _ in true } == true,
+      "the pushed string is native, not a bridged NSString")
+
+    // The SwiftUI update pass the push causes hands the same string straight back.
+    let counter = TextStorageMutationCounter(observing: editor.documentStorage)
+    #expect(editor.applyExternalText(box.value) == false)
+    #expect(counter.count == 0)
+  }
+
+  @Test("A push record goes stale on the next character edit and never hides a real reset")
+  func stalePushRecordFallsThroughToTheRealComparison() {
+    let box = BindingBox(Self.accentedScript)
+    let bridge = EscriboEditorBridge(text: box.binding)
+    let editor = bridge.makeEditor(
+      language: .fountain, mode: .live, theme: .fountainLight, appearance: .light)
+
+    editor.documentStorage.replaceCharacters(in: NSRange(location: 0, length: 0), with: "X")
+    bridge.pushToBinding()
+    let pushed = box.value
+
+    // A character edit the host has not been told about yet: the record no longer vouches
+    // for the storage, so handing back the old pushed string must reset to it.
+    editor.documentStorage.replaceCharacters(in: NSRange(location: 0, length: 0), with: "Y")
+    #expect(editor.currentText != pushed)
+
+    let counter = TextStorageMutationCounter(observing: editor.documentStorage)
+    #expect(editor.applyExternalText(pushed) == true)
+    #expect(counter.count > 0)
+    #expect(editor.currentText == pushed)
   }
 
   // MARK: - Rule 2

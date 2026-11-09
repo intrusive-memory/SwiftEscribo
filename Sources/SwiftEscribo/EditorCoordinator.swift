@@ -119,6 +119,12 @@ public final class EditorCoordinator: NSObject {
   /// How many times attributes have been applied.
   private(set) var restyleCount = 0
 
+  /// How many character edits the text system has reported — every one, including those
+  /// skipped for marked text. A change in this number is the proof that the storage's
+  /// characters may differ from a string taken earlier; ``EscriboTextView/lastPushedText``
+  /// is only trusted while it has not moved.
+  private(set) var characterEditCount = 0
+
   /// How many edits have been skipped because a composition was in flight.
   private(set) var markedTextSkipCount = 0
 
@@ -356,6 +362,7 @@ public final class EditorCoordinator: NSObject {
   ///     system reports it.
   ///   - changeInLength: How much the document grew or shrank.
   func didProcessCharacterEdit(editedRange: NSRange, changeInLength: Int) {
+    characterEditCount &+= 1
     guard !isApplying else { return }
 
     let edit = Self.textEdit(editedRange: editedRange, changeInLength: changeInLength)
