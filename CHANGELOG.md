@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo Changelog
-updated: 2026-10-25
+updated: 2026-11-09
 ---
 
 # Changelog
@@ -9,6 +9,24 @@ updated: 2026-10-25
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.6.3] — 2026-11-09
+
+### Fixed
+
+- Typing in a long non-ASCII document no longer stalls on string comparisons.
+  `NSTextStorage.string` is a bridged `NSString`, and Swift's `==` on a bridged, non-ASCII
+  string cost 8–12 ms per comparison on a 236 KB screenplay, several times per keystroke in a
+  SwiftUI host. The editor now pushes a native `String` copy to the binding (about 0.4 ms), and
+  `applyExternalText` recognises the echo of that push with a native comparison (about
+  0.07 ms instead of 1.6 ms). A character-edit count guards the check, so a real external reset
+  is never skipped. The app half of the fix is Escribir#160.
+
+### CI
+
+- Workflows run on the `xcode-27` runner (macOS 27, iOS 27, Swift 6.4) and print the toolchain.
+- `make test-ios` resolves the iPhone simulator by UDID at run time instead of pinning an OS
+  version the runner image may not carry.
 
 ## [0.6.2] — 2026-10-25
 

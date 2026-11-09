@@ -4,17 +4,28 @@
 # including the three test targets, so it is the only usable scheme here.
 SCHEME = SwiftEscribo-Package
 DESTINATION = 'platform=macOS,arch=arm64'
-# Pinned to an exact OS, never `latest` — `OS=latest` does not resolve on these runners.
-# The cost of pinning is that the runner image eventually drops the version: 26.1 vanished
-# from `macos-26` between this package's last local run and its first CI run, and xcodebuild
-# reports that as `Unable to find a device matching the provided destination specifier`
-# (exit 70) with **zero tests run** — a hard failure that looks nothing like a test failure.
-# 26.5 is chosen because it is the ONLY version present both on the `macos-26` runner
-# (which offers 26.2 / 26.4.1 / 26.5) and on this developer machine (26.0 / 26.1 / 26.3 /
-# 26.5). Pinning the oldest CI version instead would fix CI and break `make test-ios`
-# locally, which is how the two pins drifted apart in the first place. Check the
-# intersection with `xcrun simctl list runtimes` before changing this number.
-IOS_DESTINATION = 'platform=iOS Simulator,name=iPhone 17,OS=26.5'
+# The iOS simulator is RESOLVED AT RUN TIME, by UDID, never pinned to an OS version.
+# A pinned version breaks the moment the runner image drops it (26.1 vanished from
+# `macos-26` that way: exit 70, zero tests run), and `OS=latest` did not resolve on that
+# image. `ios_dest` reads available simulators straight from `simctl`, prefers
+# $(IOS_SIM_NAME), falls back to any iPhone, and fails loudly with the device list if
+# there is none. The same resolver as Escribir's Makefile, so local runs and CI pick
+# their simulator the same way.
+IOS_SIM_NAME ?= iPhone 17
+SIM_UUID_RE := [0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}
+
+define ios_dest
+UDID=$$(xcrun simctl list devices available | grep '$(IOS_SIM_NAME)' | grep -oE "$(SIM_UUID_RE)" | tail -1); \
+if [ -z "$$UDID" ]; then \
+  UDID=$$(xcrun simctl list devices available | grep 'iPhone' | grep -oE "$(SIM_UUID_RE)" | tail -1); \
+fi; \
+if [ -z "$$UDID" ]; then \
+  echo "No available iPhone simulator found. Available devices:" >&2; \
+  xcrun simctl list devices available >&2; \
+  exit 1; \
+fi; \
+echo "iOS Simulator UDID: $$UDID"
+endef
 
 # Apple Silicon only. Intel and Rosetta are out of scope, and an accidental
 # x86_64 or universal build makes the performance suite report numbers for a
@@ -43,9 +54,10 @@ test-core:
 	  $(ARCH)
 
 test-ios:
+	@$(ios_dest); \
 	xcodebuild test -scheme $(SCHEME) \
 	  -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
-	  -destination $(IOS_DESTINATION) \
+	  -destination "platform=iOS Simulator,id=$$UDID" \
 	  -skip-testing:EscriboPerformanceTests \
 	  -skipPackagePluginValidation \
 	  COMPILER_INDEX_STORE_ENABLE=NO \

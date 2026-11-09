@@ -221,7 +221,10 @@ final class EscriboEditorBridge: NSObject {
   /// loop is before it starts.
   func pushToBinding() {
     guard let editor else { return }
-    let document = editor.currentText
+    // Native, not `currentText`: see ``EscriboTextView/nativeText``. The record lets the
+    // update pass this assignment causes recognise the string coming straight back.
+    let document = editor.nativeText
+    editor.recordPushedText(document)
     guard text.wrappedValue != document else { return }
     text.wrappedValue = document
   }

@@ -31,6 +31,16 @@ import Foundation
 /// the replacement path — a thing the pure test cannot see — but they carry a comment
 /// saying they cannot fail on their own, so that a later sortie does not "simplify" the
 /// table-driven test away as redundant.
+/// A string the editor pushed to its host, and the edit count it was taken at.
+///
+/// Only meaningful while ``EditorCoordinator/characterEditCount`` still equals
+/// `characterEditCount`: any character edit since — typed, undone, or programmatic — moves the
+/// count, and the record stops vouching for the storage.
+struct PushedText {
+  let text: String
+  let characterEditCount: Int
+}
+
 enum SelectionClamp {
 
   /// `anchor..<(anchor + extent)` confined to `0..<newLength`.
@@ -113,6 +123,37 @@ extension EscriboTextView {
   /// read once per change notification on the way *out* to SwiftUI, never on the way in and
   /// never on the scan path.
   var currentText: String { documentStorage.string }
+
+  /// The document as a **native** Swift string: one `getCharacters` into a buffer, one
+  /// decode.
+  ///
+  /// ``currentText`` is `NSTextStorage.string`, a *bridged* `NSString`. Bridging itself is
+  /// cheap; what is not is everything a host then does with it. Swift's `==` on a bridged,
+  /// non-ASCII string walks it character by character — measured on a 236 KB screenplay at
+  /// 8–12 ms per comparison — and a SwiftUI host compares the binding's value several times
+  /// per keystroke (the push's own guard, the host's setter, every `onChange(of:)`). This
+  /// copy costs 0.4 ms on the same document, and after it each of those comparisons is
+  /// 0.07 ms. ``EscriboEditorBridge/pushToBinding()`` pushes this.
+  ///
+  /// `String(decoding:)` repairs an unpaired surrogate to U+FFFD. The text view never holds
+  /// one at rest, and the pushed copy is recorded (``PushedText``) so a repaired copy coming
+  /// back from the host is recognised as the editor's own and not re-applied over it.
+  var nativeText: String {
+    let storage = documentStorage
+    let length = storage.length
+    guard length > 0 else { return "" }
+    var units = [UInt16](repeating: 0, count: length)
+    units.withUnsafeMutableBufferPointer { buffer in
+      guard let base = buffer.baseAddress else { return }
+      storage.mutableString.getCharacters(base, range: NSRange(location: 0, length: length))
+    }
+    return String(decoding: units, as: UTF16.self)
+  }
+
+  /// Records `text` as what the host's binding was just handed.
+  func recordPushedText(_ text: String) {
+    lastPushedText = PushedText(text: text, characterEditCount: coordinator.characterEditCount)
+  }
 
   // MARK: - External text replacement
 
@@ -208,6 +249,18 @@ extension EscriboTextView {
   @discardableResult
   func applyExternalText(_ incoming: String) -> Bool {
     let storage = documentStorage
+
+    // Rule 1, fast path: the host is handing back exactly the string this editor last
+    // pushed, and the storage has taken no character edit since — so it already holds it.
+    // A native comparison (0.07 ms on 236 KB) instead of `isEqual(to:)` against a Swift
+    // string (1.6 ms), on every SwiftUI update pass. Either condition failing falls through
+    // to the real comparison, so a stale record can only cost time, never skip a reset.
+    if let pushed = lastPushedText,
+      pushed.characterEditCount == coordinator.characterEditCount,
+      pushed.text == incoming
+    {
+      return false
+    }
 
     // Rule 1.
     guard !storage.mutableString.isEqual(to: incoming) else { return false }
