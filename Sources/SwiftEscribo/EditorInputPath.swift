@@ -263,6 +263,31 @@ struct CaretLineContext: Equatable {
       return super.readSelection(from: pboard, type: type)
     }
 
+    /// The language a paste's formatting is rewritten into, or `nil` to paste verbatim
+    /// (DL-65). Set from the `escriboPastesFormattingAsMarkup(_:)` environment value.
+    var richPasteLanguage: Language?
+
+    /// `paste(_:)` and the services menu arrive here. With ``richPasteLanguage`` set and a
+    /// rich flavour on the pasteboard that carries formatting the language can write, the
+    /// selection is replaced with that markup (``RichPasteMarkup``); otherwise the plain
+    /// flavour is read as before.
+    override func readSelection(from pboard: NSPasteboard) -> Bool {
+      if let language = richPasteLanguage,
+        let markup = RichPasteReader.markup(from: pboard, language: language)
+      {
+        let wasPasting = isPasting
+        isPasting = true
+        defer { isPasting = wasPasting }
+        let range = selectedRange()
+        guard shouldChangeText(in: range, replacementString: markup) else { return false }
+        textStorage?.replaceCharacters(in: range, with: markup)
+        didChangeText()
+        setSelectedRange(NSRange(location: range.location + (markup as NSString).length, length: 0))
+        return true
+      }
+      return super.readSelection(from: pboard)
+    }
+
     override func shouldChangeText(
       in affectedCharRange: NSRange, replacementString: String?
     ) -> Bool {
@@ -498,7 +523,48 @@ struct CaretLineContext: Equatable {
     // without asking `canPerformAction` first. The pasteboard is never read when vetoed.
     override func paste(_ sender: Any?) {
       guard pasteAllowed() else { return }
+      if pasteFormattingAsMarkup(from: .general) { return }
       super.paste(sender)
+    }
+
+    /// The language a paste's formatting is rewritten into, or `nil` to paste verbatim
+    /// (DL-65). Set from the `escriboPastesFormattingAsMarkup(_:)` environment value.
+    var richPasteLanguage: Language?
+
+    /// With rich paste on, a copy writes the plain text only.
+    ///
+    /// `UITextView` copies its storage's attributes as RTF, and those attributes are this
+    /// package's syntax styling: `_x_` copies with `x` underlined. Pasted back with rich paste
+    /// on, that styling would be written as markup a second time (`__x__`). The document's
+    /// value is plain text, so the plain text is what a copy carries.
+    override func copy(_ sender: Any?) {
+      guard richPasteLanguage != nil, let range = selectedTextRange, !range.isEmpty else {
+        return super.copy(sender)
+      }
+      UIPasteboard.general.string = text(in: range) ?? ""
+    }
+
+    /// ``copy(_:)``'s plain text, then the selection removed through the input path.
+    override func cut(_ sender: Any?) {
+      guard richPasteLanguage != nil, let range = selectedTextRange, !range.isEmpty else {
+        return super.cut(sender)
+      }
+      UIPasteboard.general.string = text(in: range) ?? ""
+      replace(range, withText: "")
+    }
+
+    /// With ``richPasteLanguage`` set and a rich flavour on `pasteboard` that carries
+    /// formatting the language can write, replaces the selection with that markup
+    /// (``RichPasteMarkup``) and returns `true`. Otherwise touches nothing and returns `false`,
+    /// and the paste goes on as UIKit's own. Read only from `paste(_:)`, a user-initiated
+    /// paste, so reading the pasteboard raises no paste prompt.
+    func pasteFormattingAsMarkup(from pasteboard: UIPasteboard) -> Bool {
+      guard let language = richPasteLanguage,
+        let markup = RichPasteReader.markup(from: pasteboard, language: language),
+        let range = selectedTextRange
+      else { return false }
+      replace(range, withText: markup)
+      return true
     }
 
     override func pasteAndMatchStyle(_ sender: Any?) {

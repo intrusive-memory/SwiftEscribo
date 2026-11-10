@@ -721,6 +721,65 @@ struct EditorInputPathTests {
 
       #expect(fixture.text == block)
     }
+
+    /// A pasteboard whose RTF flavour underlines and bolds words, with the same text plain.
+    static func formattedPasteboard() -> NSPasteboard {
+      let pasteboard = NSPasteboard.withUniqueName()
+      let rich = NSMutableAttributedString(string: "An underlined and bold word.")
+      let base = NSFont.systemFont(ofSize: 12)
+      rich.addAttribute(.font, value: base, range: NSRange(location: 0, length: rich.length))
+      rich.addAttribute(
+        .underlineStyle, value: NSUnderlineStyle.single.rawValue,
+        range: NSRange(location: 3, length: 10))
+      rich.addAttribute(
+        .font, value: NSFont.boldSystemFont(ofSize: 12), range: NSRange(location: 18, length: 4))
+      let rtf = rich.rtf(from: NSRange(location: 0, length: rich.length), documentAttributes: [:])
+      pasteboard.declareTypes([.rtf, .string], owner: nil)
+      if let rtf { pasteboard.setData(rtf, forType: .rtf) }
+      pasteboard.setString(rich.string, forType: .string)
+      return pasteboard
+    }
+
+    @Test("Rich paste off: formatting is dropped, the plain flavour is inserted")
+    func richPasteOffIsVerbatim() {
+      let fixture = UndoableEditor(seededWith: "", language: .fountain)
+      fixture.editor.textView.readSelection(from: Self.formattedPasteboard())
+      #expect(fixture.text == "An underlined and bold word.")
+    }
+
+    @Test("Rich paste on: underline and bold become Fountain markup, in one undo action")
+    func richPasteOnWritesFountainMarkup() {
+      let fixture = UndoableEditor(seededWith: "", language: .fountain)
+      fixture.editor.textView.richPasteLanguage = .fountain
+      #expect(fixture.editor.textView.readSelection(from: Self.formattedPasteboard()))
+      settleEventGroup()
+      #expect(fixture.text == "An _underlined_ and **bold** word.")
+      #expect(fixture.registrations == 1)
+    }
+
+    @Test("Rich paste on, Markdown: bold is kept and underline is dropped")
+    func richPasteOnWritesMarkdownMarkup() {
+      let fixture = UndoableEditor(seededWith: "", language: .markdown)
+      fixture.editor.textView.richPasteLanguage = .markdown
+      fixture.editor.textView.readSelection(from: Self.formattedPasteboard())
+      #expect(fixture.text == "An underlined and **bold** word.")
+    }
+
+    @Test("Rich paste on, nothing formatted: the plain paste is unchanged")
+    func richPasteOnWithNoFormattingIsVerbatim() {
+      let fixture = UndoableEditor(seededWith: "")
+      fixture.editor.textView.richPasteLanguage = .markdown
+      let pasteboard = NSPasteboard.withUniqueName()
+      let rich = NSAttributedString(
+        string: "2 * 3 and snake_case", attributes: [.font: NSFont.systemFont(ofSize: 12)])
+      let rtf = rich.rtf(from: NSRange(location: 0, length: rich.length), documentAttributes: [:])
+      pasteboard.declareTypes([.rtf, .string], owner: nil)
+      if let rtf { pasteboard.setData(rtf, forType: .rtf) }
+      pasteboard.setString(rich.string, forType: .string)
+
+      fixture.editor.textView.readSelection(from: pasteboard)
+      #expect(fixture.text == "2 * 3 and snake_case")
+    }
   }
 
 #endif
