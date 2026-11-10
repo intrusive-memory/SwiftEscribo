@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo Changelog
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # Changelog
@@ -9,6 +9,25 @@ updated: 2026-11-09
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.7.0] — 2026-11-10
+
+### Added
+
+- Opt-in rich paste. `View.escriboPastesFormattingAsMarkup(_:)` (off by default) writes a
+  paste's bold, italics and underline as the document's markup instead of dropping them:
+  Fountain gets `**x**`, `*x*` and `_x_`, and Markdown gets `**x**`, `*x*` and `~~x~~`
+  (Markdown has no underline, so underline is dropped). Fountain scene headings, cues,
+  transitions and forced `.` headings get no markers, so an underlined slugline stays a
+  scene heading. Markers close at a line break and open again on the next line, and
+  whitespace at the edge of a styled run stays outside its markers. A paste with no
+  formatting the language can write is pasted verbatim, as before (DL-65). The pure
+  conversion is public as `EscriboCore.RichPasteMarkup`.
+  - macOS reads the pasteboard's attributed string in `readSelection(from:)`, so Paste,
+    Paste and Match Style, and services all go through it.
+  - iOS reads RTF, then flat RTFD, then HTML in `paste(_:)`. While the option is on, copy
+    and cut from the editor put plain text on the pasteboard. Otherwise copying the
+    editor's own styled text and pasting it back would double its markers.
 
 ## [0.6.3] — 2026-11-09
 

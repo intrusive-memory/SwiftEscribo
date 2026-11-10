@@ -79,7 +79,7 @@ breaking change.
 ## Installing it
 
 ```swift
-.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.6.3"))
+.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.7.0"))
 ```
 
 Then depend on whichever products you need — they are independent:
@@ -182,6 +182,14 @@ EscriboEmbed(
 
 Caret, selection, delete, undo, paste and accessibility rules are in the
 [CHANGELOG](CHANGELOG.md).
+
+### Rich paste
+
+Paste is verbatim by default. `.escriboPastesFormattingAsMarkup()` on the editor (or any
+ancestor view) makes a paste from a word processor or another screenwriting app keep its
+bold, italics and underline as Fountain `**x**`, `*x*` and `_x_`, or as Markdown `**x**`,
+`*x*` and `~~x~~`. Fountain scene headings, cues and transitions get no markers.
+`RichPasteMarkup` in `EscriboCore` is the platform-free conversion.
 
 ### Notices
 
