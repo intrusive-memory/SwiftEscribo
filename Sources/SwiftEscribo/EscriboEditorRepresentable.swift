@@ -324,14 +324,23 @@ final class EscriboEditorBridge: NSObject {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-      context.coordinator.makeEditor(
+      let scrollView = context.coordinator.makeEditor(
         language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
         focusOnAppear: focusOnAppear, handle: handle, well: well, onWellAction: onWellAction,
         embeds: embeds
       ).scrollView
+      applyRichPaste(to: scrollView.documentView, context: context)
+      return scrollView
+    }
+
+    /// Hands the text view the language its pastes are rewritten into, or `nil` (verbatim).
+    private func applyRichPaste(to view: NSView?, context: Context) {
+      (view as? EscriboNativeTextView)?.richPasteLanguage =
+        context.environment.escriboPastesFormattingAsMarkup ? language : nil
     }
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
+      applyRichPaste(to: nsView.documentView, context: context)
       context.coordinator.text = $text
       context.coordinator.update(
         language: language, mode: mode, theme: theme, appearance: appearance, text: text,
@@ -391,15 +400,24 @@ final class EscriboEditorBridge: NSObject {
     }
 
     func makeUIView(context: Context) -> UITextView {
-      context.coordinator.makeEditor(
+      let textView = context.coordinator.makeEditor(
         language: language, mode: mode, theme: theme, appearance: appearance, findBar: findBar,
         focusOnAppear: focusOnAppear, handle: handle, well: well, onWellAction: onWellAction,
         embeds: embeds,
         horizontalSizeClass: WellLane.HorizontalSizeClass(context.environment.horizontalSizeClass)
       ).textView
+      applyRichPaste(to: textView, context: context)
+      return textView
+    }
+
+    /// Hands the text view the language its pastes are rewritten into, or `nil` (verbatim).
+    private func applyRichPaste(to view: UITextView, context: Context) {
+      (view as? EscriboNativeTextView)?.richPasteLanguage =
+        context.environment.escriboPastesFormattingAsMarkup ? language : nil
     }
 
     func updateUIView(_ uiView: UITextView, context: Context) {
+      applyRichPaste(to: uiView, context: context)
       context.coordinator.text = $text
       context.coordinator.update(
         language: language, mode: mode, theme: theme, appearance: appearance, text: text,
