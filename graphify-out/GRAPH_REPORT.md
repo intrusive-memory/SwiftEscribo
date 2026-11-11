@@ -4,12 +4,12 @@
 - cluster-only mode — file stats not available
 
 ## Summary
-- 4143 nodes · 9199 edges · 171 communities (157 shown, 14 thin omitted)
-- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 566 edges (avg confidence: 0.81)
+- 4168 nodes · 9292 edges · 165 communities (152 shown, 13 thin omitted)
+- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 569 edges (avg confidence: 0.81)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `5e894ef5`
+- Built from commit: `4564f928`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -174,77 +174,71 @@
 - [[_COMMUNITY_Community 157|Community 157]]
 - [[_COMMUNITY_Community 158|Community 158]]
 - [[_COMMUNITY_Community 159|Community 159]]
-- [[_COMMUNITY_Community 160|Community 160]]
 - [[_COMMUNITY_Community 161|Community 161]]
 - [[_COMMUNITY_Community 162|Community 162]]
 - [[_COMMUNITY_Community 163|Community 163]]
 - [[_COMMUNITY_Community 164|Community 164]]
-- [[_COMMUNITY_Community 165|Community 165]]
-- [[_COMMUNITY_Community 166|Community 166]]
-- [[_COMMUNITY_Community 168|Community 168]]
-- [[_COMMUNITY_Community 169|Community 169]]
-- [[_COMMUNITY_Community 170|Community 170]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `EscriboNativeTextView` - 78 edges
 2. `MarkdownGrammar` - 73 edges
 3. `FountainGrammar` - 63 edges
 4. `placeCaretAtEnd()` - 47 edges
-5. `WellOverlay` - 45 edges
-6. `EditorCoordinator` - 41 edges
-7. `EscriboEditorBridge` - 38 edges
-8. `ProjectFrontMatter` - 37 edges
-9. `Expected` - 37 edges
-10. `EscriboStyler` - 35 edges
+5. `EditorCoordinator` - 45 edges
+6. `WellOverlay` - 45 edges
+7. `EscriboStyler` - 39 edges
+8. `EscriboEditorBridge` - 38 edges
+9. `ProjectFrontMatter` - 37 edges
+10. `Expected` - 37 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `macOS stale block cache finding` --references--> `EditorCoordinator`  [EXTRACTED]
   docs/missions/embed-spike/SPIKE_REPORT.md → Sources/SwiftEscribo/EditorCoordinator.swift
-- `EscriboSpan (range, kind, style, role)` --semantically_similar_to--> `Spans tile, they do not nest`  [INFERRED] [semantically similar]
-  docs/complete/fountain-surgeon-01/REQUIREMENTS.md → AGENTS.md
-- `Architecture §1–§10 (raw string is value, dimmed markers, convergence, parity)` --semantically_similar_to--> `Styling rules (alpha-only dimming, no setAttributedString, skip on marked text)`  [INFERRED] [semantically similar]
-  docs/complete/fountain-surgeon-01/REQUIREMENTS.md → AGENTS.md
 - `The zero-dependency charter` --semantically_similar_to--> `swift-markdown is test-only`  [INFERRED] [semantically similar]
   README.md → AGENTS.md
 - `Design: raw string is the value; markers dimmed not hidden` --semantically_similar_to--> `Architecture §1–§10 (raw string is value, dimmed markers, convergence, parity)`  [INFERRED] [semantically similar]
   README.md → docs/complete/fountain-surgeon-01/REQUIREMENTS.md
+- `EscriboScanner (fullScan / incrementalScan)` --semantically_similar_to--> `IncrementalScanner`  [AMBIGUOUS] [semantically similar]
+  README.md → AGENTS.md
+- `LineRecord (element, contentRange)` --semantically_similar_to--> `LineRecord`  [INFERRED] [semantically similar]
+  README.md → AGENTS.md
 
 ## Import Cycles
 - None detected.
 
-## Communities (171 total, 14 thin omitted)
+## Communities (165 total, 13 thin omitted)
 
 ### Community 0 - "Markdown Block Grammar"
 Cohesion: 0.06
-Nodes (31): NSTextViewDelegate, CoalescedUndoTests, CountingUndoManager, EditorInputPathTests, InputPathIsActuallyUsedTests, PasteIsVerbatimTests, placeCaret(), placeCaretAtEnd() (+23 more)
+Nodes (32): NSObject, NSTextViewDelegate, CoalescedUndoTests, CountingUndoManager, EditorInputPathTests, InputPathIsActuallyUsedTests, PasteIsVerbatimTests, placeCaret() (+24 more)
 
 ### Community 1 - "Undo Coalescing Tests"
-Cohesion: 0.06
-Nodes (46): Data, AlignedEditMeasurement, BlockAlignedEditTests, observe(), PerfDocument, PerfFixture, repeated(), report() (+38 more)
+Cohesion: 0.07
+Nodes (41): CueLayout, FountainGrammar, isASCIILower(), isASCIIUpper(), isSpaceOrTab(), RegionScan, blankSeparatesWhereNoteDoesNot(), blocksTileTheScan() (+33 more)
 
 ### Community 2 - "Fountain Line Grammar"
-Cohesion: 0.06
-Nodes (48): CGPoint, CGRect, ElementKind, EscriboScanner, LineRecord, Range, ScanResult, Bool (+40 more)
+Cohesion: 0.05
+Nodes (77): AGENTS.md — Agent Instructions, Architecture pipeline (String → LineIndex → spans/records → styler → TextKit 2), Current version 0.4.3, Fountain Surgeon Disagreement Register and Errata, EscriboToken (UTF-16 ranged token), The Fountain trap — character cue needs one-line lookahead/lookbehind, Ranged-token Fountain parser, OPERATION_FOUNTAIN_SURGEON_01_BRIEF.md (+69 more)
 
 ### Community 3 - "Well Tracking Tests"
-Cohesion: 0.05
-Nodes (43): alignmentRawValues(), alignmentSpellings(), autolinksInsideEmphasis(), bracketedEmailAutolink(), bracketedURIAutolink(), checkboxesDoNotChangeListNesting(), elementKindRawValues(), escapedPipesStayInsideCells() (+35 more)
-
-### Community 4 - "Markdown GFM Tests"
 Cohesion: 0.07
 Nodes (20): HighlightLog, ManualClock, WellOverlayTests, WellPlacementTests, WellPlaybackRuleTests, WellTrackerTests, BlockKind, Bool (+12 more)
 
+### Community 4 - "Markdown GFM Tests"
+Cohesion: 0.06
+Nodes (74): Apple Silicon only (arch=arm64, ARCHS=arm64), Apple Silicon only — always pin arch=arm64, \r\n is one terminator; never normalized; never split surrogate pairs, CI runs only on ready PRs (draft-pr-ci-gate), EscriboCore (Foundation-only parser), EscriboPerformanceTests, graphify-out/ queryable codemap, Line records must be lossless for the writer (+66 more)
+
 ### Community 5 - "Scan Invariant Harness"
 Cohesion: 0.05
-Nodes (71): CI runner intermittently lacks pinned simulator, macOS over-reports typed character's edited range, Literal ]] closes Fountain note before JSON scanning, Open decision: notice hides read-aloud stop, Per-embed accessibility subviews in container, OPERATION PRESSED FLOWER Iteration 01 Brief (KEEP), Block-aligned incremental rescan window (+64 cap), EscriboWell (+63 more)
+Nodes (72): CI runner intermittently lacks pinned simulator, Font service misbehaves under load, macOS over-reports typed character's edited range, Literal ]] closes Fountain note before JSON scanning, Open decision: notice hides read-aloud stop, Per-embed accessibility subviews in container, OPERATION PRESSED FLOWER Iteration 01 Brief (KEEP), Block-aligned incremental rescan window (+64 cap) (+64 more)
 
 ### Community 6 - "Fountain Fixture Corpus"
-Cohesion: 0.06
-Nodes (34): Never, NSButton, NSView, Bool, CGFloat, CGPoint, CGRect, EscriboBlock (+26 more)
+Cohesion: 0.05
+Nodes (38): CustomStringConvertible, Block, blank, blockquote, code, frontmatter, heading, html (+30 more)
 
 ### Community 7 - "Project Front Matter Models"
-Cohesion: 0.11
-Nodes (24): CueLayout, FountainGrammar, isASCIILower(), isASCIIUpper(), isSpaceOrTab(), RegionScan, FountainGrammarTests, BlockDialect (+16 more)
+Cohesion: 0.06
+Nodes (33): Never, NSButton, Bool, CGFloat, CGPoint, CGRect, EscriboBlock, EscriboWell (+25 more)
 
 ### Community 8 - "Editor Platform Types"
 Cohesion: 0.06
@@ -252,111 +246,111 @@ Nodes (29): Bool, CGFloat, CGRect, Double, EscriboBlock, EscriboWellItem, Int, S
 
 ### Community 9 - "Fountain Writer"
 Cohesion: 0.06
-Nodes (31): Any, EscriboSpan, FontResolver, NSParagraphStyle, ParagraphStyleRun, ResolvedStyle, Any, Bool (+23 more)
+Nodes (33): Any, EditorStyleEnvironment, EscriboSpan, EscriboTheme, FontResolver, LineRecord, ParagraphStyleRun, ResolvedStyle (+25 more)
 
 ### Community 10 - "Mac Text View Tests"
+Cohesion: 0.07
+Nodes (40): EmbedLayoutController, EmbedLayoutFragment, EmbedRowFragment, NSParagraphStyle, NSTextElement, NSTextLayoutManagerDelegate, NSTextLineFragment, NSTextLocation (+32 more)
+
+### Community 11 - "Fountain Writer Tests"
 Cohesion: 0.06
 Nodes (35): EmbedTapRecognizer, Bool, CGPoint, EmbeddedBlock, EscriboTextView, NSRange, Set, String (+27 more)
 
-### Community 11 - "Fountain Writer Tests"
-Cohesion: 0.05
-Nodes (42): EmbedAccessibilityElement, EmbedStateAccessibilityElement, table, Language, ParagraphMetrics, Double, ElementKind, EscriboAppearance (+34 more)
-
 ### Community 12 - "Front Matter Fixtures"
-Cohesion: 0.08
-Nodes (20): FontGeometry, FontTraits, PlatformSymbolicTraits, Bool, CGFloat, Double, FontGeometry, FontSpec (+12 more)
+Cohesion: 0.07
+Nodes (18): CustomTestStringConvertible, FountainWriterIdempotenceTests, FountainWriterKeySpanTests, FountainWriterTitlePageTests, TitlePageOracle, WriterDocument, EditCorpusDocument, LineIndexIncrementalTests (+10 more)
 
 ### Community 13 - "Markdown Inline Parsing"
 Cohesion: 0.08
-Nodes (23): Codable, FilePattern, multiple, single, ComparatorSelfTests, EpisodeIndexEntry, EpisodeListEntry, FrontMatterComparison (+15 more)
+Nodes (20): FontGeometry, FontTraits, PlatformSymbolicTraits, Bool, CGFloat, Double, FontGeometry, FontSpec (+12 more)
 
 ### Community 14 - "Charter and Defect Log"
-Cohesion: 0.08
-Nodes (22): RichPasteMarkup, Run, String, KindVocabularyTests, requireEquatable(), requireHashable(), requireSendable(), RichPasteMarkupTests (+14 more)
+Cohesion: 0.09
+Nodes (23): FountainWriter, isSpaceOrTab(), ExternalTextSource, ExternalWriterSource, PublicScannerTests, PublicSurfaceTests, PublicWriterTests, requireEquatableType() (+15 more)
 
 ### Community 15 - "Editor Coordinator Tests"
 Cohesion: 0.08
-Nodes (51): AGENTS.md — Agent Instructions, Architecture pipeline (String → LineIndex → spans/records → styler → TextKit 2), Current version 0.4.3, Fountain Surgeon Disagreement Register and Errata, OPERATION_FOUNTAIN_SURGEON_01_BRIEF.md, Hard constraints (zero deps, no regex, make only, arm64), Queryable graphify codemap (graphify-out/), swift-markdown is test-only (+43 more)
+Nodes (23): Codable, FilePattern, multiple, single, ComparatorSelfTests, EpisodeIndexEntry, EpisodeListEntry, FrontMatterComparison (+15 more)
 
 ### Community 16 - "Fixture Byte Oracle"
 Cohesion: 0.08
-Nodes (12): FountainFixture, FountainFixtureCorpusTests, FountainFixtures, EditorCoordinatorBlockQueryTests, Bool, Int, ScanResult, SourceLocation (+4 more)
+Nodes (22): RichPasteMarkup, Run, String, KindVocabularyTests, requireEquatable(), requireHashable(), requireSendable(), RichPasteMarkupTests (+14 more)
 
 ### Community 17 - "UTF-16 Source Tests"
 Cohesion: 0.08
-Nodes (18): BlockKind, EscriboStyler, NSTextStorage, BlockCacheSpliceTests, Keystroke, CountingEmbedProvider, EmbedAPITests, EditorCoordinator (+10 more)
+Nodes (12): FountainFixture, FountainFixtureCorpusTests, FountainFixtures, EditorCoordinatorBlockQueryTests, Bool, Int, ScanResult, SourceLocation (+4 more)
 
 ### Community 18 - "Fountain Region Tests"
-Cohesion: 0.08
-Nodes (24): ElementKind, Language, SpanKind, SpanRole, StyleSet, TableAlignment, Hashable, OptionSet (+16 more)
+Cohesion: 0.07
+Nodes (27): ElementKind, Language, SpanKind, SpanRole, StyleSet, TableAlignment, Hashable, OptionSet (+19 more)
 
 ### Community 19 - "Well Tracker"
-Cohesion: 0.07
-Nodes (47): EscriboEditor (SwiftUI view), EscriboSpan (flat tiling spans), EscriboToken (UTF-16 ranged token), Ranged-token Fountain parser, Undo not yet on iOS — deliberate, deferred, macOS and iOS are peers, Alpha-only marker dimming, Marker dimming is alpha-only via SpanRole.marker (+39 more)
+Cohesion: 0.08
+Nodes (16): FountainWriterBodyElementTests, FountainWriterCorpusTests, FountainWriterDialogueTests, FountainWriterHarness, FountainWriterMarkerTests, FountainWriterTerminatorTests, FountainWriterVerbatimTests, LineIndexTests (+8 more)
 
 ### Community 20 - "UTF-16 Text Source"
 Cohesion: 0.08
-Nodes (20): AnyCodable, FrontMatterKeyScan, FrontMatterTranscriptionTests, KnownKeyOracleTests, KnownProjectKeys, ProjectFixture, ProjectFixtures, ProjectPublicSurfaceTests (+12 more)
+Nodes (46): Composition order base→element→kind→style→role, ElementKind (struct with static members), EscriboSpan (flat tiling spans), EscriboTheme (value table), Alpha-only marker dimming, Marker dimming is alpha-only via SpanRole.marker, Marker dimming is alpha-only, markerOpacity (single scalar on theme) (+38 more)
 
 ### Community 21 - "Writer Title Page Tests"
+Cohesion: 0.08
+Nodes (20): AnyCodable, FrontMatterKeyScan, FrontMatterTranscriptionTests, KnownKeyOracleTests, KnownProjectKeys, ProjectFixture, ProjectFixtures, ProjectPublicSurfaceTests (+12 more)
+
+### Community 22 - "Styler and Font Resolution"
+Cohesion: 0.06
+Nodes (28): CGFloat, IOSEmbedAccessibility, IOSEmbedInput, IOSEmbedToolTips, MacEmbedToolTips, MainActor, NSItemProvider, NSSelectionAffinity (+20 more)
+
+### Community 23 - "Kind Vocabulary Types"
 Cohesion: 0.16
 Nodes (22): BracketOpener, ContentPiece, DelimiterRun, InlineAttribute, InlineDestination, InlineKindCode, InlineWalk, isASCIIDigit() (+14 more)
 
-### Community 22 - "Styler and Font Resolution"
+### Community 24 - "Block Grouper"
 Cohesion: 0.08
 Nodes (45): Charter Constraints (no regex, EscriboCore imports nothing, no XCTest), DL-111 — Title-page span route round-trip obligation, DL-130 — Highland title-page keys parse defect, DL-138 — MarkdownGrammar.lookahead raised 0→1, DL-170/DL-149/DL-172 — Rediscovered defect, supervisor bookkeeping failure, DL-31 / DL-25 — Gate cannot catch grammar state omission, DL-63 — Representable conformance deferral to Sortie 12, DL-74 — External text replacement Rule 4 deferred to Sortie 25 (+37 more)
 
-### Community 23 - "Kind Vocabulary Types"
+### Community 25 - "Editor Coordinator"
 Cohesion: 0.09
 Nodes (16): CoordinatorFixtures, EditorCoordinatorApplicationTests, EditorCoordinatorEditTranslationTests, EditorCoordinatorMarkedTextTests, EditorCoordinatorOwnershipTests, TextStorageTextSourceTests, EditorCoordinator, EscriboStyler (+8 more)
 
-### Community 24 - "Block Grouper"
+### Community 26 - "Native Mac Text View"
 Cohesion: 0.08
-Nodes (42): The Fountain trap — character cue needs one-line lookahead/lookbehind, The Fountain trap (forward lookahead, backward widening), Fountain trap, backward: rescan from one line before edit, Fountain trap, forward: character cue needs one line lookahead, Gate blind to grammar state omission, Gate test: incrementalScan == fullScan, incrementalScan == fullScan gate test, Incremental scanning by line-state convergence (+34 more)
+Nodes (41): IncrementalScanner, LineRecord, No regex in scanners rule, 0.4.2 — WellHighlightView replaces rendering attribute, Block retention is a splice, not a rebuild, Internal block grouper shared by full and incremental scanners, 0.4.0 — Block grouping rules (Markdown and Fountain), Block retention is a splice via shifted(byLines:byOffset:), not a rebuild (+33 more)
 
-### Community 25 - "Editor Coordinator"
+### Community 27 - "Scan Gate Edit Shapes"
 Cohesion: 0.14
 Nodes (15): ConstructedValueRoundTripTests, FixtureByteOracleTests, IndexEntry, LiteralCastValueTests, Member, RawFixture, RawFixtureSelfTests, Any (+7 more)
 
-### Community 26 - "Native Mac Text View"
-Cohesion: 0.10
-Nodes (41): \r\n is one terminator; never normalized; never split surrogate pairs, EscriboCore (Foundation-only parser), FOUNTAIN_SURGEON_01_ERRATA.md, fountain-surgeon-01 EXECUTION_PLAN.md, OPERATION FOUNTAIN SURGEON (mission record), fountain-surgeon-01 REQUIREMENTS.md, fountain-surgeon-01 SUPERVISOR_STATE.md (decisions log), Gate is blind to grammar-state omission (288/288 with no character cues) (+33 more)
-
-### Community 27 - "Scan Gate Edit Shapes"
+### Community 28 - "Incremental Scanner"
 Cohesion: 0.07
 Nodes (7): FountainRegionTests, Int, Range, ScanResult, SpanKind, SpanRole, String
 
-### Community 28 - "Incremental Scanner"
+### Community 29 - "Incremental Scanner Tests"
 Cohesion: 0.14
 Nodes (17): CountingUndoManager, NSPasteboard, NSWindow, MacEmbedBehaviourTests, MacEmbedHarness, Bool, CGPoint, CGRect (+9 more)
 
-### Community 29 - "Incremental Scanner Tests"
-Cohesion: 0.11
-Nodes (11): FountainWriterIdempotenceTests, FountainWriterKeySpanTests, FountainWriterTitlePageTests, TitlePageOracle, WriterDocument, Bool, FountainFixture, Int (+3 more)
-
 ### Community 30 - "Well Lane Layout"
-Cohesion: 0.10
-Nodes (38): Apple Silicon only (arch=arm64, ARCHS=arm64), Apple Silicon only — always pin arch=arm64, CI runs only on ready PRs (draft-pr-ci-gate), EscriboPerformanceTests, Use make, never swift build/test, Makefile / make targets (never swift build), Makefile Targets (make test-core, lint, format), Font service misbehaves under load (+30 more)
+Cohesion: 0.13
+Nodes (23): CGPoint, CGRect, ElementKind, EscriboBlock, EscriboScanner, Language, Range, Any (+15 more)
 
 ### Community 31 - "Paragraph Geometry Tests"
-Cohesion: 0.11
-Nodes (13): CustomTestStringConvertible, EditCorpusDocument, LineIndexIncrementalTests, LineIndexTests, TerminatorFixture, Int, LineIndex, Range (+5 more)
-
-### Community 32 - "Front Matter Coding Keys"
-Cohesion: 0.07
-Nodes (27): CGFloat, IOSEmbedAccessibility, IOSEmbedInput, IOSEmbedToolTips, EscriboTextView (iOS), MacEmbedToolTips, EscriboTextView (macOS), MainActor (+19 more)
-
-### Community 33 - "Kind Vocabulary Tests"
-Cohesion: 0.15
-Nodes (22): AnyCodable, CastMember, Date, Decoder, DynamicCodingKey, ProjectFrontMatter, FilePattern, Int (+14 more)
-
-### Community 34 - "Fountain Frontmatter Tests"
 Cohesion: 0.14
 Nodes (19): CGSize, NSAttributedString, PlatformFont, Bool, CGContext, CGFloat, CGPoint, CGRect (+11 more)
 
-### Community 35 - "Well Construction Tests"
+### Community 32 - "Front Matter Coding Keys"
 Cohesion: 0.12
 Nodes (18): EmbedAccessibilityContainer, NSCoder, Bool, CGRect, EmbedAccessibilityElement, EmbeddedBlock, EmbedStateAccessibilityElement, EscriboEmbed (+10 more)
+
+### Community 33 - "Kind Vocabulary Tests"
+Cohesion: 0.16
+Nodes (16): FountainAffordanceOutcome, ListContinuation, NSRange, ElementKind, FountainAffordanceOutcome, Int, ListContinuation, NSRange (+8 more)
+
+### Community 34 - "Fountain Frontmatter Tests"
+Cohesion: 0.10
+Nodes (33): Custom NSTextLayoutFragment (frame override), SpikeBlockEmbedController, SpikeEmbedSelection (constrain/deletionRange), BlockEmbedSpikeCoreTests, BlockEmbedSpikeIOSTests, BlockEmbedSpikeMacTests, Atomic Block Embed (single-row paragraph), NSTextLayoutManagerDelegate textLayoutFragmentFor (+25 more)
+
+### Community 35 - "Well Construction Tests"
+Cohesion: 0.12
+Nodes (25): Double, table, FontSpec, ParagraphMetrics, Double, ElementKind, Int, ParagraphMetrics (+17 more)
 
 ### Community 36 - "External Text Replacement"
 Cohesion: 0.18
@@ -375,16 +369,16 @@ Cohesion: 0.13
 Nodes (15): EmbedCallbackRecorder, Fixture, IOSEmbedInputTests, Bool, EmbedLayoutHarness, EscriboBlock, EscriboNativeTextView, EscriboTextView (+7 more)
 
 ### Community 40 - "Editor Mode Switching Tests"
-Cohesion: 0.13
-Nodes (10): FountainWriterBodyElementTests, FountainWriterCorpusTests, FountainWriterDialogueTests, FountainWriterHarness, FountainWriterMarkerTests, FountainWriterTerminatorTests, FountainWriterVerbatimTests, FountainFixture (+2 more)
+Cohesion: 0.11
+Nodes (13): BlockKind, EscriboStyler, NSTextStorage, CountingEmbedProvider, EmbedAPITests, BlockKind, CGRect, EscriboBlock (+5 more)
 
 ### Community 41 - "Line Grammar Protocol"
-Cohesion: 0.16
-Nodes (11): IncrementalScannerTests, ScanCorpusDocument, CueGrammar, FenceGrammar, G, Int, Range, ScanResult (+3 more)
+Cohesion: 0.08
+Nodes (24): CaseIterable, CastMember, CodingKeys, actor, character, gender, language, voiceDescription (+16 more)
 
 ### Community 42 - "Span Model Tests"
-Cohesion: 0.15
-Nodes (27): EditorCoordinator, EditorMode, EscriboAppearance, EscriboBlock, EscriboEditorHandle, EscriboTheme, EscriboWell, EscriboWellItem (+19 more)
+Cohesion: 0.09
+Nodes (31): Link to 0.5.0 incomplete requirements, Current version marker 0.4.4 (dev suffix convention), EscriboBlock.ID (composite line+offset), EscriboWell.spokenRange, Release 0.4.2 — spoken-word highlight fix, Release 0.4.5 — elementStyles table, 0.4.2 — spoken-word highlight fix, WellHighlightView (overlay sublayer per line segment) (+23 more)
 
 ### Community 43 - "Cast Member Model"
 Cohesion: 0.17
@@ -392,199 +386,199 @@ Nodes (19): Convergence, IncrementalScanner, JoinableRun, JoinTarget, LineIndex,
 
 ### Community 44 - "List Continuation"
 Cohesion: 0.17
-Nodes (7): EscriboTextView, MacTextViewConstructionTests, MacTextViewFindBarTests, MacTextViewFocusOnAppearTests, MacTextViewStylingTests, EscriboTextView, NSWindow
+Nodes (11): IncrementalScannerTests, ScanCorpusDocument, CueGrammar, FenceGrammar, G, Int, Range, ScanResult (+3 more)
 
 ### Community 45 - "Fountain Block Grouping Tests"
+Cohesion: 0.16
+Nodes (7): EscriboTextView, MacTextViewConstructionTests, MacTextViewFindBarTests, MacTextViewFocusOnAppearTests, MacTextViewStylingTests, EscriboTextView, NSWindow
+
+### Community 46 - "Container Span Tests"
 Cohesion: 0.12
 Nodes (20): BlockKind, Bool, CGFloat, Double, EscriboBlock, NSRange, Set, String (+12 more)
 
-### Community 46 - "Container Span Tests"
+### Community 47 - "Font Resolver"
 Cohesion: 0.18
 Nodes (13): EmbedLayoutFixture, EmbedLayoutHarness, EmbedLayoutTests, LaidOutParagraph, CGFloat, CGRect, Double, EscriboTextView (+5 more)
 
-### Community 47 - "Font Resolver"
-Cohesion: 0.10
-Nodes (28): Current version marker 0.4.4 (dev suffix convention), 0.4.2 — WellHighlightView replaces rendering attribute, applyExternalText, 0.4.0 — Block grouping rules (Markdown and Fountain), 0.4.0 — EscriboBlock, BlockKind, ScanResult.blocks, SwiftEscribo Changelog, EmbedLayoutFragment, View.escriboPastesFormattingAsMarkup (+20 more)
-
 ### Community 48 - "Project Front Matter Merging"
+Cohesion: 0.11
+Nodes (28): Context, EditorCoordinator, EditorMode, EscriboAppearance, EscriboEditorHandle, EscriboWell, NSScrollView, NSViewRepresentable (+20 more)
+
+### Community 49 - "Line Index Incremental Tests"
+Cohesion: 0.17
+Nodes (5): Expected, MarkdownInlineTests, ScanResult, SourceLocation, String
+
+### Community 50 - "Fountain Emphasis Tests"
 Cohesion: 0.15
 Nodes (12): GeometryChecks, ParagraphGeometryTests, Bool, CGFloat, Double, ElementKind, EscriboStyler, EscriboTheme (+4 more)
 
-### Community 49 - "Line Index Incremental Tests"
+### Community 51 - "Paragraph Geometry"
 Cohesion: 0.19
 Nodes (13): CountingNotice, WellNoticeOverlayTests, BlockKind, Bool, CGFloat, CGPoint, EscriboBlock, EscriboTextView (+5 more)
 
-### Community 50 - "Fountain Emphasis Tests"
+### Community 52 - "Theme Value Types"
 Cohesion: 0.14
-Nodes (18): PaintedDocument, PaintedLine, paintedLines(), ScanInvariants, PaintedSpan, Bool, ElementKind, Int (+10 more)
+Nodes (16): CALayer, NSTextRange, NSView, Bool, CGFloat, CGPoint, CGRect, EscriboNativeTextView (+8 more)
 
-### Community 51 - "Paragraph Geometry"
+### Community 53 - "List Continuation Tests"
+Cohesion: 0.10
+Nodes (21): alignmentRawValues(), alignmentSpellings(), autolinksInsideEmphasis(), bracketedEmailAutolink(), bracketedURIAutolink(), checkboxesDoNotChangeListNesting(), escapedPipesStayInsideCells(), nearMissesAreNotCheckboxes() (+13 more)
+
+### Community 54 - "Line Index"
 Cohesion: 0.07
 Nodes (27): KnownCodingKeys, audioDir, author, cast, created, description, episodePath, episodes (+19 more)
 
-### Community 52 - "Theme Value Types"
-Cohesion: 0.13
-Nodes (17): NSObject, NSPoint, NSViewToolTipOwner, CGPoint, CGRect, EscriboTextView, Notification, NSView (+9 more)
-
-### Community 53 - "List Continuation Tests"
-Cohesion: 0.12
-Nodes (26): Composition order base→element→kind→style→role, ElementKind (struct with static members), EscriboTheme (value table), Paragraph geometry in characters and line heights, never points, Paragraph geometry in characters and line heights, not points (10 CPI), Source mode is a built-in theme, not a code path, SpanKind (struct with static members), SpanKind/ElementKind are structs, not enums (+18 more)
-
-### Community 54 - "Line Index"
-Cohesion: 0.13
-Nodes (26): Custom NSTextLayoutFragment (frame override), SpikeBlockEmbedController, SpikeEmbedSelection (constrain/deletionRange), BlockEmbedSpikeCoreTests, BlockEmbedSpikeIOSTests, BlockEmbedSpikeMacTests, Atomic Block Embed (single-row paragraph), NSTextLayoutManagerDelegate textLayoutFragmentFor (+18 more)
-
 ### Community 55 - "Hostile Test Grammars"
-Cohesion: 0.17
-Nodes (13): ListContinuation, NSRange, NSString, ElementKind, Int, ListContinuation, NSPasteboard, NSRange (+5 more)
+Cohesion: 0.12
+Nodes (25): applyExternalText, SwiftEscribo Changelog, EscriboEmbed.Action.editAsTextID, EscriboEmbed.Action.editAsTextID, EscriboEmbed.toolTip, EmbedLayoutFragment, EscriboEmbed (Badge, Action), EscriboEmbed.StateElement (+17 more)
 
 ### Community 56 - "CommonMark Differential Oracle"
+Cohesion: 0.13
+Nodes (16): NSPoint, NSViewToolTipOwner, CGPoint, CGRect, EscriboTextView, Notification, NSView, String (+8 more)
+
+### Community 57 - "iOS Editor Bridge"
 Cohesion: 0.12
 Nodes (5): NSSize, EscriboWellTests, CGFloat, EscriboTextView, NSWindow
 
-### Community 57 - "iOS Editor Bridge"
-Cohesion: 0.30
-Nodes (10): FountainWriter, isSpaceOrTab(), Bool, Int, LineRecord, Range, String, UInt16 (+2 more)
-
 ### Community 58 - "Mac Editor Host"
+Cohesion: 0.19
+Nodes (14): Bool, DynamicCodingKey, IntroOutroAssets, ProjectType, overview, project, Int, NSString (+6 more)
+
+### Community 59 - "Frontmatter Scanning"
+Cohesion: 0.35
+Nodes (7): MarkdownBlockState, Indent, EscriboSpan, GrammarLine, LineScan, LineState, LineWindow
+
+### Community 60 - "Line State Model"
 Cohesion: 0.12
 Nodes (10): MarkdownGrammar, FountainInMarkdownTests, BlockDialect, ContentPiece, ElementKind, SpanKind, TableAlignment, Bool (+2 more)
 
-### Community 59 - "Frontmatter Scanning"
+### Community 61 - "Hostile Fixture Tests"
 Cohesion: 0.12
 Nodes (8): FountainFrontmatterTests, Bool, Int, Range, ScanResult, SpanKind, SpanRole, String
 
-### Community 60 - "Line State Model"
+### Community 62 - "Markdown Block Grouping Tests"
 Cohesion: 0.16
 Nodes (4): GlosaScannerTests, Bool, SpanKind, String
 
-### Community 61 - "Hostile Fixture Tests"
+### Community 63 - "Fountain Tab Affordances"
 Cohesion: 0.15
 Nodes (14): Bool, NSRange, NSString, String, Bool, Int, NSRange, NSString (+6 more)
 
-### Community 62 - "Markdown Block Grouping Tests"
-Cohesion: 0.14
-Nodes (24): Block retention is a splice, not a rebuild, Internal block grouper shared by full and incremental scanners, Block retention is a splice via shifted(byLines:byOffset:), not a rebuild, Blocks tile lines with no gaps/overlaps; scoped to rescanned window, 0.4.0 — EditorCoordinator public block queries, EditorCoordinator.block(atUTF16Offset:) / block(at:) / blocks(in:), EditorCoordinator.textStorage(_:didProcessEditing:range:changeInLength:), Escribir ScriptPreview contiguity rule (ported) (+16 more)
+### Community 64 - "Agent Architecture Docs"
+Cohesion: 0.20
+Nodes (9): Binding, Binding, EscriboTextView, Notification, String, UITextView, EscriboEditorBridge, UITextView (+1 more)
 
-### Community 63 - "Fountain Tab Affordances"
+### Community 65 - "Styler Cache Tests"
+Cohesion: 0.10
+Nodes (21): EmbedAccessibilityElement, EmbedStateAccessibilityElement, EscriboWellItem, Bool, CGFloat, EditorCoordinator, EmbedAccessibilityElement, EmbedLayoutController (+13 more)
+
+### Community 66 - "Changelog and README"
+Cohesion: 0.15
+Nodes (17): EscriboBlockGrouper.sameDepthRun, GrammarLine, LineGrammar, LineScan, LineWindow, FountainGrammar (note region scanning), BlockDialect, Bool (+9 more)
+
+### Community 67 - "Resolved Grammar Dispatch"
 Cohesion: 0.30
 Nodes (8): JSONNoteContext, JSONNoteState, Bool, EscriboSpan, Int, Range, UInt16, UInt64
 
-### Community 64 - "Agent Architecture Docs"
-Cohesion: 0.22
-Nodes (10): Indent, isBullet(), isDigit(), isSpaceOrTab(), MarkdownBlockState, Bool, Int, Range (+2 more)
+### Community 68 - "Built-In Themes"
+Cohesion: 0.26
+Nodes (12): observe(), repeated(), report(), ScanFacts, timed(), Timing, ObservationTests, R (+4 more)
 
-### Community 65 - "Styler Cache Tests"
+### Community 69 - "Project Front Matter Core"
 Cohesion: 0.18
 Nodes (10): Host, MacEmbedAccessibilityTests, CGRect, EmbedAccessibilityElement, EmbedLayoutHarness, EscriboBlock, EscriboEmbed, EscriboNativeTextView (+2 more)
 
-### Community 66 - "Changelog and README"
+### Community 70 - "Well Button"
+Cohesion: 0.13
+Nodes (22): Fixture: A Full Moon Over Aunt Stanley's Boobie Barn PROJECT.md, glosaJSON span kinds, ProjectFrontMatter.normalizingPaths, ProjectFrontMatter.normalizingPaths(relativeTo:), Release 0.6.2 (Windows path normalization), 0.6.2 — Windows path normalization fix, Fixture: Confessions of a Software Spellcaster PROJECT.md, Fixture: Daily Dao PROJECT.md (+14 more)
+
+### Community 71 - "iOS Editor Host"
 Cohesion: 0.13
 Nodes (20): Phase, awaitingContent, awaitingQuote, inactive, json, malformed, LineState, NestedFountainState (+12 more)
 
-### Community 67 - "Resolved Grammar Dispatch"
-Cohesion: 0.16
-Nodes (16): GrammarLine, LineGrammar, LineScan, LineWindow, FountainGrammar (note region scanning), BlockDialect, Bool, ContentPiece (+8 more)
-
-### Community 68 - "Built-In Themes"
-Cohesion: 0.36
-Nodes (6): Indent, EscriboSpan, GrammarLine, LineScan, LineState, LineWindow
-
-### Community 69 - "Project Front Matter Core"
+### Community 72 - "Fountain Affordance Tests"
 Cohesion: 0.19
 Nodes (6): JSONNoteMultiLineTests, JSONNoteContext, ScanResult, SpanKind, SpanRole, String
 
-### Community 70 - "Well Button"
+### Community 73 - "Fountain Emphasis"
 Cohesion: 0.19
 Nodes (7): MarkdownCrossLineSpanTests, Int, Range, ScanResult, SourceLocation, String, StyleSet
 
-### Community 71 - "iOS Editor Host"
+### Community 74 - "Glosa Directive Scanner"
 Cohesion: 0.16
 Nodes (5): MarkdownGrammarTests, Int, ScanResult, SourceLocation, String
 
-### Community 72 - "Fountain Affordance Tests"
+### Community 75 - "Mission Errata and CI"
 Cohesion: 0.15
 Nodes (13): GateDocument, GateEditGenerator, GateStep, ScanGateTests, SeededGenerator, RandomNumberGenerator, Bool, Grammar (+5 more)
 
-### Community 73 - "Fountain Emphasis"
+### Community 76 - "SwiftUI Editor View"
+Cohesion: 0.20
+Nodes (12): Bool, EscriboBlock, EscriboEmbed, EscriboEmbedProvider, Int, Range, String, TextEdit (+4 more)
+
+### Community 77 - "Geometry Rule Set Tests"
 Cohesion: 0.14
 Nodes (8): BindingBox, ExternalTextReplacementTests, TextStorageMutationCounter, Binding, Notification, NSRange, NSTextStorage, String
 
-### Community 74 - "Glosa Directive Scanner"
+### Community 78 - "iOS Text View Tests"
 Cohesion: 0.22
 Nodes (11): WellHighlightRenderingTests, BlockKind, CGFloat, CGRect, EscriboBlock, EscriboTextView, Int, Language (+3 more)
 
-### Community 75 - "Mission Errata and CI"
-Cohesion: 0.13
-Nodes (21): Fixture: A Full Moon Over Aunt Stanley's Boobie Barn PROJECT.md, glosaJSON span kinds, ProjectFrontMatter.normalizingPaths, ProjectFrontMatter.normalizingPaths(relativeTo:), Release 0.6.2 (Windows path normalization), 0.6.2 — Windows path normalization fix, Fixture: Confessions of a Software Spellcaster PROJECT.md, Fixture: Daily Dao PROJECT.md (+13 more)
+### Community 79 - "Styling Test Fixtures"
+Cohesion: 0.21
+Nodes (9): Indent, isBullet(), isDigit(), isSpaceOrTab(), Bool, Int, Range, UInt16 (+1 more)
 
-### Community 76 - "SwiftUI Editor View"
+### Community 80 - "Lint and Charter Rules"
 Cohesion: 0.10
 Nodes (7): requireEquatable(), requireSendable(), SpanModelTests, Bool, Int, Range, T
 
-### Community 77 - "Geometry Rule Set Tests"
+### Community 81 - "Project Fixtures and Decisions"
 Cohesion: 0.26
 Nodes (11): Bool, ElementKind, Int, Range, String, UInt16, ListContinuation, literalNewline (+3 more)
 
-### Community 78 - "iOS Text View Tests"
-Cohesion: 0.22
-Nodes (12): EmbedLayoutController, NSTextLayoutManagerDelegate, Double, EditorCoordinator, EscriboNativeTextView, EscriboTheme, FontSpec, Int (+4 more)
+### Community 82 - "Escribo Scanner Facade"
+Cohesion: 0.12
+Nodes (21): LineIndex, LineState (public but opaque), LineState is public but opaque, NestedFountainState, CastMember.merge(with:strategy:) / MergeStrategy / withCast(_:), EscriboProject product (PROJECT.md front-matter model), Known limitations — EscriboProject (episodes without season, withCast, MergeStrategy), Limitation: blockquote/list-item content not re-scanned (no container axis) (+13 more)
 
-### Community 79 - "Styling Test Fixtures"
+### Community 83 - "Markdown Block Kinds"
 Cohesion: 0.17
-Nodes (17): blankSeparatesWhereNoteDoesNot(), blocksTileTheScan(), cueParentheticalAndDialogueAreOneSpeechBlock(), everyElementOnOnePage(), FountainBlockGroupingTests, GroupingCase, groupingTableHolds(), incrementalBlocksCarryDocumentLineIndices() (+9 more)
+Nodes (13): ElementKind, HostileGrammar, isAllCaps(), isFenceLine(), PlainTextGrammar, SpanKind, SurrogateSplittingGrammar, Bool (+5 more)
 
-### Community 80 - "Lint and Charter Rules"
+### Community 84 - "Editor Handle"
 Cohesion: 0.23
 Nodes (7): MarkdownContainerSpanTests, Int, Range, ScanResult, SourceLocation, String, StyleSet
 
-### Community 81 - "Project Fixtures and Decisions"
-Cohesion: 0.13
-Nodes (14): CastMember, Gender, female, male, nonBinary, notSpecified, MergeStrategy, combine (+6 more)
-
-### Community 82 - "Escribo Scanner Facade"
-Cohesion: 0.14
-Nodes (20): Link to 0.5.0 incomplete requirements, EscriboBlock.ID (composite line+offset), Escribir 1.2.0 (consumer, REQUIREMENTS-1.2.0 § 4), EscriboWell, EscriboWell.progress (span bar fill), EscriboWellItem, EscriboWellItemState (idle, busy, active, failed) — proposed, R-1.2: generic state vocabulary (busy, not generating) (+12 more)
-
-### Community 83 - "Markdown Block Kinds"
-Cohesion: 0.50
-Nodes (3): ContentPiece, ContentPiece, EscriboSpan
-
-### Community 84 - "Editor Handle"
-Cohesion: 0.18
-Nodes (13): ElementKind, HostileGrammar, isAllCaps(), isFenceLine(), PlainTextGrammar, SpanKind, SurrogateSplittingGrammar, Bool (+5 more)
-
 ### Community 85 - "Well Geometry and Hover"
+Cohesion: 0.17
+Nodes (12): AlignedEditMeasurement, BlockAlignedEditTests, PerformanceSuite, Bool, EscriboBlock, Int, Language, PerfDocument (+4 more)
+
+### Community 86 - "Styler Composition Tests"
+Cohesion: 0.14
+Nodes (20): EscriboEditor (SwiftUI view), Undo not yet on iOS — deliberate, deferred, macOS and iOS are peers, macOS and iOS are peers; visionOS/watchOS out of scope, Produciesta (first macOS embed), Stylized Markdown/Fountain SwiftUI editor, SwiftEscribo (editor module), Smart quotes/dashes/autocorrect disabled (+12 more)
+
+### Community 87 - "Requirements and Architecture"
+Cohesion: 0.21
+Nodes (16): AnyCodable, CastMember, Date, Decoder, ProjectFrontMatter, FilePattern, LanguageDefinition, SeasonDefinition (+8 more)
+
+### Community 88 - "Escribo Block Model"
+Cohesion: 0.11
+Nodes (16): ContentPiece, ResolvedGrammar, fountain, markdown, text, LineGrammar, BlockDialect, Bool (+8 more)
+
+### Community 89 - "Scanner Test Corpus"
 Cohesion: 0.19
 Nodes (15): blocksTileTheScan(), contentlessBlocksHaveBothArraysEmpty(), contentLinesPairEachKeptRangeToItsLine(), GroupingCase, groupingTableHolds(), incrementalBlocksCarryDocumentLineIndices(), MarkdownBlockGroupingTests, sevenLineHardWrappedParagraphIsOneBlock() (+7 more)
 
-### Community 86 - "Styler Composition Tests"
-Cohesion: 0.22
-Nodes (12): FontSpec, Bool, Double, ElementKind, FontSpec, Int, ParagraphMetrics, SpanKind (+4 more)
+### Community 90 - "Execution Plan Sorties"
+Cohesion: 0.16
+Nodes (12): NSAccessibilityElement, NSRect, Any, Bool, CGRect, MainActor, NSView, Void (+4 more)
 
-### Community 87 - "Requirements and Architecture"
-Cohesion: 0.14
-Nodes (12): Binding, EditorMode (.live/.source), textDidChange (macOS bridge), textViewDidChangeSelection (iOS bridge), Makefile (build/test/test-ios), NSTextStorageBridge (storage delegate), Recon Report: atomic block embeds spike, Binding (+4 more)
-
-### Community 88 - "Escribo Block Model"
+### Community 91 - "Well Overlay View"
 Cohesion: 0.25
 Nodes (6): FountainEmphasisTests, Piece, Bool, Int, String, StyleSet
 
-### Community 89 - "Scanner Test Corpus"
-Cohesion: 0.24
-Nodes (6): MarkdownDifferentialOracleTests, ListItem, Markup, Bool, Int, String
-
-### Community 91 - "Well Overlay View"
-Cohesion: 0.43
-Nodes (3): UIPasteboard, UITextRange, UITextRange
-
-### Community 92 - "Span Tiling"
+### Community 93 - "Style Set Tests"
 Cohesion: 0.15
 Nodes (13): NSTextAlignment, Double, Int, NSParagraphStyle, Range, Bool, Double, String (+5 more)
-
-### Community 93 - "Style Set Tests"
-Cohesion: 0.20
-Nodes (11): NSTextRange, CGFloat, CGPoint, EscriboNativeTextView, Int, NSRange, NSTextLayoutManager, PlatformColor (+3 more)
 
 ### Community 94 - "Cast Voice Coding Keys"
 Cohesion: 0.25
@@ -592,19 +586,19 @@ Nodes (7): Host, MacEmbedToolTipTests, CGRect, EmbedLayoutHarness, EscriboNative
 
 ### Community 95 - "Variant Reference"
 Cohesion: 0.17
-Nodes (7): ContinuationCase, MarkdownListContinuationTests, Bool, ElementKind, Int, ListContinuation, String
+Nodes (12): Bool, EditorMode, EscriboAppearance, EscriboTheme, Int, Language, NSRange, NSTextStorage (+4 more)
 
 ### Community 96 - "Well Item State Requirements"
-Cohesion: 0.18
-Nodes (16): EscriboEmbed.Action.editAsTextID, EscriboEmbed.Action.editAsTextID, EscriboEmbed.toolTip, EscriboEmbed (Badge, Action), EscriboEmbed.StateElement, EscriboEmbed.SubtitleRun, EscriboEmbed.toolTip, EscriboEmbedProvider (+8 more)
+Cohesion: 0.27
+Nodes (7): Bool, CGPoint, EmbeddedBlock, NSRange, NSValue, String, EscriboTextView
 
 ### Community 97 - "Oracle Divergence Types"
-Cohesion: 0.21
-Nodes (14): EmbedLayoutFragment, NSTextElement, NSTextLineFragment, NSTextLocation, CGFloat, CGRect, EscriboEmbed, NSTextElement (+6 more)
+Cohesion: 0.28
+Nodes (5): BlockCacheSpliceTests, Keystroke, EditorCoordinator, Int, String
 
 ### Community 98 - "Escribo Span"
-Cohesion: 0.17
-Nodes (12): Bool, EditorMode, EscriboAppearance, EscriboTheme, Int, Language, NSRange, NSTextStorage (+4 more)
+Cohesion: 0.20
+Nodes (10): Data, PerfDocument, PerfFixture, Bool, ClosedRange, Data, Int, Range (+2 more)
 
 ### Community 99 - "Line Record"
 Cohesion: 0.34
@@ -627,216 +621,196 @@ Cohesion: 0.18
 Nodes (11): NSTextStorageDelegate, EscriboStyler, Int, Language, NSRange, Range, UInt16, UnsafeMutableBufferPointer (+3 more)
 
 ### Community 104 - "Token Style Definition"
-Cohesion: 0.23
-Nodes (10): Bool, ElementKind, Int, String, UInt16, FountainAffordanceOutcome, consume, literal (+2 more)
+Cohesion: 0.28
+Nodes (11): EscriboBlock, Int, Range, Set, String, TextEdit, Void, EditorCoordinator (+3 more)
 
 ### Community 105 - "Dynamic Coding Keys"
-Cohesion: 0.19
-Nodes (8): CaseIterable, StylerCacheTests, Trigger, appearance, fontMetrics, mode, theme, EscriboStyler
+Cohesion: 0.23
+Nodes (10): Bool, ElementKind, Int, String, UInt16, FountainAffordanceOutcome, consume, literal (+2 more)
 
 ### Community 106 - "Platform Color Bridging"
 Cohesion: 0.37
 Nodes (10): DirectiveScan, GlosaScanner, isASCIILetter(), isSpaceOrTab(), Bool, EscriboSpan, Int, JSONNoteContext (+2 more)
 
 ### Community 107 - "Text Edit Model"
+Cohesion: 0.23
+Nodes (10): ScanInvariants, Bool, Int, Range, Set, SpanKind, SpanRole, String (+2 more)
+
+### Community 108 - "Line Scan State"
 Cohesion: 0.16
 Nodes (7): CodeUnitSource, UTF16TextSourceTests, Int, Range, String, UInt16, UnsafeMutableBufferPointer
 
-### Community 108 - "Line Scan State"
-Cohesion: 0.20
-Nodes (11): DynamicCodingKey, VariantReference, VariantStatus, draft, inProgress, obsolete, published, Encoder (+3 more)
-
 ### Community 109 - "Span Kind Enum"
-Cohesion: 0.20
-Nodes (10): NSAccessibilityElement, Any, Bool, CGRect, MainActor, Void, EmbedAccessibilityElement, EmbedAnchoredAccessibilityElement (+2 more)
-
-### Community 110 - "Table Alignment Enum"
 Cohesion: 0.24
 Nodes (13): Binding, Bool, EditorMode, EscriboBlock, EscriboEditorHandle, EscriboEmbedProvider, EscriboTheme, EscriboWell (+5 more)
 
-### Community 111 - "Markdown Block Grouping Tests"
-Cohesion: 0.18
-Nodes (7): FountainAffordanceTests, FountainTabRule, Bool, ElementKind, FountainAffordanceOutcome, Int, String
+### Community 110 - "Table Alignment Enum"
+Cohesion: 0.30
+Nodes (6): HiddenForcedMarkerTests, Any, Bool, EscriboTheme, NSAttributedString, String
 
-### Community 112 - "Editor Layer Tests"
+### Community 111 - "Markdown Block Grouping Tests"
 Cohesion: 0.22
 Nodes (8): Fixture, IOSEmbedToolTipTests, Bool, CGRect, EmbedLayoutHarness, EscriboEmbed, EscriboNativeTextView, EscriboTextView
 
+### Community 113 - "Editor Layer Vocabulary"
+Cohesion: 0.19
+Nodes (9): EscriboScanner, IncrementalScanner, ResolvedGrammar, Int, Language, Range, ScanResult, TextEdit (+1 more)
+
 ### Community 114 - "Platform Coordinator Parity Tests"
-Cohesion: 0.29
-Nodes (5): Context, NSScrollView, NSScrollView, UITextView, UITextView
-
-### Community 115 - "Package Manifest"
-Cohesion: 0.10
-Nodes (19): EscriboScanner, ResolvedGrammar, fountain, markdown, text, IncrementalScanner, LineGrammar, ResolvedGrammar (+11 more)
-
-### Community 116 - "Platform Type Aliases"
 Cohesion: 0.24
 Nodes (11): Attribute, FountainEmphasis, Run, Bool, ElementKind, EscriboSpan, Int, LineScan (+3 more)
 
-### Community 117 - "Community 117"
+### Community 115 - "Package Manifest"
 Cohesion: 0.24
 Nodes (10): String, UTF16LineBuffer, UTF16TextSource, Int, R, Range, UInt16, UnsafeBufferPointer (+2 more)
 
-### Community 118 - "Community 118"
+### Community 116 - "Platform Type Aliases"
 Cohesion: 0.16
 Nodes (11): EscriboEmbedProvider, EscriboEmbedProvider, NoteEmbedProvider, AccessibleNoteProvider, AccessibleEmbedProvider, EscriboBlock, EscriboEmbed, Set (+3 more)
 
-### Community 119 - "Community 119"
+### Community 117 - "Community 117"
 Cohesion: 0.37
 Nodes (6): MacEmbedHarness, NSTextFinder, FindFixture, MacFindHookTests, NSRange, NSWindow
 
-### Community 120 - "Community 120"
-Cohesion: 0.24
-Nodes (9): Any, Bool, NSTextElement, NSTextLayoutFragment, NSTextLayoutManager, NSTextLayoutManagerDelegate, NSTextLocation, Selector (+1 more)
+### Community 119 - "Community 119"
+Cohesion: 0.21
+Nodes (7): StylerCacheTests, Trigger, appearance, fontMetrics, mode, theme, EscriboStyler
 
-### Community 122 - "Community 122"
+### Community 120 - "Community 120"
 Cohesion: 0.15
 Nodes (10): StylingFixtures, Any, EscriboSpan, Int, LineRecord, NSAttributedString, NSDictionary, ScanResult (+2 more)
 
-### Community 123 - "Community 123"
+### Community 121 - "Community 121"
+Cohesion: 0.24
+Nodes (8): NoteTarget, ScanBudgetTests, ClosedRange, Int, PerfDocument, Range, String, Timing
+
+### Community 122 - "Community 122"
 Cohesion: 0.18
 Nodes (7): ObservableObject, CGPoint, CGRect, EditorCoordinator, EscriboBlock, Int, EscriboEditorHandle
 
-### Community 124 - "Community 124"
+### Community 123 - "Community 123"
 Cohesion: 0.17
 Nodes (9): RichPasteMarkup, Bool, Language, NSPasteboard, String, UIPasteboard, EnvironmentValues, RichPasteReader (+1 more)
 
-### Community 125 - "Community 125"
+### Community 124 - "Community 124"
 Cohesion: 0.18
 Nodes (4): BindingBox, EscriboEditorSurfaceTests, Binding, String
 
-### Community 126 - "Community 126"
+### Community 125 - "Community 125"
 Cohesion: 0.26
 Nodes (9): AnyObject, EditorTextStorage, EscriboScanner, Int, Range, ScanResult, TextEdit, EditorTextStorage (+1 more)
 
+### Community 126 - "Community 126"
+Cohesion: 0.26
+Nodes (11): elementKindRawValues(), MarkdownGFMTests, spanKindRawValues(), ElementKind, EscriboSpan, Int, Range, SpanKind (+3 more)
+
 ### Community 127 - "Community 127"
-Cohesion: 0.23
-Nodes (6): CALayer, NSRect, NSView, Bool, CGRect, WellHighlightView
+Cohesion: 0.31
+Nodes (7): BlockKind, EscriboBlock, ID, BlockKind, Int, Range, String
 
 ### Community 128 - "Community 128"
-Cohesion: 0.27
-Nodes (8): BlockKind, EscriboBlock, ID, Identifiable, BlockKind, Int, Range, String
+Cohesion: 0.31
+Nodes (8): PaintedDocument, PaintedLine, paintedLines(), PaintedSpan, ElementKind, LineState, ScanResult, TableAlignment
 
 ### Community 129 - "Community 129"
-Cohesion: 0.17
-Nodes (12): Block, blank, blockquote, code, frontmatter, heading, html, orderedListItem (+4 more)
-
-### Community 130 - "Community 130"
-Cohesion: 0.27
-Nodes (5): PublicSurfaceTests, requireEquatableType(), requireSendableType(), String, T
-
-### Community 131 - "Community 131"
-Cohesion: 0.45
-Nodes (4): FountainAffordanceOutcome, Bool, FountainAffordanceOutcome, EscriboTextView
-
-### Community 132 - "Community 132"
-Cohesion: 0.20
-Nodes (9): CodingKey, CodingKeys, actor, character, gender, language, voiceDescription, voicePrompt (+1 more)
-
-### Community 133 - "Community 133"
-Cohesion: 0.33
-Nodes (4): EmbedRowFragment, CGContext, CGPoint, EmbeddedBlock
-
-### Community 134 - "Community 134"
 Cohesion: 0.31
 Nodes (8): blockEditSequenceTracksFullScan(), deeplyNestedListsSaturate(), degenerateBlockDocuments(), fullScan(), openingAListDirtiesWhatItContains(), ScanResult, SourceLocation, String
 
-### Community 135 - "Community 135"
+### Community 130 - "Community 130"
 Cohesion: 0.20
 Nodes (10): EditShape, afterAllCapsLine, atEndOfFile, atOffsetZero, closeBoneyard, closeFence, deleteMultiLineBlock, openBoneyard (+2 more)
 
-### Community 136 - "Community 136"
+### Community 131 - "Community 131"
+Cohesion: 0.44
+Nodes (5): ScanResult, NSRange, ScanResult, TextEdit, TextEdit
+
+### Community 132 - "Community 132"
 Cohesion: 0.44
 Nodes (3): EditorModeSwitchingTests, EditorMode, EscriboTextView
 
-### Community 137 - "Community 137"
+### Community 133 - "Community 133"
 Cohesion: 0.39
 Nodes (5): SpanTiling, EscriboSpan, Int, Range, UInt16
 
-### Community 138 - "Community 138"
-Cohesion: 0.44
-Nodes (6): ExternalTextSource, ExternalWriterSource, Int, Range, UInt16, UnsafeMutableBufferPointer
-
-### Community 139 - "Community 139"
+### Community 134 - "Community 134"
 Cohesion: 0.28
 Nodes (3): StyleSetTests, StyleSet, UInt16
 
-### Community 140 - "Community 140"
+### Community 135 - "Community 135"
 Cohesion: 0.39
 Nodes (7): SeasonDefinition, CastMember, Date, FilePattern, Int, String, TTSConfig
 
-### Community 141 - "Community 141"
-Cohesion: 0.32
-Nodes (6): Bool, IntroOutroAssets, ProjectType, overview, project, Bool
+### Community 136 - "Community 136"
+Cohesion: 0.31
+Nodes (7): VariantReference, VariantStatus, draft, inProgress, obsolete, published, Int
 
-### Community 142 - "Community 142"
+### Community 137 - "Community 137"
 Cohesion: 0.43
 Nodes (6): EscriboSpan, Int, Range, SpanKind, SpanRole, StyleSet
 
-### Community 143 - "Community 143"
+### Community 138 - "Community 138"
 Cohesion: 0.25
 Nodes (8): Expect, colon, commaOrEnd, done, key, keyOrObjectEnd, value, valueOrArrayEnd
 
-### Community 144 - "Community 144"
+### Community 139 - "Community 139"
 Cohesion: 0.43
 Nodes (6): LineRecord, ElementKind, Int, LineState, Range, TableAlignment
 
-### Community 145 - "Community 145"
+### Community 140 - "Community 140"
 Cohesion: 0.43
 Nodes (6): ScanResult, EscriboBlock, EscriboSpan, Int, LineRecord, Range
 
-### Community 146 - "Community 146"
+### Community 141 - "Community 141"
 Cohesion: 0.25
 Nodes (6): TextGrammar, grammarsWithoutABlockDialectProduceNoBlocks(), Int, LineScan, LineState, LineWindow
 
-### Community 147 - "Community 147"
+### Community 142 - "Community 142"
+Cohesion: 0.25
+Nodes (3): BuildConfigurationTests, FixtureTests, LineIndexLinearityTests
+
+### Community 143 - "Community 143"
 Cohesion: 0.43
 Nodes (6): FontMetrics, EditorMode, EscriboTheme, String, EditorStyleEnvironment, EscriboAppearance
 
-### Community 148 - "Community 148"
+### Community 144 - "Community 144"
+Cohesion: 0.57
+Nodes (4): Set, Set, UIPress, UIPressesEvent
+
+### Community 145 - "Community 145"
 Cohesion: 0.33
 Nodes (3): AnyClass, UIKitLayoutDelegateChainTests, Selector
 
-### Community 149 - "Community 149"
-Cohesion: 0.43
-Nodes (6): CustomStringConvertible, Divergence, Fixture, Verdict, deliberate, scannerDefect
+### Community 146 - "Community 146"
+Cohesion: 0.29
+Nodes (6): EscriboSpan, Int, Range, SpanKind, SpanRole, StyleSet
 
-### Community 150 - "Community 150"
+### Community 147 - "Community 147"
 Cohesion: 0.48
 Nodes (5): FontFamilyRole, Bool, EscriboColor, FontTraits, TokenStyle
 
-### Community 151 - "Community 151"
+### Community 148 - "Community 148"
 Cohesion: 0.38
 Nodes (3): GlosaThemeTests, EscriboTheme, SpanKind
 
-### Community 155 - "Community 155"
+### Community 150 - "Community 150"
+Cohesion: 0.40
+Nodes (4): CodingKey, DynamicCodingKey, Encoder, Int
+
+### Community 152 - "Community 152"
 Cohesion: 0.53
 Nodes (3): SelectionClampCase, SelectionClampTests, Int
 
-### Community 156 - "Community 156"
+### Community 153 - "Community 153"
 Cohesion: 0.60
 Nodes (3): TextEdit, Int, Range
 
-### Community 157 - "Community 157"
+### Community 154 - "Community 154"
 Cohesion: 0.40
 Nodes (5): AnyTestGrammar, cue, fence, hostile, plain
 
-### Community 158 - "Community 158"
+### Community 155 - "Community 155"
 Cohesion: 0.40
 Nodes (3): Selector, Any, Selector
-
-### Community 168 - "Community 168"
-Cohesion: 0.46
-Nodes (4): Set, Set, UIPress, UIPressesEvent
-
-### Community 169 - "Community 169"
-Cohesion: 0.47
-Nodes (3): Double, PlatformColor, EscriboColor
-
-### Community 170 - "Community 170"
-Cohesion: 0.50
-Nodes (3): LineScan, LineState, LineWindow
 
 ## Ambiguous Edges - Review These
 - `Fixture: The Life of Lazarillo de Tormes PROJECT.md` → `WU-8 Title-Page Repair & Metadata Model (Sorties 31–33)`  [AMBIGUOUS]
@@ -855,9 +829,9 @@ Nodes (3): LineScan, LineState, LineWindow
   README.md · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **611 isolated node(s):** `BlockDialect`, `markdown`, `fountain`, `none`, `Element` (+606 more)
+- **615 isolated node(s):** `BlockDialect`, `markdown`, `fountain`, `none`, `Element` (+610 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
