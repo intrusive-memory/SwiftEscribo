@@ -219,6 +219,28 @@ final class EscriboStyler {
     return resolved.attributes(resolver: &fontResolver)
   }
 
+  /// The Fountain elements whose line-initial forcing prefix
+  /// ``EscriboTheme/hidesForcedElementMarkers`` hides.
+  static let hideableForcedElements: Set<ElementKind> = [
+    .sceneHeading, .character, .transition, .action,
+  ]
+
+  /// Whether `span` is the forcing prefix of `line`, and the active theme hides it.
+  ///
+  /// A forcing prefix is a marker that begins the line and ends at or before the line's
+  /// content, on one of ``hideableForcedElements``. The grammar requires every forcing
+  /// marker to sit at the line's first code unit, so this cannot match an emphasis
+  /// delimiter or centered text's closing `<`. In ``EditorMode/source`` the active theme
+  /// is stripped, so this is always `false` there.
+  func hidesMarker(_ span: EscriboSpan, on line: LineRecord) -> Bool {
+    activeTheme.hidesForcedElementMarkers
+      && span.role == .marker
+      && Self.hideableForcedElements.contains(line.element)
+      && span.range.lowerBound == line.range.lowerBound
+      && span.range.upperBound <= line.contentRange.lowerBound
+      && !span.range.isEmpty
+  }
+
   /// Text-storage attributes for an already-resolved style.
   func attributes(for resolved: ResolvedStyle) -> [NSAttributedString.Key: Any] {
     resolved.attributes(resolver: &fontResolver)
