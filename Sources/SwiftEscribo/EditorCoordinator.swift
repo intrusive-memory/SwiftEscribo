@@ -479,9 +479,13 @@ public final class EditorCoordinator: NSObject {
           cursor += 1
         }
         guard let range = Self.clamped(span.range, to: limit) else { continue }
-        textStorage.setAttributes(
-          styler.attributes(for: span, on: result.lineRecords[cursor]),
-          range: Self.nsRange(range))
+        let line = result.lineRecords[cursor]
+        let attributes = styler.attributes(for: span, on: line)
+        if styler.hidesMarker(span, on: line) {
+          hideMarker(in: range, styled: attributes)
+        } else {
+          textStorage.setAttributes(attributes, range: Self.nsRange(range))
+        }
       }
     }
 
@@ -490,6 +494,32 @@ public final class EditorCoordinator: NSObject {
       guard let range = Self.clamped(run.range, to: limit) else { continue }
       textStorage.addAttribute(
         .paragraphStyle, value: run.style, range: Self.nsRange(range))
+    }
+  }
+
+  /// Draws the characters in `range` invisible and takes their width away.
+  ///
+  /// Each character keeps its glyph, drawn in a clear colour, and gets a negative kern
+  /// equal to its own advance, so the text after it starts where it started. Measured per
+  /// character in the font already applied, because a forced `@` can swallow whitespace
+  /// and a proportional face gives each character its own width. Underline and
+  /// strikethrough go, or a slugline's underline would run on under nothing.
+  /// See ``EscriboTheme/hidesForcedElementMarkers``.
+  private func hideMarker(in range: Range<Int>, styled attributes: [NSAttributedString.Key: Any]) {
+    var units = [UInt16](repeating: 0, count: range.count)
+    units.withUnsafeMutableBufferPointer { textStorage.copyUTF16CodeUnits(in: range, into: $0) }
+    var hidden = attributes
+    hidden[.foregroundColor] = PlatformColor.clear
+    hidden[.underlineStyle] = nil
+    hidden[.strikethroughStyle] = nil
+    let measuring = attributes[.font].map { [NSAttributedString.Key.font: $0] } ?? [:]
+    var location = range.lowerBound
+    for character in String(decoding: units, as: UTF16.self) {
+      let text = String(character)
+      let length = text.utf16.count
+      hidden[.kern] = -NSAttributedString(string: text, attributes: measuring).size().width
+      textStorage.setAttributes(hidden, range: NSRange(location: location, length: length))
+      location += length
     }
   }
 

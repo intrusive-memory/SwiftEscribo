@@ -79,7 +79,7 @@ breaking change.
 ## Installing it
 
 ```swift
-.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.7.0"))
+.package(url: "https://github.com/intrusive-memory/SwiftEscribo.git", .upToNextMinor(from: "0.8.0"))
 ```
 
 Then depend on whichever products you need — they are independent:
@@ -190,6 +190,12 @@ ancestor view) makes a paste from a word processor or another screenwriting app 
 bold, italics and underline as Fountain `**x**`, `*x*` and `_x_`, or as Markdown `**x**`,
 `*x*` and `~~x~~`. Fountain scene headings, cues and transitions get no markers.
 `RichPasteMarkup` in `EscriboCore` is the platform-free conversion.
+
+### Hidden forcing prefixes
+
+Set `hidesForcedElementMarkers` on a Fountain theme to hide the `.`, `@`, `>` and `!`
+that force a scene heading, a cue, a transition or action. They take no width, but they
+stay in the document. Source mode shows them.
 
 ### Notices
 

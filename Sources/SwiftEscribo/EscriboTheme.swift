@@ -113,6 +113,22 @@ public struct EscriboTheme: Equatable, Sendable {
   /// type.
   public var markerOpacity: Double
 
+  /// Whether a Fountain line's forcing prefix — the `.` of a forced scene heading, the `@`
+  /// of a forced character cue, the `>` of a forced transition, the `!` of forced action —
+  /// is drawn invisible and takes no width. Off by default.
+  ///
+  /// The one exception to "markers are dimmed, never hidden" (Architecture §2), and an
+  /// opt-in for that reason. A writer who opens a script with `.SHOT 1 – WIDE` headings,
+  /// written by another app, reads a dimmed period as something this one added. The
+  /// prefix stays in the document: the caret crosses it with one keypress that moves
+  /// nothing on screen, Backspace at the start of the heading deletes it, and Find still
+  /// matches it. Only those four line-initial prefixes are hidden. A `#` section, a `=`
+  /// synopsis, a `~` lyric and centered text's `>` and `<` are still dimmed.
+  ///
+  /// ``strippedToSource()`` switches it off, so ``EditorMode/source`` always shows the
+  /// file's every character.
+  public var hidesForcedElementMarkers: Bool
+
   /// Creates a theme.
   public init(
     name: String,
@@ -124,7 +140,8 @@ public struct EscriboTheme: Equatable, Sendable {
     elementSizeScales: [ElementKind: [Int: Double]] = [:],
     elementParagraphMetrics: [ElementKind: [Int: ParagraphMetrics]] = [:],
     isGeometryEnabled: Bool = true,
-    markerOpacity: Double = 1
+    markerOpacity: Double = 1,
+    hidesForcedElementMarkers: Bool = false
   ) {
     self.name = name
     self.baseFontSize = baseFontSize
@@ -136,6 +153,7 @@ public struct EscriboTheme: Equatable, Sendable {
     self.elementParagraphMetrics = elementParagraphMetrics
     self.isGeometryEnabled = isGeometryEnabled
     self.markerOpacity = markerOpacity
+    self.hidesForcedElementMarkers = hidesForcedElementMarkers
   }
 
   /// The point-size scale for a line classified `element` at `depth`.
@@ -186,7 +204,8 @@ public struct EscriboTheme: Equatable, Sendable {
       // geometry switched off round-trips to the same value.
       elementParagraphMetrics: [:],
       isGeometryEnabled: isGeometryEnabled,
-      markerOpacity: 1
+      markerOpacity: 1,
+      hidesForcedElementMarkers: false
     )
   }
 
