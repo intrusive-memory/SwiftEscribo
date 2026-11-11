@@ -10,6 +10,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-11-10
+
+### Added
+
+- `EscriboTheme.hidesForcedElementMarkers` (off by default) hides the line-initial forcing
+  prefix of a Fountain scene heading (`.`), character cue (`@`), transition (`>`) and
+  forced action (`!`). The prefix is drawn in a clear colour, and a negative kern equal to
+  its width means it takes no space. The characters stay in the document: Find still
+  matches them, Backspace still deletes them, and the caret crosses one with a single
+  keypress that moves nothing on screen. Source mode always shows every character.
+  Section, synopsis, lyric, centered and emphasis markers are still only dimmed. This is
+  the one opt-in exception to "markers are dimmed, never hidden" (Architecture §2).
+
 ## [0.7.0] — 2026-11-10
 
 ### Added

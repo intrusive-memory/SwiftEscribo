@@ -11,7 +11,7 @@ SwiftEscribo.
 
 ## Current version
 
-**`0.7.0-dev`** — the post-`v0.7.0` development cycle. Between releases this line carries
+**`0.8.0`** — the `v0.8.0` release. Between releases this line carries
 a `-dev` suffix (`X.Y.Z-dev`), which the next release strips. README's install snippet
 always names the last resolvable release, never a `-dev` marker.
 
