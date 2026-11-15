@@ -1,7 +1,7 @@
 ---
 type: doc
 title: SwiftEscribo Changelog
-updated: 2026-11-10
+updated: 2026-11-15
 ---
 
 # Changelog
@@ -9,6 +9,21 @@ updated: 2026-11-10
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.8.1] — 2026-11-15
+
+### Fixed
+
+- iOS: an external text reset (the host's document arriving through the binding, including
+  the first load of a file) no longer goes through `UITextView.replace(_:withText:)`. That
+  is the keyboard's per-keystroke call, and UIKit runs smart-punctuation and word analysis
+  over the inserted text, even with smart quotes and dashes off. For a whole screenplay on
+  an iPad it held the main thread long enough for the system watchdog to kill the host
+  app. The reset now writes the text storage directly, keeps the keyboard informed through
+  the input delegate, registers one undo action with its redo, and notifies the view
+  delegate once. macOS is unchanged.
+- iOS: loading a document into an empty editor no longer registers an undo action, so
+  Undo straight after opening a file can no longer empty it.
 
 ## [0.8.0] — 2026-11-10
 
