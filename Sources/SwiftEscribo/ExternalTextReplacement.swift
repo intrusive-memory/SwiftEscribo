@@ -239,10 +239,10 @@ extension EscriboTextView {
   /// place in the package where a document's characters change and exactly one undo story to
   /// reason about. Do not add a private one here.
   ///
-  /// On iOS undo granularity remains whatever UIKit provides (Known limitations §1). The
-  /// *shape* is identical on both platforms — one transaction through the text view's own
-  /// input path — which is what makes that limitation a scheduling fact rather than an
-  /// architectural one.
+  /// iOS is the one exception to "through the input path". UIKit's input path is the
+  /// keyboard's, and on a device it costs seconds for a whole document, so iOS writes the
+  /// storage directly and keeps the undo action and change notification by hand. See
+  /// ``replaceDocumentOutsideKeyboardPath(with:)``.
   ///
   /// - Parameter incoming: The document the host wants displayed.
   /// - Returns: `true` if the document was replaced, `false` if rule 1 fired.
@@ -274,10 +274,17 @@ extension EscriboTextView {
     // registers exactly one undo action while doing it.
     //
     // The edit's own embed re-ask is deferred: rule 2's full scan below asks every block.
+    //
+    // iOS is the exception to "through the input path": see
+    // ``replaceDocumentOutsideKeyboardPath(with:)``.
     coordinator.withEmbedEditRefreshDeferred {
-      performInputPathEdit(
-        InputPathEdit(
-          replacing: NSRange(location: 0, length: storage.length), with: incoming))
+      #if os(iOS)
+        replaceDocumentOutsideKeyboardPath(with: incoming)
+      #else
+        performInputPathEdit(
+          InputPathEdit(
+            replacing: NSRange(location: 0, length: storage.length), with: incoming))
+      #endif
     }
 
     // Rule 2, second half.
@@ -291,6 +298,51 @@ extension EscriboTextView {
 
     return true
   }
+
+  #if os(iOS)
+    /// Replaces the whole document on iOS without going through UIKit's keyboard path.
+    ///
+    /// `UITextView.replace(_:withText:)` is the call the keyboard makes for a keystroke, and
+    /// UIKit treats it as one: it runs smart-punctuation and word analysis on the inserted
+    /// text, even with smart quotes and dashes turned off. For a whole screenplay that is
+    /// seconds of main-thread work on a device. TestFlight build 68 of Escribir was killed by
+    /// the watchdog (0x8BADF00D) on an iPad inside exactly this call while a `.fountain` file
+    /// opened. A whole-document reset is not typing, so it writes the storage directly.
+    ///
+    /// What the input path gave, kept here by hand:
+    ///
+    /// - **The keyboard stays in step.** `textWillChange`/`textDidChange` on the input
+    ///   delegate tell the keyboard the document changed under it, as UIKit asks of any
+    ///   programmatic edit.
+    /// - **One undo action**, restoring the previous document through this same reset, so
+    ///   the undo registers its own redo. Except for the first load: replacing an empty
+    ///   document registers nothing, so Undo straight after opening a file cannot blank it.
+    /// - **One change notification** to the view delegate, which is how the host's binding
+    ///   hears about an undo or redo of the reset.
+    ///
+    /// The storage is mutated inside `beginEditing()`/`endEditing()` with
+    /// `replaceCharacters(in:with:)`, never `setAttributedString` (Architecture §8).
+    func replaceDocumentOutsideKeyboardPath(with incoming: String) {
+      let storage = documentStorage
+      let previous = storage.string
+
+      textView.inputDelegate?.textWillChange(textView)
+      storage.beginEditing()
+      storage.replaceCharacters(in: NSRange(location: 0, length: storage.length), with: incoming)
+      storage.endEditing()
+      textView.inputDelegate?.textDidChange(textView)
+
+      if !previous.isEmpty, let undoManager = textView.undoManager {
+        undoManager.registerUndo(withTarget: self) { editor in
+          MainActor.assumeIsolated {
+            editor.applyExternalText(previous)
+          }
+        }
+      }
+
+      textView.delegate?.textViewDidChange?(textView)
+    }
+  #endif
 
   // MARK: - External configuration
 
